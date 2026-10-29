@@ -114,6 +114,9 @@ public class GameActivity extends SDLActivity {
         // Set low-latency audio values
         nativeSetDefaultStreamValues(getAudioFreq(), getAudioSMP());
 
+        // CodeLove: monta o painel lateral ao lado da area do jogo (prototipo P1).
+        Workspace.attach(this, mLayout, mSurface);
+
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
             attr.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
