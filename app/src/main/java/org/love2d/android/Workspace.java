@@ -240,6 +240,12 @@ public final class Workspace {
             return insets;
         });
 
+        root.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+            if ((r - l) != (oldR - oldL) || (b - t) != (oldB - oldT)) {
+                root.post(this::applyLayout);
+            }
+        });
+
         renderTree();
         applyLayout();
         root.requestApplyInsets();
@@ -336,19 +342,34 @@ public final class Workspace {
         // Espaco que o painel toma: largura + margem de cada lado dele.
         int reserved = open ? (panelWidth + margin * 2) : 0;
 
-        // Area do jogo: o que sobra, sem ficar embaixo das barras do sistema.
+        // A area do jogo SEMPRE tem o mesmo tamanho: a tela inteira, sem as barras do
+        // sistema. Assim o jogo nao muda de resolucao quando o painel abre ou fecha.
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        surfaceLp.leftMargin = insetLeft;
         surfaceLp.topMargin = insetTop;
+        surfaceLp.rightMargin = insetRight;
         surfaceLp.bottomMargin = insetBottom;
-        if (onLeft) {
-            surfaceLp.leftMargin = insetLeft + reserved;
-            surfaceLp.rightMargin = insetRight;
-        } else {
-            surfaceLp.leftMargin = insetLeft;
-            surfaceLp.rightMargin = insetRight + reserved;
-        }
         surface.setLayoutParams(surfaceLp);
+
+        // Com o painel aberto, o jogo apenas encolhe (mesma proporcao) e vai para o
+        // espaco livre, centralizado na vertical. Nao e esticado nem espremido.
+        float baseW = root.getWidth() - insetLeft - insetRight;
+        float baseH = root.getHeight() - insetTop - insetBottom;
+        float scale = 1f;
+        float shiftX = 0f;
+        float shiftY = 0f;
+        if (open && baseW > reserved && baseH > 0f) {
+            scale = (baseW - reserved) / baseW;
+            shiftX = onLeft ? reserved : 0f;
+            shiftY = (baseH - baseH * scale) / 2f;
+        }
+        surface.setPivotX(0f);
+        surface.setPivotY(0f);
+        surface.setScaleX(scale);
+        surface.setScaleY(scale);
+        surface.setTranslationX(shiftX);
+        surface.setTranslationY(shiftY);
 
         // Painel lateral.
         RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
