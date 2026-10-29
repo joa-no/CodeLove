@@ -84,6 +84,24 @@ public class MainActivity extends AppCompatActivity {
         recyclerView.setAdapter(adapter);
 
         scanGames(adapter, noGameText, null);
+
+        // CodeLove: no Android 15 a lista fica embaixo da barra de titulo (e o primeiro
+        // projeto some). Empurra a lista para baixo da barra, quando for preciso.
+        final SwipeRefreshLayout listArea = swipeLayout;
+        listArea.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            View bar = findViewById(androidx.appcompat.R.id.action_bar);
+            if (bar == null) {
+                return;
+            }
+            int[] barPos = new int[2];
+            int[] listPos = new int[2];
+            bar.getLocationOnScreen(barPos);
+            listArea.getLocationOnScreen(listPos);
+            int wanted = Math.max(0, barPos[1] + bar.getHeight() - listPos[1]);
+            if (listArea.getPaddingTop() != wanted) {
+                listArea.setPadding(0, wanted, 0, 0);
+            }
+        });
     }
 
     @Override

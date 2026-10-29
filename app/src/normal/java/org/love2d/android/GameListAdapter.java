@@ -22,7 +22,9 @@ package org.love2d.android;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.net.Uri;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,6 +32,8 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
+import androidx.core.widget.ImageViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.File;
@@ -79,6 +83,22 @@ public class GameListAdapter extends RecyclerView.Adapter<GameListAdapter.ViewHo
             name.setText(data.path.getName());
             image.setImageResource(data.directory ? R.drawable.ic_baseline_folder_32 : R.drawable.ic_baseline_insert_drive_file_32);
             file = data.path;
+
+            // CodeLove: cor do texto e do icone acompanha o tema (antes era sempre preta).
+            int color = themeTextColor(name.getContext());
+            name.setTextColor(color);
+            ImageViewCompat.setImageTintList(image, ColorStateList.valueOf(color));
+        }
+
+        private static int themeTextColor(Context context) {
+            TypedValue value = new TypedValue();
+            if (context.getTheme().resolveAttribute(android.R.attr.textColorPrimary, value, true)) {
+                if (value.resourceId != 0) {
+                    return ContextCompat.getColor(context, value.resourceId);
+                }
+                return value.data;
+            }
+            return 0xFFFFFFFF;
         }
 
         @Override
