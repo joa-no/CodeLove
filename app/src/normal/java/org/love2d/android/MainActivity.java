@@ -155,6 +155,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
+                // CodeLove: cria um projeto de exemplo na primeira vez (pasta vazia).
+                Workspace.ensureSampleProject(extDir);
+
                 ArrayList<GameListAdapter.Data> validGames = new ArrayList<>();
                 File[] files = extDir.listFiles();
 
