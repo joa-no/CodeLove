@@ -5,7 +5,7 @@ Copyright (c) 2006-2024 LOVE Development Team
 
 Download:
 ---------
-
+teste de build
 You can download pre-built Android packages from https://github.com/love2d/love/releases/latest that allow
 you to run .love files by opening them using a file manager of your choice.
 
