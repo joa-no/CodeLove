@@ -12,13 +12,11 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -37,6 +35,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -71,15 +70,23 @@ public final class Workspace {
     private final Activity activity;
     private final RelativeLayout root;
     private final View surface;
-    private final File gamesDir;      // pasta onde ficam os projetos (pode ser nula)
-    private final File activeProject; // projeto aberto agora (nulo se nenhum)
+    private final File gamesDir;   // pasta onde ficam os projetos (pode ser nula)
+    private final File channelDir; // pasta do canal de comandos com o executor (Lua)
     private final int panelWidth;
     private final int margin;
     private final Set<String> expanded = new HashSet<String>();
 
+    private File activeProject = null; // projeto aberto agora (nulo se nenhum)
+    private boolean playing = false;
+    private String lastStatus = "";
+
     private LinearLayout panel;
     private LinearLayout placeholder;
+    private LinearLayout playButton;
+    private IconView playIcon;
     private TextView toggle;
+    private TextView projectTitle;
+    private TextView statusView;
     private LinearLayout treeBox;
     private EditText search;
 
@@ -90,22 +97,21 @@ public final class Workspace {
     private int insetRight;
     private int insetBottom;
 
-    private Workspace(Activity activity, RelativeLayout root, View surface, File gamesDir, File activeProject) {
+    private Workspace(Activity activity, RelativeLayout root, View surface, File gamesDir) {
         this.activity = activity;
         this.root = root;
         this.surface = surface;
         this.gamesDir = gamesDir;
-        this.activeProject = activeProject;
+        this.channelDir = channelDir(activity);
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
     }
 
     /**
      * Liga a area de trabalho ao layout do SDL.
-     * "layout" e o layout criado pelo SDL; "surface" e onde o LOVE desenha;
-     * "projectPath" e o caminho do jogo aberto (pode ser nulo).
+     * "layout" e o layout criado pelo SDL; "surface" e onde o LOVE desenha.
      */
-    public static void attach(Activity activity, ViewGroup layout, View surface, String projectPath) {
+    public static void attach(Activity activity, ViewGroup layout, View surface) {
         if (activity == null || surface == null || !(layout instanceof RelativeLayout)) {
             return;
         }
@@ -116,15 +122,26 @@ public final class Workspace {
             }
             ensureSampleProject(games);
         }
+        new Workspace(activity, (RelativeLayout) layout, surface, games).build();
+    }
 
-        File dir = null;
-        if (projectPath != null) {
-            File candidate = new File(projectPath);
-            if (candidate.isDirectory()) {
-                dir = candidate;
-            }
+    /** Pasta do canal de comandos (Java -> executor em Lua). */
+    public static File channelDir(Context context) {
+        return new File(context.getFilesDir(), "codelove");
+    }
+
+    /**
+     * Prepara um canal de comandos limpo. Precisa ser chamado ANTES de o LOVE
+     * iniciar. Devolve o caminho da pasta, que o executor recebe como argumento.
+     */
+    public static String prepareChannel(Context context) {
+        File dir = channelDir(context);
+        if (!dir.isDirectory()) {
+            dir.mkdirs();
         }
-        new Workspace(activity, (RelativeLayout) layout, surface, games, dir).build();
+        new File(dir, "commands.txt").delete();
+        new File(dir, "status.txt").delete();
+        return dir.getAbsolutePath();
     }
 
     /**
@@ -201,9 +218,6 @@ public final class Workspace {
 
     private void build() {
         root.setBackgroundColor(COLOR_OUTER);
-        if (activeProject != null) {
-            expanded.add(activeProject.getAbsolutePath());
-        }
 
         panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -233,6 +247,17 @@ public final class Workspace {
         scrollLp.setMargins(0, dp(10), 0, 0);
         panel.addView(scroll, scrollLp);
 
+        // Mensagem do executor (Lua) no pe do painel.
+        statusView = new TextView(activity);
+        statusView.setText("Aguardando o executor...");
+        statusView.setTextColor(COLOR_MUTED);
+        statusView.setTextSize(12);
+        statusView.setMaxLines(3);
+        statusView.setEllipsize(TextUtils.TruncateAt.END);
+        statusView.setPadding(dp(4), dp(8), dp(4), 0);
+        panel.addView(statusView, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         toggle = new TextView(activity);
         toggle.setGravity(Gravity.CENTER);
         toggle.setTextColor(COLOR_TEXT);
@@ -243,10 +268,36 @@ public final class Workspace {
             applyLayout();
         });
 
+        // Botao de play/pause (so aparece com um projeto aberto).
+        playIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
+        playButton = new LinearLayout(activity);
+        playButton.setGravity(Gravity.CENTER);
+        playButton.setBackground(box(COLOR_PANEL, 20, true));
+        playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(18), dp(18)));
+        playButton.setVisibility(View.GONE);
+        playButton.setOnClickListener(v -> {
+            playing = !playing;
+            sendCommand(playing ? "play" : "pause", "");
+            updatePlayButton();
+        });
+
         placeholder = buildPlaceholder();
         root.addView(placeholder);
         root.addView(panel);
         root.addView(toggle);
+        root.addView(playButton);
+
+        root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override
+            public void onViewAttachedToWindow(View v) {
+            }
+
+            @Override
+            public void onViewDetachedFromWindow(View v) {
+                root.removeCallbacks(statusPoller);
+            }
+        });
+        root.postDelayed(statusPoller, 700);
 
         // Acompanha as barras do sistema (relogio no topo, gestos embaixo).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -278,6 +329,7 @@ public final class Workspace {
             new LinearLayout.LayoutParams(dp(22), dp(22)));
 
         TextView name = new TextView(activity);
+        projectTitle = name;
         name.setText(activeProject != null ? activeProject.getName() : "CodeLove");
         name.setTextColor(COLOR_TEXT);
         name.setTextSize(16);
@@ -423,6 +475,19 @@ public final class Workspace {
             toggleLp.rightMargin = sideInset + reserved + margin;
         }
         toggle.setLayoutParams(toggleLp);
+
+        // Botao de play/pause: logo ao lado do botao de abrir/fechar.
+        RelativeLayout.LayoutParams playLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
+        playLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        playLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        playLp.topMargin = insetTop + margin;
+        int playEdge = sideInset + reserved + margin + dp(40) + margin;
+        if (onLeft) {
+            playLp.leftMargin = playEdge;
+        } else {
+            playLp.rightMargin = playEdge;
+        }
+        playButton.setLayoutParams(playLp);
 
         // A seta aponta para onde o painel vai se mover ao tocar.
         boolean pointLeft = (onLeft == open);
@@ -608,7 +673,7 @@ public final class Workspace {
         if (project != null
             && (activeProject == null
                 || !project.getAbsolutePath().equals(activeProject.getAbsolutePath()))) {
-            openProject(project);
+            selectProject(project);
             return;
         }
 
@@ -620,13 +685,69 @@ public final class Workspace {
         }
     }
 
-    /** Reabre a tela do jogo com o projeto escolhido. */
-    private void openProject(File project) {
-        Intent intent = new Intent(activity, GameActivity.class);
-        intent.setData(Uri.fromFile(project));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        activity.startActivity(intent);
+    // ------------------------------------------------------------------
+    // Projeto aberto, play/pause e canal com o executor (Lua)
+    // ------------------------------------------------------------------
+
+    /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
+    private void selectProject(File project) {
+        activeProject = project;
+        expanded.add(project.getAbsolutePath());
+        playing = false;
+        sendCommand("open", project.getAbsolutePath());
+        projectTitle.setText(project.getName());
+        placeholder.setVisibility(View.GONE);
+        updatePlayButton();
+        renderTree();
     }
+
+    private void updatePlayButton() {
+        playIcon.setKind(playing ? IconView.PAUSE : IconView.PLAY);
+        playButton.setVisibility(activeProject != null ? View.VISIBLE : View.GONE);
+    }
+
+    /** Escreve uma linha no arquivo de comandos que o executor (Lua) le. */
+    private void sendCommand(String command, String argument) {
+        if (!channelDir.isDirectory() && !channelDir.mkdirs()) {
+            Log.w(TAG, "Sem pasta do canal: " + channelDir);
+            return;
+        }
+        File file = new File(channelDir, "commands.txt");
+        try (FileOutputStream out = new FileOutputStream(file, true)) {
+            out.write((command + "\t" + argument + "\n").getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            Log.w(TAG, "Falha ao enviar o comando " + command, e);
+        }
+    }
+
+    private static String readText(File file) {
+        if (!file.isFile()) {
+            return null;
+        }
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] data = new byte[(int) Math.min(file.length(), 4096L)];
+            int read = in.read(data);
+            return read <= 0 ? "" : new String(data, 0, read, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Mostra, no pe do painel, a ultima mensagem do executor. */
+    private final Runnable statusPoller = new Runnable() {
+        @Override
+        public void run() {
+            String text = readText(new File(channelDir, "status.txt"));
+            if (text != null) {
+                text = text.trim();
+                if (!text.isEmpty() && !text.equals(lastStatus)) {
+                    lastStatus = text;
+                    statusView.setText(text);
+                }
+            }
+            root.postDelayed(this, 700);
+        }
+    };
 
     /** Aviso que cobre a area do jogo enquanto nenhum projeto estiver aberto. */
     private LinearLayout buildPlaceholder() {
@@ -678,17 +799,25 @@ public final class Workspace {
         static final int FILE = 1;
         static final int CHEVRON_RIGHT = 2;
         static final int CHEVRON_DOWN = 3;
+        static final int PLAY = 4;
+        static final int PAUSE = 5;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
 
         IconView(Context context, int kind, int color) {
             super(context);
-            paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeJoin(Paint.Join.ROUND);
             paint.setStrokeWidth(1.8f); // em unidades da grade 24x24
             paint.setColor(color);
+            setKind(kind);
+        }
+
+        /** Troca o desenho do icone. */
+        void setKind(int kind) {
+            path.reset();
+            paint.setStyle((kind == PLAY || kind == PAUSE) ? Paint.Style.FILL : Paint.Style.STROKE);
 
             // Desenho em uma grade de 24 x 24.
             switch (kind) {
@@ -717,12 +846,31 @@ public final class Workspace {
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
                     break;
+                case PLAY:
+                    path.moveTo(8f, 5f);
+                    path.lineTo(19f, 12f);
+                    path.lineTo(8f, 19f);
+                    path.close();
+                    break;
+                case PAUSE:
+                    path.moveTo(7f, 5f);
+                    path.lineTo(11f, 5f);
+                    path.lineTo(11f, 19f);
+                    path.lineTo(7f, 19f);
+                    path.close();
+                    path.moveTo(13f, 5f);
+                    path.lineTo(17f, 5f);
+                    path.lineTo(17f, 19f);
+                    path.lineTo(13f, 19f);
+                    path.close();
+                    break;
                 default:
                     path.moveTo(6f, 9f);
                     path.lineTo(12f, 15f);
                     path.lineTo(18f, 9f);
                     break;
             }
+            invalidate();
         }
 
         @Override

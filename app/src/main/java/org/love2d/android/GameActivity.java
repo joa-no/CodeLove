@@ -105,6 +105,13 @@ public class GameActivity extends SDLActivity {
         // Prevent SDL sending filedropped event. Let us do that instead.
         intent.setData(null);
 
+        // CodeLove: prepara o canal de comandos e diz ao executor (Lua) onde ele fica.
+        // Precisa vir ANTES do super.onCreate, que inicia o LOVE.
+        String channel = Workspace.prepareChannel(this);
+        if (isFused) {
+            args = new String[]{channel};
+        }
+
         super.onCreate(savedInstanceState);
 
         if (mBrokenLibraries) {
@@ -115,7 +122,7 @@ public class GameActivity extends SDLActivity {
         nativeSetDefaultStreamValues(getAudioFreq(), getAudioSMP());
 
         // CodeLove: monta o painel lateral ao lado da area do jogo.
-        Workspace.attach(this, mLayout, mSurface, (args != null && args.length > 0) ? args[0] : null);
+        Workspace.attach(this, mLayout, mSurface);
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
