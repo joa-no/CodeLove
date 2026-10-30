@@ -20,227 +20,35 @@
 
 package org.love2d.android;
 
-import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Intent;
-import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
-import android.view.View;
-
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.constraintlayout.widget.ConstraintLayout;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.zip.ZipFile;
 
-public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "MainActivity";
-
-    private final Executor executor = Executors.newSingleThreadExecutor();
-
-    private final ActivityResultLauncher<String[]> openFileLauncher = registerForActivityResult(
-        new ActivityResultContracts.OpenDocument(),
-        (Uri result) -> {
-            if (result != null) {
-                Intent intent = new Intent(this, GameActivity.class);
-                intent.setData(result);
-                startActivity(intent);
-            }
-        }
-    );
-
+/**
+ * CodeLove (versao alterada do LOVE para Android).
+ *
+ * Esta tela nao aparece mais: o app agora abre direto na area de trabalho
+ * (painel de arquivos + area do jogo), que vive dentro da GameActivity.
+ * Aqui so garantimos que a pasta de projetos exista e passamos adiante.
+ * O tema "NoDisplay" do manifesto evita qualquer piscada de tela cinza.
+ */
+public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
-        RecyclerView recyclerView = findViewById(R.id.recyclerView);
-        SwipeRefreshLayout swipeLayout = findViewById(R.id.swipeRefreshLayout);
-        ConstraintLayout noGameText = findViewById(R.id.constraintLayout);
-
-        GameListAdapter adapter = new GameListAdapter();
-
-        // Set refresh listener
-        swipeLayout.setOnRefreshListener(() -> {
-            scanGames(adapter, noGameText, swipeLayout);
-        });
-
-        // Set layout manager and adapter
-        recyclerView.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
-        recyclerView.setAdapter(adapter);
-
-        scanGames(adapter, noGameText, null);
-
-        // CodeLove: no Android 15 a lista fica embaixo da barra de titulo (e o primeiro
-        // projeto some). Empurra a lista para baixo da barra, quando for preciso.
-        final SwipeRefreshLayout listArea = swipeLayout;
-        listArea.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
-            View bar = findViewById(androidx.appcompat.R.id.action_bar);
-            if (bar == null) {
-                return;
+        File games = getExternalFilesDir("games");
+        if (games != null) {
+            if (!games.isDirectory()) {
+                games.mkdirs();
             }
-            int[] barPos = new int[2];
-            int[] listPos = new int[2];
-            bar.getLocationOnScreen(barPos);
-            listArea.getLocationOnScreen(listPos);
-            int wanted = Math.max(0, barPos[1] + bar.getHeight() - listPos[1]);
-            if (listArea.getPaddingTop() != wanted) {
-                listArea.setPadding(0, wanted, 0, 0);
-            }
-        });
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater inflater = getMenuInflater();
-        inflater.inflate(R.menu.options_menu, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int itemId = item.getItemId();
-
-        // Handle item selection
-        if (itemId == R.id.optionItem) {
-            openFileLauncher.launch(new String[]{"*/*"});
-            return true;
-        } else if (itemId == R.id.optionItem2) {
-            Intent intent = new Intent(this, GameActivity.class);
-            startActivity(intent);
-            return true;
-        } else if (itemId == R.id.optionItem3) {
-            getGameFolderDialog().show();
-            return true;
-        } else if (itemId == R.id.optionItem4) {
-            Intent intent = new Intent(this, AboutActivity.class);
-            startActivity(intent);
-            return true;
-        } else {
-            return super.onOptionsItemSelected(item);
-        }
-    }
-
-    private AlertDialog getGameFolderDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this)
-            .setTitle(getString(R.string.game_folder))
-            .setPositiveButton(R.string.ok, (dialog1, which) -> {
-            });
-        StringBuilder message = new StringBuilder()
-            .append(getString(R.string.game_folder_location, getPackageName()))
-            .append("\n\n");
-
-        if (Build.VERSION.SDK_INT >= 30) {
-            message.append(getString(R.string.game_folder_inaccessible));
-        } else {
-            message.append(getString(R.string.game_folder_accessible));
+            Workspace.ensureSampleProject(games);
         }
 
-        return builder.setMessage(message.toString()).create();
-    }
-
-    @SuppressLint("NotifyDataSetChanged")
-    private void scanGames(GameListAdapter adapter, ConstraintLayout noGameText, SwipeRefreshLayout swipeRefreshLayout) {
-        executor.execute(() -> {
-            File extDir = getExternalFilesDir("games");
-
-            if (extDir != null) {
-                if (!extDir.isDirectory()) {
-                    if (!extDir.mkdir()) {
-                        // Scan failure, abort
-                        runOnUiThread(() -> {
-                            if (swipeRefreshLayout != null) {
-                                swipeRefreshLayout.setRefreshing(false);
-                            }
-                        });
-
-                        Log.e(TAG, "Directory creation failure.");
-                        return;
-                    }
-                }
-
-                // CodeLove: cria um projeto de exemplo na primeira vez (pasta vazia).
-                Workspace.ensureSampleProject(extDir);
-
-                ArrayList<GameListAdapter.Data> validGames = new ArrayList<>();
-                File[] files = extDir.listFiles();
-
-                if (files != null) {
-                    for (File file : files) {
-                        GameListAdapter.Data gameData = null;
-
-                        if (file.isDirectory()) {
-                            if (isValidGamedir(file)) {
-                                gameData = new GameListAdapter.Data();
-                                gameData.path = file;
-                                gameData.directory = true;
-                            }
-                        } else {
-                            if (isValidLovegame(file)) {
-                                gameData = new GameListAdapter.Data();
-                                gameData.path = file;
-                                gameData.directory = false;
-                            }
-                        }
-
-                        if (gameData != null) {
-                            validGames.add(gameData);
-                        }
-                    }
-                }
-
-                boolean empty = validGames.isEmpty();
-
-                runOnUiThread(() -> {
-                    if (empty) {
-                        adapter.setData(null);
-                    } else {
-                        GameListAdapter.Data[] gameDatas = new GameListAdapter.Data[validGames.size()];
-                        validGames.toArray(gameDatas);
-                        adapter.setData(gameDatas);
-                    }
-
-                    adapter.notifyDataSetChanged();
-
-                    if (swipeRefreshLayout != null) {
-                        swipeRefreshLayout.setRefreshing(false);
-                    }
-
-                    noGameText.setVisibility(empty ? View.VISIBLE : View.INVISIBLE);
-                });
-            }
-        });
-    }
-
-    public static boolean isValidLovegame(File file) {
-        boolean valid = false;
-
-        try {
-            ZipFile zip = new ZipFile(file, ZipFile.OPEN_READ);
-            valid = zip.getEntry("main.lua") != null;
-            zip.close();
-        } catch (IOException ignored) {
-        }
-
-        return valid;
-    }
-
-    public static boolean isValidGamedir(File file) {
-        File mainLua = new File(file, "main.lua");
-        return mainLua.isFile();
+        startActivity(new Intent(this, GameActivity.class));
+        overridePendingTransition(0, 0);
+        finish();
     }
 }
