@@ -50,19 +50,20 @@ public final class Workspace {
     private static final String TAG = "CodeLove";
 
     // Cores inspiradas no desenho de referencia (tema escuro).
-    private static final int COLOR_OUTER = 0xFF0D0F16;
-    private static final int COLOR_PANEL = 0xFF151822;
-    private static final int COLOR_FIELD = 0xFF1B1F2B;
-    private static final int COLOR_BORDER = 0xFF272C3B;
-    private static final int COLOR_TEXT = 0xFFE6E8EE;
-    private static final int COLOR_MUTED = 0xFF8A8FA3;
-    private static final int COLOR_FOLDER = 0xFFA78BFA;
-    private static final int COLOR_LUA = 0xFF7AA2F7;
-    private static final int COLOR_IMAGE = 0xFF5EEAD4;
-    private static final int COLOR_OTHER = 0xFF9CA3AF;
+    static final int COLOR_OUTER = 0xFF0D0F16;
+    static final int COLOR_PANEL = 0xFF151822;
+    static final int COLOR_FIELD = 0xFF1B1F2B;
+    static final int COLOR_BORDER = 0xFF272C3B;
+    static final int COLOR_TEXT = 0xFFE6E8EE;
+    static final int COLOR_MUTED = 0xFF8A8FA3;
+    static final int COLOR_FOLDER = 0xFFA78BFA;
+    static final int COLOR_LUA = 0xFF7AA2F7;
+    static final int COLOR_IMAGE = 0xFF5EEAD4;
+    static final int COLOR_OTHER = 0xFF9CA3AF;
 
     private static final int PANEL_WIDTH_DP = 272;
     private static final int MARGIN_DP = 8;
+    private static final int EDITOR_WIDTH_DP = 360;
     private static final int ROW_HEIGHT_DP = 36;
     private static final int LEVEL_WIDTH_DP = 16;
     private static final int MAX_DEPTH = 12;
@@ -80,6 +81,8 @@ public final class Workspace {
     private boolean playing = false;
     private String lastStatus = "";
 
+    private CodeEditor editor;
+    private View editorView;
     private LinearLayout panel;
     private LinearLayout placeholder;
     private LinearLayout playButton;
@@ -95,7 +98,8 @@ public final class Workspace {
     private int insetLeft;
     private int insetTop;
     private int insetRight;
-    private int insetBottom;
+    private int insetBottom;     // barras do sistema (sem o teclado)
+    private int insetBottomIme;  // barras do sistema + teclado
 
     private Workspace(Activity activity, RelativeLayout root, View surface, File gamesDir) {
         this.activity = activity;
@@ -282,7 +286,24 @@ public final class Workspace {
         });
 
         placeholder = buildPlaceholder();
+
+        editor = new CodeEditor(activity, new CodeEditor.Listener() {
+            @Override
+            public void onSaved(File file) {
+                onFileSaved(file);
+            }
+
+            @Override
+            public void onClosed() {
+                applyLayout();
+                renderTree();
+            }
+        });
+        editorView = editor.getView();
+        editorView.setVisibility(View.GONE);
+
         root.addView(placeholder);
+        root.addView(editorView);
         root.addView(panel);
         root.addView(toggle);
         root.addView(playButton);
@@ -295,6 +316,7 @@ public final class Workspace {
             @Override
             public void onViewDetachedFromWindow(View v) {
                 root.removeCallbacks(statusPoller);
+                editor.saveNow();
             }
         });
         root.postDelayed(statusPoller, 700);
@@ -304,7 +326,8 @@ public final class Workspace {
             insetLeft = insets.getSystemWindowInsetLeft();
             insetTop = insets.getSystemWindowInsetTop();
             insetRight = insets.getSystemWindowInsetRight();
-            insetBottom = insets.getSystemWindowInsetBottom();
+            insetBottom = insets.getStableInsetBottom();
+            insetBottomIme = insets.getSystemWindowInsetBottom();
             applyLayout();
             return insets;
         });
@@ -409,11 +432,33 @@ public final class Workspace {
 
     private void applyLayout() {
         int sideInset = onLeft ? insetLeft : insetRight;
-        // Espaco que o painel toma: largura + margem de cada lado dele.
-        int reserved = open ? (panelWidth + margin * 2) : 0;
+        boolean editorOpen = editor != null && editor.isOpen();
 
-        // A area do jogo SEMPRE tem o mesmo tamanho: a tela inteira, sem as barras do
-        // sistema. Assim o jogo nao muda de resolucao quando o painel abre ou fecha.
+        // Tamanho da area de jogo cheia: a tela sem as barras do sistema.
+        float baseW = root.getWidth() - insetLeft - insetRight;
+        float baseH = root.getHeight() - insetTop - insetBottom;
+
+        int editorWidth = dp(EDITOR_WIDTH_DP);
+        if (baseW > 0f) {
+            editorWidth = Math.min(editorWidth, (int) (baseW * 0.45f));
+        }
+
+        // Da borda da tela para dentro: [painel] [editor] e, por fim, a area do jogo.
+        int cursor = sideInset;
+        int panelOffset = 0;
+        int editorOffset = 0;
+        if (open) {
+            panelOffset = cursor + margin;
+            cursor += margin + panelWidth + margin;
+        }
+        if (editorOpen) {
+            editorOffset = open ? cursor : cursor + margin;
+            cursor = editorOffset + editorWidth + margin;
+        }
+        int reserved = cursor - sideInset;
+
+        // A area do jogo SEMPRE tem o mesmo tamanho: a tela cheia, sem as barras do
+        // sistema. Assim o jogo nao muda de resolucao quando o painel ou o teclado mudam.
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         surfaceLp.leftMargin = insetLeft;
@@ -422,14 +467,12 @@ public final class Workspace {
         surfaceLp.bottomMargin = insetBottom;
         surface.setLayoutParams(surfaceLp);
 
-        // Com o painel aberto, o jogo apenas encolhe (mesma proporcao) e vai para o
-        // espaco livre, centralizado na vertical. Nao e esticado nem espremido.
-        float baseW = root.getWidth() - insetLeft - insetRight;
-        float baseH = root.getHeight() - insetTop - insetBottom;
+        // O jogo so encolhe (mesma proporcao) e vai para o espaco que sobrou,
+        // centralizado na vertical. Nao e esticado nem espremido.
         float scale = 1f;
         float shiftX = 0f;
         float shiftY = 0f;
-        if (open && baseW > reserved && baseH > 0f) {
+        if (reserved > 0 && baseW > reserved && baseH > 0f) {
             scale = (baseW - reserved) / baseW;
             shiftX = onLeft ? reserved : 0f;
             shiftY = (baseH - baseH * scale) / 2f;
@@ -450,21 +493,35 @@ public final class Workspace {
         placeholderLp.rightMargin = insetRight + (onLeft ? 0 : reserved);
         placeholder.setLayoutParams(placeholderLp);
 
-        // Painel lateral.
+        // Painel de arquivos (acompanha o teclado: sobe junto com ele).
         RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
             panelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
         panelLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
         panelLp.topMargin = insetTop + margin;
-        panelLp.bottomMargin = insetBottom + margin;
+        panelLp.bottomMargin = insetBottomIme + margin;
         if (onLeft) {
-            panelLp.leftMargin = sideInset + margin;
+            panelLp.leftMargin = panelOffset;
         } else {
-            panelLp.rightMargin = sideInset + margin;
+            panelLp.rightMargin = panelOffset;
         }
         panel.setLayoutParams(panelLp);
         panel.setVisibility(open ? View.VISIBLE : View.GONE);
 
-        // Botao de abrir/fechar: canto de cima da area do jogo, junto ao painel.
+        // Editor de codigo (tambem acompanha o teclado).
+        RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
+            editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+        editorLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        editorLp.topMargin = insetTop + margin;
+        editorLp.bottomMargin = insetBottomIme + margin;
+        if (onLeft) {
+            editorLp.leftMargin = editorOffset;
+        } else {
+            editorLp.rightMargin = editorOffset;
+        }
+        editorView.setLayoutParams(editorLp);
+        editorView.setVisibility(editorOpen ? View.VISIBLE : View.GONE);
+
+        // Botao de abrir/fechar: canto de cima da area do jogo, junto ao que vem antes.
         RelativeLayout.LayoutParams toggleLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
         toggleLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         toggleLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
@@ -606,7 +663,11 @@ public final class Workspace {
         line.setOrientation(LinearLayout.HORIZONTAL);
         line.setGravity(Gravity.CENTER_VERTICAL);
         line.setPadding(dp(4), 0, dp(4), 0);
-        if (activeProject != null && row.file.getAbsolutePath().equals(activeProject.getAbsolutePath())) {
+        boolean selected = (activeProject != null
+                && row.file.getAbsolutePath().equals(activeProject.getAbsolutePath()))
+            || (editor != null && editor.isOpen()
+                && row.file.getAbsolutePath().equals(editor.getFile().getAbsolutePath()));
+        if (selected) {
             line.setBackground(box(COLOR_FIELD, 10, false));
         }
 
@@ -674,14 +735,41 @@ public final class Workspace {
             && (activeProject == null
                 || !project.getAbsolutePath().equals(activeProject.getAbsolutePath()))) {
             selectProject(project);
+            if (!row.dir) {
+                openInEditor(row.file);
+            }
             return;
         }
 
         if (row.dir) {
             renderTree();
         } else {
-            Toast.makeText(activity, "O editor de codigo vem na proxima etapa.",
+            openInEditor(row.file);
+        }
+    }
+
+    private void openInEditor(File file) {
+        if (editor.open(file)) {
+            applyLayout();
+            renderTree();
+        } else {
+            Toast.makeText(activity, "Esse arquivo nao abre no editor (binario ou grande demais).",
                 Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private static boolean isInside(File file, File dir) {
+        String f = file.getAbsolutePath();
+        String d = dir.getAbsolutePath();
+        return f.equals(d) || f.startsWith(d + File.separator);
+    }
+
+    /** Depois de salvar: recarrega o projeto no executor, e o 1o quadro mostra o codigo novo. */
+    private void onFileSaved(File file) {
+        if (activeProject != null && isInside(file, activeProject)) {
+            playing = false;
+            sendCommand("open", activeProject.getAbsolutePath());
+            updatePlayButton();
         }
     }
 
@@ -691,6 +779,9 @@ public final class Workspace {
 
     /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
     private void selectProject(File project) {
+        if (editor != null && editor.isOpen() && !isInside(editor.getFile(), project)) {
+            editor.close();
+        }
         activeProject = project;
         expanded.add(project.getAbsolutePath());
         playing = false;
