@@ -12,11 +12,13 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -69,12 +71,14 @@ public final class Workspace {
     private final Activity activity;
     private final RelativeLayout root;
     private final View surface;
-    private final File projectDir; // null quando nao ha projeto aberto
+    private final File gamesDir;      // pasta onde ficam os projetos (pode ser nula)
+    private final File activeProject; // projeto aberto agora (nulo se nenhum)
     private final int panelWidth;
     private final int margin;
     private final Set<String> expanded = new HashSet<String>();
 
     private LinearLayout panel;
+    private LinearLayout placeholder;
     private TextView toggle;
     private LinearLayout treeBox;
     private EditText search;
@@ -86,11 +90,12 @@ public final class Workspace {
     private int insetRight;
     private int insetBottom;
 
-    private Workspace(Activity activity, RelativeLayout root, View surface, File projectDir) {
+    private Workspace(Activity activity, RelativeLayout root, View surface, File gamesDir, File activeProject) {
         this.activity = activity;
         this.root = root;
         this.surface = surface;
-        this.projectDir = projectDir;
+        this.gamesDir = gamesDir;
+        this.activeProject = activeProject;
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
     }
@@ -104,6 +109,14 @@ public final class Workspace {
         if (activity == null || surface == null || !(layout instanceof RelativeLayout)) {
             return;
         }
+        File games = activity.getExternalFilesDir("games");
+        if (games != null) {
+            if (!games.isDirectory()) {
+                games.mkdirs();
+            }
+            ensureSampleProject(games);
+        }
+
         File dir = null;
         if (projectPath != null) {
             File candidate = new File(projectPath);
@@ -111,7 +124,7 @@ public final class Workspace {
                 dir = candidate;
             }
         }
-        new Workspace(activity, (RelativeLayout) layout, surface, dir).build();
+        new Workspace(activity, (RelativeLayout) layout, surface, games, dir).build();
     }
 
     /**
@@ -188,6 +201,9 @@ public final class Workspace {
 
     private void build() {
         root.setBackgroundColor(COLOR_OUTER);
+        if (activeProject != null) {
+            expanded.add(activeProject.getAbsolutePath());
+        }
 
         panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -227,6 +243,8 @@ public final class Workspace {
             applyLayout();
         });
 
+        placeholder = buildPlaceholder();
+        root.addView(placeholder);
         root.addView(panel);
         root.addView(toggle);
 
@@ -260,7 +278,7 @@ public final class Workspace {
             new LinearLayout.LayoutParams(dp(22), dp(22)));
 
         TextView name = new TextView(activity);
-        name.setText(projectDir != null ? projectDir.getName() : "CodeLove");
+        name.setText(activeProject != null ? activeProject.getName() : "CodeLove");
         name.setTextColor(COLOR_TEXT);
         name.setTextSize(16);
         name.setTypeface(Typeface.DEFAULT_BOLD);
@@ -371,6 +389,15 @@ public final class Workspace {
         surface.setTranslationX(shiftX);
         surface.setTranslationY(shiftY);
 
+        // Aviso "nenhum arquivo selecionado": ocupa a mesma area do jogo.
+        RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        placeholderLp.topMargin = insetTop;
+        placeholderLp.bottomMargin = insetBottom;
+        placeholderLp.leftMargin = insetLeft + (onLeft ? reserved : 0);
+        placeholderLp.rightMargin = insetRight + (onLeft ? 0 : reserved);
+        placeholder.setLayoutParams(placeholderLp);
+
         // Painel lateral.
         RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
             panelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -423,9 +450,10 @@ public final class Workspace {
     private void renderTree() {
         treeBox.removeAllViews();
 
-        if (projectDir == null) {
+        File treeRoot = (gamesDir != null && gamesDir.isDirectory()) ? gamesDir : activeProject;
+        if (treeRoot == null) {
             TextView note = new TextView(activity);
-            note.setText("Nenhum projeto aberto.\nAbra um projeto na lista para ver os arquivos.");
+            note.setText("Pasta de projetos indisponivel.");
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -435,11 +463,11 @@ public final class Workspace {
 
         String query = search == null ? "" : search.getText().toString().trim().toLowerCase(Locale.ROOT);
         ArrayList<Row> rows = new ArrayList<Row>();
-        collect(projectDir, 0, query, rows);
+        collect(treeRoot, 0, query, rows);
 
         if (rows.isEmpty()) {
             TextView note = new TextView(activity);
-            note.setText(query.isEmpty() ? "Pasta vazia." : "Nada encontrado.");
+            note.setText(query.isEmpty() ? "Nenhum projeto ainda." : "Nada encontrado.");
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -513,6 +541,9 @@ public final class Workspace {
         line.setOrientation(LinearLayout.HORIZONTAL);
         line.setGravity(Gravity.CENTER_VERTICAL);
         line.setPadding(dp(4), 0, dp(4), 0);
+        if (activeProject != null && row.file.getAbsolutePath().equals(activeProject.getAbsolutePath())) {
+            line.setBackground(box(COLOR_FIELD, 10, false));
+        }
 
         // Linhas guia verticais, uma por nivel de profundidade.
         for (int i = 0; i < row.depth; i++) {
@@ -544,19 +575,83 @@ public final class Workspace {
         line.addView(label, new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        line.setOnClickListener(v -> {
-            if (row.dir) {
-                String path = row.file.getAbsolutePath();
-                if (!expanded.remove(path)) {
-                    expanded.add(path);
-                }
-                renderTree();
-            } else {
-                Toast.makeText(activity, "O editor de codigo vem na proxima etapa.",
-                    Toast.LENGTH_SHORT).show();
-            }
-        });
+        line.setOnClickListener(v -> onRowClicked(row));
         return line;
+    }
+
+    /** Pasta de projeto (filho direto da pasta de jogos) que contem este arquivo. */
+    private File projectOf(File file) {
+        if (gamesDir == null) {
+            return null;
+        }
+        File current = file;
+        while (current != null) {
+            File parent = current.getParentFile();
+            if (parent != null && parent.getAbsolutePath().equals(gamesDir.getAbsolutePath())) {
+                return current;
+            }
+            current = parent;
+        }
+        return null;
+    }
+
+    private void onRowClicked(Row row) {
+        if (row.dir) {
+            String path = row.file.getAbsolutePath();
+            if (!expanded.remove(path)) {
+                expanded.add(path);
+            }
+        }
+
+        // Tocar em qualquer pasta ou arquivo de outro projeto abre esse projeto.
+        File project = projectOf(row.file);
+        if (project != null
+            && (activeProject == null
+                || !project.getAbsolutePath().equals(activeProject.getAbsolutePath()))) {
+            openProject(project);
+            return;
+        }
+
+        if (row.dir) {
+            renderTree();
+        } else {
+            Toast.makeText(activity, "O editor de codigo vem na proxima etapa.",
+                Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /** Reabre a tela do jogo com o projeto escolhido. */
+    private void openProject(File project) {
+        Intent intent = new Intent(activity, GameActivity.class);
+        intent.setData(Uri.fromFile(project));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        activity.startActivity(intent);
+    }
+
+    /** Aviso que cobre a area do jogo enquanto nenhum projeto estiver aberto. */
+    private LinearLayout buildPlaceholder() {
+        LinearLayout box = new LinearLayout(activity);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setBackgroundColor(COLOR_OUTER);
+        box.setClickable(true); // nao deixa o toque passar para o jogo escondido
+        box.setVisibility(activeProject == null ? View.VISIBLE : View.GONE);
+
+        TextView title = new TextView(activity);
+        title.setText("Nenhum arquivo selecionado");
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(18);
+        title.setGravity(Gravity.CENTER);
+        box.addView(title);
+
+        TextView hint = new TextView(activity);
+        hint.setText("Escolha um projeto no painel para ver o jogo aqui.");
+        hint.setTextColor(COLOR_MUTED);
+        hint.setTextSize(14);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, dp(6), 0, 0);
+        box.addView(hint);
+        return box;
     }
 
     private int colorFor(Row row) {
