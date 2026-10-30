@@ -10,10 +10,13 @@
 package org.love2d.android;
 
 import android.app.Activity;
+import android.content.Context;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.Spanned;
@@ -46,6 +49,9 @@ final class CodeEditor {
 
         /** Chamado quando o editor foi fechado. */
         void onClosed();
+
+        /** Chamado ao tocar no botao de expandir/recolher. */
+        void onExpandToggle();
     }
 
     private static final String TAG = "CodeLove";
@@ -65,6 +71,7 @@ final class CodeEditor {
     private final TextView gutter;
     private final EditText input;
     private final ScrollView scroll;
+    private final Workspace.IconView expandIcon;
 
     private final Runnable saveTask = new Runnable() {
         @Override
@@ -78,6 +85,7 @@ final class CodeEditor {
     private boolean loading;     // true enquanto trocamos o texto por codigo
     private boolean highlightLua;
     private int lineCount;
+    private long followUntil;    // ate quando o editor pode seguir o cursor
 
     CodeEditor(Activity activity, Listener listener) {
         this.activity = activity;
@@ -108,6 +116,16 @@ final class CodeEditor {
         dirtyMark.setPadding(dp(6), 0, dp(6), 0);
         dirtyMark.setVisibility(View.GONE);
         header.addView(dirtyMark);
+
+        expandIcon = new Workspace.IconView(activity, Workspace.IconView.EXPAND, Workspace.COLOR_MUTED);
+        LinearLayout expandButton = new LinearLayout(activity);
+        expandButton.setGravity(Gravity.CENTER);
+        expandButton.setBackground(box(Workspace.COLOR_FIELD, 10, false));
+        expandButton.addView(expandIcon, new LinearLayout.LayoutParams(dp(18), dp(18)));
+        expandButton.setOnClickListener(v -> listener.onExpandToggle());
+        LinearLayout.LayoutParams expandLp = new LinearLayout.LayoutParams(dp(32), dp(32));
+        expandLp.setMargins(0, 0, dp(6), 0);
+        header.addView(expandButton, expandLp);
 
         TextView close = new TextView(activity);
         close.setText("\u00D7");
@@ -169,6 +187,7 @@ final class CodeEditor {
                     return;
                 }
                 dirty = true;
+                followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
                 applyHighlight(s);
                 refreshGutter(s, false);
@@ -183,7 +202,7 @@ final class CodeEditor {
             }
         });
 
-        HorizontalScrollView horizontal = new HorizontalScrollView(activity);
+        HorizontalScrollView horizontal = new CaretGuardHorizontalScrollView(activity);
         horizontal.setFillViewport(true);
         horizontal.addView(input, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -195,7 +214,7 @@ final class CodeEditor {
         row.addView(horizontal, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        scroll = new ScrollView(activity);
+        scroll = new CaretGuardScrollView(activity);
         scroll.addView(row, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         view.addView(scroll, new LinearLayout.LayoutParams(
@@ -211,6 +230,11 @@ final class CodeEditor {
 
     View getView() {
         return view;
+    }
+
+    /** Troca o icone do botao conforme o editor esteja expandido ou nao. */
+    void setExpanded(boolean expanded) {
+        expandIcon.setKind(expanded ? Workspace.IconView.COLLAPSE : Workspace.IconView.EXPAND);
     }
 
     boolean isOpen() {
@@ -296,6 +320,37 @@ final class CodeEditor {
     }
 
     // ------------------------------------------------------------------
+
+    private boolean followCaret() {
+        return SystemClock.uptimeMillis() < followUntil;
+    }
+
+    /**
+     * O campo de texto pede para rolar ate o cursor o tempo todo, e isso "puxava"
+     * a tela de volta quando voce rolava para ver o resto do codigo. Aqui so
+     * deixamos ele seguir o cursor logo depois de voce digitar.
+     */
+    private final class CaretGuardScrollView extends ScrollView {
+        CaretGuardScrollView(Context context) {
+            super(context);
+        }
+
+        @Override
+        public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
+            return followCaret() && super.requestChildRectangleOnScreen(child, rectangle, immediate);
+        }
+    }
+
+    private final class CaretGuardHorizontalScrollView extends HorizontalScrollView {
+        CaretGuardHorizontalScrollView(Context context) {
+            super(context);
+        }
+
+        @Override
+        public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
+            return followCaret() && super.requestChildRectangleOnScreen(child, rectangle, immediate);
+        }
+    }
 
     private void refreshDirtyMark() {
         dirtyMark.setVisibility(dirty ? View.VISIBLE : View.GONE);

@@ -79,6 +79,7 @@ public final class Workspace {
 
     private File activeProject = null; // projeto aberto agora (nulo se nenhum)
     private boolean playing = false;
+    private boolean editorExpanded = false;
     private String lastStatus = "";
 
     private CodeEditor editor;
@@ -86,6 +87,7 @@ public final class Workspace {
     private LinearLayout panel;
     private LinearLayout placeholder;
     private LinearLayout playButton;
+    private TextView resetButton;
     private IconView playIcon;
     private TextView toggle;
     private TextView projectTitle;
@@ -285,6 +287,16 @@ public final class Workspace {
             updatePlayButton();
         });
 
+        // Botao de reset: volta a cena ao estado inicial (pausada).
+        resetButton = new TextView(activity);
+        resetButton.setText("\u21BA");
+        resetButton.setGravity(Gravity.CENTER);
+        resetButton.setTextColor(COLOR_TEXT);
+        resetButton.setTextSize(20);
+        resetButton.setBackground(box(COLOR_PANEL, 20, true));
+        resetButton.setVisibility(View.GONE);
+        resetButton.setOnClickListener(v -> resetScene());
+
         placeholder = buildPlaceholder();
 
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
@@ -295,8 +307,17 @@ public final class Workspace {
 
             @Override
             public void onClosed() {
+                editorExpanded = false;
+                editor.setExpanded(false);
                 applyLayout();
                 renderTree();
+            }
+
+            @Override
+            public void onExpandToggle() {
+                editorExpanded = !editorExpanded;
+                editor.setExpanded(editorExpanded);
+                applyLayout();
             }
         });
         editorView = editor.getView();
@@ -307,6 +328,7 @@ public final class Workspace {
         root.addView(panel);
         root.addView(toggle);
         root.addView(playButton);
+        root.addView(resetButton);
 
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -507,9 +529,14 @@ public final class Workspace {
         panel.setLayoutParams(panelLp);
         panel.setVisibility(open ? View.VISIBLE : View.GONE);
 
-        // Editor de codigo (tambem acompanha o teclado).
+        // Editor de codigo (tambem acompanha o teclado). Expandido, ele vai ate a
+        // outra borda e cobre a area do jogo.
+        int editorLayoutWidth = editorWidth;
+        if (editorOpen && editorExpanded && baseW > 0f) {
+            editorLayoutWidth = (int) baseW - (editorOffset - sideInset) - margin;
+        }
         RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
-            editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+            editorLayoutWidth, ViewGroup.LayoutParams.MATCH_PARENT);
         editorLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
         editorLp.topMargin = insetTop + margin;
         editorLp.bottomMargin = insetBottomIme + margin;
@@ -546,9 +573,24 @@ public final class Workspace {
         }
         playButton.setLayoutParams(playLp);
 
+        // Botao de reset: ao lado do play.
+        RelativeLayout.LayoutParams resetLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
+        resetLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        resetLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        resetLp.topMargin = insetTop + margin;
+        int resetEdge = playEdge + dp(40) + margin;
+        if (onLeft) {
+            resetLp.leftMargin = resetEdge;
+        } else {
+            resetLp.rightMargin = resetEdge;
+        }
+        resetButton.setLayoutParams(resetLp);
+
         // A seta aponta para onde o painel vai se mover ao tocar.
         boolean pointLeft = (onLeft == open);
         toggle.setText(pointLeft ? "\u2039" : "\u203A");
+
+        updateControlsVisibility();
     }
 
     // ------------------------------------------------------------------
@@ -794,7 +836,27 @@ public final class Workspace {
 
     private void updatePlayButton() {
         playIcon.setKind(playing ? IconView.PAUSE : IconView.PLAY);
-        playButton.setVisibility(activeProject != null ? View.VISIBLE : View.GONE);
+        updateControlsVisibility();
+    }
+
+    /** Com o editor expandido, os botoes da area do jogo somem (ela fica coberta). */
+    private void updateControlsVisibility() {
+        boolean show = !(editor != null && editor.isOpen() && editorExpanded);
+        toggle.setVisibility(show ? View.VISIBLE : View.GONE);
+        int projectVisibility = (activeProject != null && show) ? View.VISIBLE : View.GONE;
+        playButton.setVisibility(projectVisibility);
+        resetButton.setVisibility(projectVisibility);
+    }
+
+    /** Volta a cena ao inicio: recarrega o projeto, pausado, no primeiro quadro. */
+    private void resetScene() {
+        if (activeProject == null) {
+            return;
+        }
+        editor.saveNow();
+        playing = false;
+        sendCommand("open", activeProject.getAbsolutePath());
+        updatePlayButton();
     }
 
     /** Escreve uma linha no arquivo de comandos que o executor (Lua) le. */
@@ -885,13 +947,15 @@ public final class Workspace {
     // Icones desenhados por codigo (sem arquivos de imagem)
     // ------------------------------------------------------------------
 
-    private static final class IconView extends View {
+    static final class IconView extends View {
         static final int FOLDER = 0;
         static final int FILE = 1;
         static final int CHEVRON_RIGHT = 2;
         static final int CHEVRON_DOWN = 3;
         static final int PLAY = 4;
         static final int PAUSE = 5;
+        static final int EXPAND = 6;
+        static final int COLLAPSE = 7;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -942,6 +1006,30 @@ public final class Workspace {
                     path.lineTo(19f, 12f);
                     path.lineTo(8f, 19f);
                     path.close();
+                    break;
+                case EXPAND:
+                    path.moveTo(14f, 4f);
+                    path.lineTo(20f, 4f);
+                    path.lineTo(20f, 10f);
+                    path.moveTo(20f, 4f);
+                    path.lineTo(13f, 11f);
+                    path.moveTo(10f, 20f);
+                    path.lineTo(4f, 20f);
+                    path.lineTo(4f, 14f);
+                    path.moveTo(4f, 20f);
+                    path.lineTo(11f, 13f);
+                    break;
+                case COLLAPSE:
+                    path.moveTo(20f, 10f);
+                    path.lineTo(14f, 10f);
+                    path.lineTo(14f, 4f);
+                    path.moveTo(14f, 10f);
+                    path.lineTo(21f, 3f);
+                    path.moveTo(4f, 14f);
+                    path.lineTo(10f, 14f);
+                    path.lineTo(10f, 20f);
+                    path.moveTo(10f, 14f);
+                    path.lineTo(3f, 21f);
                     break;
                 case PAUSE:
                     path.moveTo(7f, 5f);
