@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -82,6 +83,8 @@ public final class Workspace {
     private boolean editorExpanded = false;
     private String lastStatus = "";
 
+    private OverlayUi ui;
+    private File lastFolder = null; // ultima pasta tocada no projeto aberto
     private CodeEditor editor;
     private View editorView;
     private LinearLayout panel;
@@ -150,57 +153,9 @@ public final class Workspace {
         return dir.getAbsolutePath();
     }
 
-    /**
-     * Cria um projeto de exemplo na pasta de jogos, se ela estiver vazia.
-     * Chamado pela lista de projetos.
-     */
+    /** Cria o projeto de exemplo na primeira vez que o app roda (e so nela). */
     public static void ensureSampleProject(File gamesDir) {
-        if (gamesDir == null || !gamesDir.isDirectory()) {
-            return;
-        }
-        String[] existing = gamesDir.list();
-        if (existing != null && existing.length > 0) {
-            return;
-        }
-        File project = new File(gamesDir, "meu_jogo");
-        writeFile(new File(project, "main.lua"),
-            "-- Projeto de exemplo do CodeLove.\n"
-            + "-- Edite este arquivo para mudar o jogo.\n"
-            + "\n"
-            + "local x = 100\n"
-            + "\n"
-            + "function love.update(dt)\n"
-            + "  x = x + 60 * dt\n"
-            + "end\n"
-            + "\n"
-            + "function love.draw()\n"
-            + "  love.graphics.print(\"Ola, CodeLove!\", x, 100)\n"
-            + "end\n");
-        writeFile(new File(project, "conf.lua"),
-            "function love.conf(t)\n"
-            + "  t.window.title = \"meu_jogo\"\n"
-            + "end\n");
-        writeFile(new File(new File(project, "scripts"), "util.lua"),
-            "local util = {}\n"
-            + "\n"
-            + "function util.clamp(v, a, b)\n"
-            + "  return math.max(a, math.min(b, v))\n"
-            + "end\n"
-            + "\n"
-            + "return util\n");
-    }
-
-    private static void writeFile(File file, String text) {
-        File parent = file.getParentFile();
-        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
-            Log.w(TAG, "Nao consegui criar a pasta " + parent);
-            return;
-        }
-        try (FileOutputStream out = new FileOutputStream(file)) {
-            out.write(text.getBytes(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            Log.w(TAG, "Falha ao criar " + file, e);
-        }
+        FileOps.ensureSampleProject(gamesDir);
     }
 
     private int dp(int value) {
@@ -224,6 +179,7 @@ public final class Workspace {
 
     private void build() {
         root.setBackgroundColor(COLOR_OUTER);
+        ui = new OverlayUi(activity, root);
 
         panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -386,6 +342,7 @@ public final class Workspace {
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
 
+        header.addView(iconButton(IconView.PLUS, v -> showAddMenu(v)), headerButtonParams());
         header.addView(headerButton("\u21BB", v -> renderTree()), headerButtonParams());
         header.addView(headerButton("\u21C4", v -> {
             onLeft = !onLeft;
@@ -401,6 +358,16 @@ public final class Workspace {
         button.setTextColor(COLOR_MUTED);
         button.setTextSize(16);
         button.setBackground(box(COLOR_FIELD, 10, false));
+        button.setOnClickListener(listener);
+        return button;
+    }
+
+    private LinearLayout iconButton(int kind, View.OnClickListener listener) {
+        LinearLayout button = new LinearLayout(activity);
+        button.setGravity(Gravity.CENTER);
+        button.setBackground(box(COLOR_FIELD, 10, false));
+        button.addView(new IconView(activity, kind, COLOR_MUTED),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
         button.setOnClickListener(listener);
         return button;
     }
@@ -455,6 +422,9 @@ public final class Workspace {
     private void applyLayout() {
         int sideInset = onLeft ? insetLeft : insetRight;
         boolean editorOpen = editor != null && editor.isOpen();
+        if (ui != null) {
+            ui.topInset = insetTop;
+        }
 
         // Tamanho da area de jogo cheia: a tela sem as barras do sistema.
         float baseW = root.getWidth() - insetLeft - insetRight;
@@ -744,6 +714,10 @@ public final class Workspace {
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         line.setOnClickListener(v -> onRowClicked(row));
+        line.setOnLongClickListener(v -> {
+            showRowMenu(row, v);
+            return true;
+        });
         return line;
     }
 
@@ -777,17 +751,245 @@ public final class Workspace {
             && (activeProject == null
                 || !project.getAbsolutePath().equals(activeProject.getAbsolutePath()))) {
             selectProject(project);
+            rememberFolder(row);
             if (!row.dir) {
                 openInEditor(row.file);
             }
             return;
         }
 
+        rememberFolder(row);
         if (row.dir) {
             renderTree();
         } else {
             openInEditor(row.file);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Criar, renomear e apagar
+    // ------------------------------------------------------------------
+
+    private static boolean sameFile(File a, File b) {
+        return a.getAbsolutePath().equals(b.getAbsolutePath());
+    }
+
+    private void toast(String message) {
+        Toast.makeText(activity, message, Toast.LENGTH_SHORT).show();
+    }
+
+    private void rememberFolder(Row row) {
+        if (activeProject != null && isInside(row.file, activeProject)) {
+            lastFolder = row.dir ? row.file : row.file.getParentFile();
+        }
+    }
+
+    /** Pasta onde um arquivo novo cai pelo botao "+": a ultima tocada, ou a raiz do projeto. */
+    private File targetFolder() {
+        if (activeProject == null) {
+            return null;
+        }
+        if (lastFolder != null && lastFolder.isDirectory() && isInside(lastFolder, activeProject)) {
+            return lastFolder;
+        }
+        return activeProject;
+    }
+
+    private void showAddMenu(View anchor) {
+        List<String> labels = new ArrayList<String>();
+        List<Runnable> actions = new ArrayList<Runnable>();
+        labels.add("Novo projeto");
+        actions.add(() -> newProject());
+        final File folder = targetFolder();
+        if (folder != null) {
+            labels.add("Novo arquivo em " + folder.getName());
+            actions.add(() -> newFile(folder));
+            labels.add("Nova pasta em " + folder.getName());
+            actions.add(() -> newFolder(folder));
+        }
+        ui.showMenu(anchor, labels, actions);
+    }
+
+    private void showRowMenu(Row row, View anchor) {
+        final File file = row.file;
+        List<String> labels = new ArrayList<String>();
+        List<Runnable> actions = new ArrayList<Runnable>();
+        if (row.dir) {
+            labels.add("Novo arquivo aqui");
+            actions.add(() -> newFile(file));
+            labels.add("Nova pasta aqui");
+            actions.add(() -> newFolder(file));
+        }
+        labels.add("Renomear");
+        actions.add(() -> rename(file));
+        labels.add("Excluir");
+        actions.add(() -> delete(file));
+        ui.showMenu(anchor, labels, actions);
+    }
+
+    private void newProject() {
+        if (gamesDir == null) {
+            toast("Pasta de projetos indisponivel.");
+            return;
+        }
+        ui.askText("Novo projeto", "", "Criar",
+            text -> FileOps.checkName(gamesDir, text),
+            text -> {
+                File project = FileOps.createProject(gamesDir, text);
+                if (project == null) {
+                    toast("Nao consegui criar o projeto.");
+                    return;
+                }
+                selectProject(project);
+                openInEditor(new File(project, "main.lua"));
+            });
+    }
+
+    private void newFile(final File folder) {
+        ui.askText("Novo arquivo em " + folder.getName(), "", "Criar",
+            text -> FileOps.checkName(folder, FileOps.withDefaultExtension(text)),
+            text -> {
+                File file = FileOps.createFile(folder, FileOps.withDefaultExtension(text));
+                if (file == null) {
+                    toast("Nao consegui criar o arquivo.");
+                    return;
+                }
+                enterProjectOf(file);
+                expanded.add(folder.getAbsolutePath());
+                lastFolder = folder;
+                renderTree();
+                openInEditor(file);
+            });
+    }
+
+    private void newFolder(final File parent) {
+        ui.askText("Nova pasta em " + parent.getName(), "", "Criar",
+            text -> FileOps.checkName(parent, text),
+            text -> {
+                File folder = FileOps.createFolder(parent, text);
+                if (folder == null) {
+                    toast("Nao consegui criar a pasta.");
+                    return;
+                }
+                enterProjectOf(folder);
+                expanded.add(parent.getAbsolutePath());
+                expanded.add(folder.getAbsolutePath());
+                lastFolder = folder;
+                renderTree();
+            });
+    }
+
+    /** Se o item novo e de outro projeto, passa a trabalhar nesse projeto. */
+    private void enterProjectOf(File file) {
+        File project = projectOf(file);
+        if (project != null && (activeProject == null || !sameFile(project, activeProject))) {
+            selectProject(project);
+        }
+    }
+
+    private void rename(final File target) {
+        final File parent = target.getParentFile();
+        ui.askText("Renomear", target.getName(), "Renomear",
+            text -> text.equals(target.getName()) ? null : FileOps.checkName(parent, text),
+            text -> {
+                if (!text.equals(target.getName())) {
+                    doRename(target, new File(parent, text));
+                }
+            });
+    }
+
+    private void doRename(File target, File dest) {
+        boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
+        File editedFile = editor.isOpen() ? editor.getFile() : null;
+
+        // grava e fecha o editor se o arquivo aberto esta no que vai mudar de nome
+        if (editedFile != null && isInside(editedFile, target)) {
+            editor.close();
+        }
+        if (isActiveProject) {
+            sendCommand("close", "");
+        }
+
+        if (!target.renameTo(dest)) {
+            toast("Nao consegui renomear.");
+            if (isActiveProject) {
+                sendCommand("open", target.getAbsolutePath());
+            }
+            renderTree();
+            return;
+        }
+
+        // acompanha o novo caminho nas pastas abertas
+        String oldPath = target.getAbsolutePath();
+        String newPath = dest.getAbsolutePath();
+        java.util.Set<String> next = new HashSet<String>();
+        for (String path : expanded) {
+            if (path.equals(oldPath)) {
+                next.add(newPath);
+            } else if (path.startsWith(oldPath + File.separator)) {
+                next.add(newPath + path.substring(oldPath.length()));
+            } else {
+                next.add(path);
+            }
+        }
+        expanded.clear();
+        expanded.addAll(next);
+        lastFolder = null;
+
+        if (isActiveProject) {
+            activeProject = dest;
+            projectTitle.setText(dest.getName());
+            playing = false;
+            sendCommand("open", dest.getAbsolutePath());
+            updatePlayButton();
+        } else if (activeProject != null && isInside(target, activeProject)) {
+            playing = false;
+            sendCommand("open", activeProject.getAbsolutePath());
+            updatePlayButton();
+        }
+
+        renderTree();
+        if (editedFile != null && sameFile(editedFile, target)) {
+            openInEditor(dest); // era este arquivo que estava aberto
+        }
+    }
+
+    private void delete(final File target) {
+        String what = "\"" + target.getName() + "\"";
+        String message = target.isDirectory()
+            ? "Excluir a pasta " + what + " e tudo que esta dentro dela? Isso nao pode ser desfeito."
+            : "Excluir o arquivo " + what + "? Isso nao pode ser desfeito.";
+        ui.confirm(message, "Excluir", () -> doDelete(target));
+    }
+
+    private void doDelete(File target) {
+        boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
+
+        if (editor.isOpen() && isInside(editor.getFile(), target)) {
+            editor.close();
+        }
+        if (isActiveProject) {
+            sendCommand("close", "");
+        }
+
+        if (!FileOps.deleteRecursive(target)) {
+            toast("Nao consegui apagar tudo.");
+        }
+        expanded.remove(target.getAbsolutePath());
+        lastFolder = null;
+
+        if (isActiveProject) {
+            activeProject = null;
+            playing = false;
+            projectTitle.setText("CodeLove");
+            placeholder.setVisibility(View.VISIBLE);
+            updatePlayButton();
+        } else if (activeProject != null && isInside(target, activeProject)) {
+            playing = false;
+            sendCommand("open", activeProject.getAbsolutePath());
+            updatePlayButton();
+        }
+        renderTree();
     }
 
     private void openInEditor(File file) {
@@ -825,6 +1027,7 @@ public final class Workspace {
             editor.close();
         }
         activeProject = project;
+        lastFolder = null;
         expanded.add(project.getAbsolutePath());
         playing = false;
         sendCommand("open", project.getAbsolutePath());
@@ -956,6 +1159,7 @@ public final class Workspace {
         static final int PAUSE = 5;
         static final int EXPAND = 6;
         static final int COLLAPSE = 7;
+        static final int PLUS = 8;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -1000,6 +1204,12 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case PLUS:
+                    path.moveTo(12f, 5f);
+                    path.lineTo(12f, 19f);
+                    path.moveTo(5f, 12f);
+                    path.lineTo(19f, 12f);
                     break;
                 case PLAY:
                     path.moveTo(8f, 5f);
