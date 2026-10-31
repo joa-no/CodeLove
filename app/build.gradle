@@ -94,6 +94,19 @@ android {
         return modules
     }
 
+    // CodeLove: chave de assinatura FIXA para os builds de teste (debug).
+    // Assim cada versao nova instala por cima da anterior, sem apagar os projetos.
+    // Esta chave e publica de proposito: serve so para teste, nunca para publicar o app.
+    signingConfigs {
+        debug {
+            storeFile file('codelove-debug.p12')
+            storeType 'pkcs12'
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
