@@ -1,4 +1,4 @@
--- CodeLove: executor (runtime), versao 1.
+-- CodeLove: executor (runtime), versao 2.
 --
 -- Este arquivo roda dentro do LOVE o tempo todo. Ele carrega o projeto escolhido
 -- no painel SEM reiniciar o app, desenha o primeiro quadro (pausado) e so mexe
@@ -7,8 +7,10 @@
 -- Conversa com o painel (Java) por dois arquivos na pasta do "canal":
 --   commands.txt  (o painel escreve)  -> uma linha por comando: nome<TAB>argumento
 --   status.txt    (este arquivo escreve) -> a ultima mensagem, mostrada no painel
+--   console.txt   (este arquivo escreve) -> o que o jogo escreveu com print(), e os erros
 
-local VERSION = 1
+local VERSION = 2
+local MAX_LOG_LINES = 300 -- linhas guardadas no console
 local POLL_INTERVAL = 0.2 -- de quanto em quanto tempo olha o arquivo de comandos
 
 local host = {
@@ -20,6 +22,9 @@ local host = {
   errorText = nil,
   baseModules = {},  -- modulos que ja existiam antes de qualquer projeto
   errorFont = nil,
+  logLines = {},     -- ultimas linhas do console (print() e erros)
+  logDirty = false,
+  lastOpenedPath = nil,
 }
 
 -- ----------------------------------------------------------------------
@@ -45,6 +50,32 @@ end
 
 local function firstLine(text)
   return (tostring(text):match("^[^\n]*"))
+end
+
+-- Console: guarda as ultimas linhas e grava em console.txt (o painel le).
+local function appendLog(text)
+  for line in (tostring(text) .. "\n"):gmatch("([^\n]*)\n") do
+    host.logLines[#host.logLines + 1] = line
+  end
+  local extra = #host.logLines - MAX_LOG_LINES
+  if extra > 0 then
+    local trimmed = {}
+    for i = extra + 1, #host.logLines do
+      trimmed[#trimmed + 1] = host.logLines[i]
+    end
+    host.logLines = trimmed
+  end
+  host.logDirty = true
+end
+
+local function flushLog()
+  if not host.logDirty or not host.channelDir then return end
+  host.logDirty = false
+  local f = io.open(host.channelDir .. "/console.txt", "wb")
+  if f then
+    f:write(table.concat(host.logLines, "\n"))
+    f:close()
+  end
 end
 
 local function findChannelDir()
@@ -73,6 +104,7 @@ end
 local function fail(err)
   host.errorText = tostring(err)
   host.playing = false
+  appendLog("[erro] " .. tostring(err))
   writeStatus("erro: " .. firstLine(err))
 end
 
@@ -122,6 +154,11 @@ local function openProject(path)
   host.playing = false
 
   local name = path:match("([^/]+)/*$") or path
+
+  if host.lastOpenedPath ~= path then
+    host.lastOpenedPath = path
+    appendLog("--- projeto " .. name .. " ---")
+  end
 
   local code = readFile(path .. "/main.lua")
   if not code then
@@ -180,6 +217,9 @@ local function handleCommand(command, argument)
     setPlaying(true)
   elseif command == "pause" then
     setPlaying(false)
+  elseif command == "clearlog" then
+    host.logLines = {}
+    host.logDirty = true
   elseif command == "close" then
     closeProject()
     writeStatus("nenhum projeto aberto")
@@ -214,6 +254,17 @@ function love.load()
   host.errorFont = love.graphics.newFont(20)
   host.channelDir = findChannelDir()
 
+  -- print() (do executor, do projeto e dos modulos dele) tambem vai para o console
+  local originalPrint = print
+  print = function(...)
+    local parts = {}
+    for i = 1, select("#", ...) do
+      parts[#parts + 1] = tostring((select(i, ...)))
+    end
+    appendLog(table.concat(parts, "\t"))
+    originalPrint(...)
+  end
+
   if host.channelDir then
     writeStatus("executor pronto (v" .. VERSION .. ")")
   end
@@ -225,6 +276,7 @@ function love.update(dt)
     host.pollTimer = 0
     local ok, err = pcall(pollCommands)
     if not ok then writeStatus("erro interno: " .. firstLine(err)) end
+    pcall(flushLog)
   end
 
   if host.project and host.playing and not host.errorText then
