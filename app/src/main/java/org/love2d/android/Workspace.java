@@ -12,6 +12,7 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -84,6 +85,13 @@ public final class Workspace {
     private String lastStatus = "";
 
     private OverlayUi ui;
+    private SharedPreferences prefs;
+    private LinearLayout consolePanel;
+    private TextView consoleText;
+    private ScrollView consoleScroll;
+    private LinearLayout consoleButton;
+    private boolean consoleOpen = false;
+    private String lastConsole = "";
     private File lastFolder = null; // ultima pasta tocada no projeto aberto
     private CodeEditor editor;
     private View editorView;
@@ -99,7 +107,7 @@ public final class Workspace {
     private EditText search;
 
     private boolean open = true;
-    private boolean onLeft = true;
+    private boolean onLeft = true; // restaurado das preferencias no construtor
     private int insetLeft;
     private int insetTop;
     private int insetRight;
@@ -112,6 +120,8 @@ public final class Workspace {
         this.surface = surface;
         this.gamesDir = gamesDir;
         this.channelDir = channelDir(activity);
+        this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
+        this.onLeft = prefs.getBoolean("panel_left", true);
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
     }
@@ -243,6 +253,22 @@ public final class Workspace {
             updatePlayButton();
         });
 
+        // Console: mostra o que o jogo escreve com print() e os erros.
+        consoleButton = new LinearLayout(activity);
+        consoleButton.setGravity(Gravity.CENTER);
+        consoleButton.setBackground(box(COLOR_PANEL, 20, true));
+        consoleButton.addView(new IconView(activity, IconView.CONSOLE, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        consoleButton.setVisibility(View.GONE);
+        consoleButton.setOnClickListener(v -> {
+            consoleOpen = !consoleOpen;
+            applyLayout();
+            if (consoleOpen) {
+                updateConsole();
+            }
+        });
+        consolePanel = buildConsolePanel();
+
         // Botao de reset: volta a cena ao estado inicial (pausada).
         resetButton = new TextView(activity);
         resetButton.setText("\u21BA");
@@ -267,6 +293,7 @@ public final class Workspace {
                 editor.setExpanded(false);
                 applyLayout();
                 renderTree();
+                saveState();
             }
 
             @Override
@@ -285,6 +312,8 @@ public final class Workspace {
         root.addView(toggle);
         root.addView(playButton);
         root.addView(resetButton);
+        root.addView(consoleButton);
+        root.addView(consolePanel);
 
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -319,6 +348,7 @@ public final class Workspace {
         renderTree();
         applyLayout();
         root.requestApplyInsets();
+        restoreState();
     }
 
     private View buildHeader() {
@@ -347,6 +377,7 @@ public final class Workspace {
         header.addView(headerButton("\u21C4", v -> {
             onLeft = !onLeft;
             applyLayout();
+            saveState();
         }), headerButtonParams());
         return header;
     }
@@ -555,6 +586,32 @@ public final class Workspace {
             resetLp.rightMargin = resetEdge;
         }
         resetButton.setLayoutParams(resetLp);
+
+        // Botao do console: ao lado do reset.
+        RelativeLayout.LayoutParams consoleBtnLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
+        consoleBtnLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        consoleBtnLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        consoleBtnLp.topMargin = insetTop + margin;
+        int consoleEdge = resetEdge + dp(40) + margin;
+        if (onLeft) {
+            consoleBtnLp.leftMargin = consoleEdge;
+        } else {
+            consoleBtnLp.rightMargin = consoleEdge;
+        }
+        consoleButton.setLayoutParams(consoleBtnLp);
+
+        // Painel do console: na parte de baixo da area do jogo.
+        int consoleHeight = dp(260);
+        if (baseH > 0f) {
+            consoleHeight = Math.min(consoleHeight, (int) (baseH * 0.4f));
+        }
+        RelativeLayout.LayoutParams consoleLp = new RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
+        consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        consoleLp.leftMargin = insetLeft + (onLeft ? reserved : 0) + margin;
+        consoleLp.rightMargin = insetRight + (onLeft ? 0 : reserved) + margin;
+        consoleLp.bottomMargin = insetBottom + margin;
+        consolePanel.setLayoutParams(consoleLp);
 
         // A seta aponta para onde o painel vai se mover ao tocar.
         boolean pointLeft = (onLeft == open);
@@ -952,6 +1009,7 @@ public final class Workspace {
         if (editedFile != null && sameFile(editedFile, target)) {
             openInEditor(dest); // era este arquivo que estava aberto
         }
+        saveState();
     }
 
     private void delete(final File target) {
@@ -990,12 +1048,14 @@ public final class Workspace {
             updatePlayButton();
         }
         renderTree();
+        saveState();
     }
 
     private void openInEditor(File file) {
         if (editor.open(file)) {
             applyLayout();
             renderTree();
+            saveState();
         } else {
             Toast.makeText(activity, "Esse arquivo nao abre no editor (binario ou grande demais).",
                 Toast.LENGTH_SHORT).show();
@@ -1035,6 +1095,7 @@ public final class Workspace {
         placeholder.setVisibility(View.GONE);
         updatePlayButton();
         renderTree();
+        saveState();
     }
 
     private void updatePlayButton() {
@@ -1049,6 +1110,8 @@ public final class Workspace {
         int projectVisibility = (activeProject != null && show) ? View.VISIBLE : View.GONE;
         playButton.setVisibility(projectVisibility);
         resetButton.setVisibility(projectVisibility);
+        consoleButton.setVisibility(projectVisibility);
+        consolePanel.setVisibility((consoleOpen && show && activeProject != null) ? View.VISIBLE : View.GONE);
     }
 
     /** Volta a cena ao inicio: recarrega o projeto, pausado, no primeiro quadro. */
@@ -1076,6 +1139,162 @@ public final class Workspace {
         }
     }
 
+    /** Painel do console: titulo, botao de limpar, botao de fechar e o texto. */
+    private LinearLayout buildConsolePanel() {
+        LinearLayout panelBox = new LinearLayout(activity);
+        panelBox.setOrientation(LinearLayout.VERTICAL);
+        panelBox.setBackground(box(COLOR_PANEL, 16, true));
+        panelBox.setPadding(dp(12), dp(10), dp(12), dp(10));
+        panelBox.setClickable(true); // nao deixa o toque passar para o jogo
+        panelBox.setVisibility(View.GONE);
+
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(activity);
+        title.setText("Console");
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(14);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView clear = new TextView(activity);
+        clear.setText("Limpar");
+        clear.setTextColor(COLOR_TEXT);
+        clear.setTextSize(13);
+        clear.setGravity(Gravity.CENTER);
+        clear.setPadding(dp(12), 0, dp(12), 0);
+        clear.setBackground(box(COLOR_FIELD, 10, false));
+        clear.setOnClickListener(v -> {
+            sendCommand("clearlog", "");
+            lastConsole = "";
+            consoleText.setText("");
+        });
+        header.addView(clear, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)));
+
+        TextView close = new TextView(activity);
+        close.setText("\u00D7");
+        close.setTextColor(COLOR_MUTED);
+        close.setTextSize(20);
+        close.setGravity(Gravity.CENTER);
+        close.setBackground(box(COLOR_FIELD, 10, false));
+        close.setOnClickListener(v -> {
+            consoleOpen = false;
+            applyLayout();
+        });
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(30), dp(30));
+        closeLp.setMargins(dp(6), 0, 0, 0);
+        header.addView(close, closeLp);
+
+        panelBox.addView(header, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        dividerLp.setMargins(0, dp(8), 0, dp(6));
+        panelBox.addView(divider, dividerLp);
+
+        consoleText = new TextView(activity);
+        consoleText.setTypeface(Typeface.MONOSPACE);
+        consoleText.setTextSize(12);
+        consoleText.setTextColor(COLOR_TEXT);
+        consoleText.setTextIsSelectable(true); // segure para copiar uma mensagem
+        consoleText.setPadding(dp(2), dp(2), dp(2), dp(2));
+
+        consoleScroll = new ScrollView(activity);
+        consoleScroll.addView(consoleText, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        panelBox.addView(consoleScroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        return panelBox;
+    }
+
+    /** Le o console.txt (escrito pelo executor) e rola para o fim se mudou. */
+    private void updateConsole() {
+        String text = readTail(new File(channelDir, "console.txt"), 32768);
+        if (text == null) {
+            text = "";
+        }
+        if (!text.equals(lastConsole)) {
+            lastConsole = text;
+            consoleText.setText(text);
+            consoleScroll.post(() -> consoleScroll.fullScroll(View.FOCUS_DOWN));
+        }
+    }
+
+    /** Le so o final do arquivo (ate maxBytes), sem a primeira linha se foi cortada. */
+    private static String readTail(File file, int maxBytes) {
+        if (!file.isFile()) {
+            return null;
+        }
+        try (FileInputStream in = new FileInputStream(file)) {
+            long length = file.length();
+            long start = Math.max(0L, length - maxBytes);
+            if (start > 0) {
+                long skipped = 0;
+                while (skipped < start) {
+                    long n = in.skip(start - skipped);
+                    if (n <= 0) {
+                        break;
+                    }
+                    skipped += n;
+                }
+            }
+            byte[] data = new byte[(int) (length - start)];
+            int total = 0;
+            while (total < data.length) {
+                int read = in.read(data, total, data.length - total);
+                if (read < 0) {
+                    break;
+                }
+                total += read;
+            }
+            String text = new String(data, 0, total, StandardCharsets.UTF_8);
+            if (start > 0) {
+                int cut = text.indexOf('\n');
+                if (cut >= 0) {
+                    text = text.substring(cut + 1);
+                }
+            }
+            return text;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Guarda onde voce parou: projeto aberto, arquivo no editor e lado do painel. */
+    private void saveState() {
+        prefs.edit()
+            .putString("project", activeProject == null ? "" : activeProject.getAbsolutePath())
+            .putString("file", (editor != null && editor.isOpen()) ? editor.getFile().getAbsolutePath() : "")
+            .putBoolean("panel_left", onLeft)
+            .apply();
+    }
+
+    /** Ao abrir o app, volta para o projeto e o arquivo em que voce estava. */
+    private void restoreState() {
+        String projectPath = prefs.getString("project", "");
+        String filePath = prefs.getString("file", "");
+        if (projectPath.isEmpty() || gamesDir == null) {
+            return;
+        }
+        File project = new File(projectPath);
+        if (!project.isDirectory() || sameFile(project, gamesDir) || !isInside(project, gamesDir)) {
+            return;
+        }
+        selectProject(project);
+        if (!filePath.isEmpty()) {
+            File file = new File(filePath);
+            if (file.isFile() && isInside(file, project)) {
+                openInEditor(file);
+            }
+        }
+    }
+
     private static String readText(File file) {
         if (!file.isFile()) {
             return null;
@@ -1100,6 +1319,9 @@ public final class Workspace {
                     lastStatus = text;
                     statusView.setText(text);
                 }
+            }
+            if (consoleOpen) {
+                updateConsole();
             }
             root.postDelayed(this, 700);
         }
@@ -1160,6 +1382,7 @@ public final class Workspace {
         static final int EXPAND = 6;
         static final int COLLAPSE = 7;
         static final int PLUS = 8;
+        static final int CONSOLE = 9;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -1204,6 +1427,13 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case CONSOLE:
+                    path.moveTo(5f, 7f);
+                    path.lineTo(11f, 12f);
+                    path.lineTo(5f, 17f);
+                    path.moveTo(13f, 17f);
+                    path.lineTo(19f, 17f);
                     break;
                 case PLUS:
                     path.moveTo(12f, 5f);

@@ -10,8 +10,10 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -101,9 +103,17 @@ final class OverlayUi {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
         }
 
-        int cardWidth = dp(240);
-        int cardHeight = labels.size() * dp(44) + dp(12);
         int margin = dp(8);
+        // largura pelo texto mais comprido (para nada ficar cortado)
+        Paint paint = new Paint();
+        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 15,
+            activity.getResources().getDisplayMetrics()));
+        int widest = 0;
+        for (String label : labels) {
+            widest = Math.max(widest, (int) Math.ceil(paint.measureText(label)));
+        }
+        int cardWidth = Math.min(Math.max(dp(200), widest + dp(44)), root.getWidth() - margin * 2);
+        int cardHeight = labels.size() * dp(44) + dp(12);
 
         int[] anchorPos = new int[2];
         int[] rootPos = new int[2];
