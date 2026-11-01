@@ -21,8 +21,10 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.util.List;
@@ -217,6 +219,103 @@ final class OverlayUi {
                 imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT);
             }
         });
+    }
+
+    // ------------------------------------------------------------------
+    // Sobre / agradecimentos
+    // ------------------------------------------------------------------
+
+    /** Tela com a logo, o autor, os agradecimentos ao LOVE e as licencas. */
+    void showAbout(String author, final String credits, final String licenses) {
+        FrameLayout scrim = openScrim(0xCC000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        card.setPadding(dp(20), dp(18), dp(20), dp(14));
+        card.setClickable(true);
+
+        int logoId = activity.getResources().getIdentifier(
+            "codelove_logo", "drawable", activity.getPackageName());
+        if (logoId != 0) {
+            ImageView logo = new ImageView(activity);
+            logo.setImageResource(logoId);
+            LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(96), dp(96));
+            logoLp.gravity = Gravity.CENTER_HORIZONTAL;
+            card.addView(logo, logoLp);
+        }
+
+        TextView title = new TextView(activity);
+        title.setText("CodeLove");
+        title.setTextColor(Workspace.COLOR_TEXT);
+        title.setTextSize(22);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        card.addView(title, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView by = new TextView(activity);
+        by.setText("Desenvolvido por " + author);
+        by.setTextColor(Workspace.COLOR_MUTED);
+        by.setTextSize(14);
+        by.setGravity(Gravity.CENTER);
+        by.setPadding(0, dp(2), 0, 0);
+        card.addView(by, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(Workspace.COLOR_BORDER);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        dividerLp.setMargins(0, dp(12), 0, dp(10));
+        card.addView(divider, dividerLp);
+
+        final TextView body = new TextView(activity);
+        body.setText(credits);
+        body.setTextColor(Workspace.COLOR_TEXT);
+        body.setTextSize(14);
+        body.setLineSpacing(0f, 1.15f);
+        final ScrollView scroll = new ScrollView(activity);
+        scroll.addView(body, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // botoes: alterna entre agradecimentos e licencas; fechar
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.END);
+
+        final TextView toggle = button("Licen\u00E7as", Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
+        final boolean[] showingLicenses = {false};
+        toggle.setOnClickListener(v -> {
+            showingLicenses[0] = !showingLicenses[0];
+            body.setText(showingLicenses[0] ? licenses : credits);
+            body.setTextSize(showingLicenses[0] ? 11 : 14);
+            toggle.setText(showingLicenses[0] ? "Agradecimentos" : "Licen\u00E7as");
+            scroll.scrollTo(0, 0);
+        });
+        row.addView(toggle, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));
+
+        TextView close = button("Fechar", Workspace.COLOR_FOLDER, 0xFF0D0F16);
+        close.setTypeface(Typeface.DEFAULT_BOLD);
+        close.setOnClickListener(v -> dismiss());
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
+        closeLp.setMargins(dp(10), 0, 0, 0);
+        row.addView(close, closeLp);
+
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.setMargins(0, dp(12), 0, 0);
+        card.addView(row, rowLp);
+
+        int width = Math.min(dp(480), root.getWidth() - dp(32));
+        int height = Math.min(dp(600), root.getHeight() - topInset - dp(48));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            width, height, Gravity.CENTER);
+        scrim.addView(card, lp);
     }
 
     // ------------------------------------------------------------------

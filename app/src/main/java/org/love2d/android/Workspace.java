@@ -400,6 +400,14 @@ public final class Workspace {
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
 
+        LinearLayout info = new LinearLayout(activity);
+        info.setGravity(Gravity.CENTER);
+        info.setBackground(box(COLOR_FIELD, 10, false));
+        info.addView(new IconView(activity, IconView.INFO, COLOR_MUTED),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        info.setOnClickListener(v -> showAbout());
+        header.addView(info, new LinearLayout.LayoutParams(dp(32), dp(32)));
+
         return header;
     }
 
@@ -440,6 +448,40 @@ public final class Workspace {
             lp.setMargins(dp(BAR_GAP_DP), 0, 0, 0);
         }
         return lp;
+    }
+
+    private static final String CREDITS =
+        "O CodeLove \u00E9 um projeto derivado (fork) do L\u00D6VE para Android, modificado para "
+        + "trazer um ambiente de trabalho completo dentro do pr\u00F3prio app: pastas e arquivos, "
+        + "editor de c\u00F3digo, jogo ao vivo e console.\n\n"
+        + "Todo o motor que executa os jogos \u00E9 o L\u00D6VE (love2d.org), um framework livre para "
+        + "jogos 2D feito e mantido pela equipe LOVE Development Team e por muitos colaboradores. "
+        + "O CodeLove s\u00F3 existe gra\u00E7as a esse trabalho. Muito obrigado!\n\n"
+        + "O CodeLove \u00E9 uma vers\u00E3o modificada e n\u00E3o \u00E9 o L\u00D6VE original. "
+        + "Ele n\u00E3o \u00E9 afiliado nem endossado pelo projeto L\u00D6VE.\n\n"
+        + "O L\u00D6VE \u00E9 distribu\u00EDdo sob a licen\u00E7a zlib, e o app usa outras "
+        + "bibliotecas livres, cada uma com a sua licen\u00E7a. Toque em \"Licen\u00E7as\" para ler "
+        + "todos os avisos.";
+
+    private void showAbout() {
+        ui.showAbout("joa-no", CREDITS, readAssetText("codelove-licenses.txt"));
+    }
+
+    /** Le um arquivo de texto de dentro do app (assets). */
+    private String readAssetText(String name) {
+        try (java.io.InputStream in = activity.getAssets().open(name)) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                out.write(buffer, 0, read);
+            }
+            return new String(out.toByteArray(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "O arquivo de licencas (" + name + ") nao foi encontrado neste app.\n\n"
+                + "Licenca do LOVE: zlib. Copyright (c) 2006-2024 LOVE Development Team. "
+                + "Veja love2d.org.";
+        }
     }
 
     /** Tela cheia: some tudo (pastas, editor, console) e o jogo ocupa a area toda. */
@@ -524,6 +566,17 @@ public final class Workspace {
         }
         int reserved = cursor - sideInset;
 
+        // Console: painel encaixado embaixo da area do jogo (o jogo encolhe para dar lugar).
+        boolean expandedEditor = editorOpen && editorExpanded;
+        boolean consoleShown = consoleOpen && activeProject != null && !fullscreen && !expandedEditor;
+        int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
+        int consoleHeight = dp(220);
+        if (baseH > 0f) {
+            consoleHeight = Math.min(consoleHeight, (int) (baseH * 0.38f));
+        }
+        // pilha de baixo: [console] [barra de controles]
+        int stack = consoleShown ? (consoleHeight + margin + barHeight + margin) : 0;
+
         // A area do jogo SEMPRE tem o mesmo tamanho: a tela cheia, sem as barras do
         // sistema. Assim o jogo nao muda de resolucao quando o painel ou o teclado mudam.
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
@@ -539,10 +592,12 @@ public final class Workspace {
         float scale = 1f;
         float shiftX = 0f;
         float shiftY = 0f;
-        if (reserved > 0 && baseW > reserved && baseH > 0f) {
-            scale = (baseW - reserved) / baseW;
-            shiftX = onLeft ? reserved : 0f;
-            shiftY = (baseH - baseH * scale) / 2f;
+        if (baseW > 0f && baseH > 0f && (reserved > 0 || stack > 0)) {
+            float availW = Math.max(1f, baseW - reserved);
+            float availH = Math.max(1f, baseH - stack);
+            scale = Math.min(1f, Math.min(availW / baseW, availH / baseH));
+            shiftX = (onLeft ? reserved : 0f) + (availW - baseW * scale) / 2f;
+            shiftY = (availH - baseH * scale) / 2f;
         }
         surface.setPivotX(0f);
         surface.setPivotY(0f);
@@ -598,7 +653,6 @@ public final class Workspace {
         int buttonCount = fullscreen ? 3 : 4;
         int barWidth = buttonCount * dp(CONTROL_BUTTON_DP) + (buttonCount - 1) * dp(BAR_GAP_DP)
             + 2 * dp(BAR_PAD_DP);
-        int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
         int regionStart = insetLeft + (onLeft ? reserved : 0);
         int regionWidth = root.getWidth() - insetLeft - insetRight - reserved;
         int barX;
@@ -618,10 +672,6 @@ public final class Workspace {
         controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
 
         // Painel do console: na parte de baixo da area do jogo, acima da barra.
-        int consoleHeight = dp(260);
-        if (baseH > 0f) {
-            consoleHeight = Math.min(consoleHeight, (int) (baseH * 0.4f));
-        }
         RelativeLayout.LayoutParams consoleLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
         consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
@@ -1238,7 +1288,10 @@ public final class Workspace {
         if (!text.equals(lastConsole)) {
             lastConsole = text;
             consoleText.setText(text);
-            consoleScroll.post(() -> consoleScroll.fullScroll(View.FOCUS_DOWN));
+            // Rola ate o fim SEM usar fullScroll: ele tambem muda o foco e tirava o
+            // cursor (e o teclado) do editor sempre que chegava uma linha nova.
+            consoleScroll.post(() -> consoleScroll.scrollTo(0,
+                Math.max(0, consoleText.getHeight() - consoleScroll.getHeight())));
         }
     }
 
@@ -1401,6 +1454,7 @@ public final class Workspace {
         static final int CONSOLE = 9;
         static final int FULLSCREEN = 10;
         static final int FULLSCREEN_EXIT = 11;
+        static final int INFO = 12;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -1445,6 +1499,13 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case INFO:
+                    path.addCircle(12f, 12f, 9f, Path.Direction.CW);
+                    path.moveTo(12f, 11f);
+                    path.lineTo(12f, 17f);
+                    path.moveTo(12f, 7.4f);
+                    path.lineTo(12f, 7.6f);
                     break;
                 case FULLSCREEN:
                     path.moveTo(4f, 9f);
