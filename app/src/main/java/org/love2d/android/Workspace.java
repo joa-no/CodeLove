@@ -66,6 +66,9 @@ public final class Workspace {
     private static final int PANEL_WIDTH_DP = 272;
     private static final int MARGIN_DP = 8;
     private static final int EDITOR_WIDTH_DP = 360;
+    private static final int CONTROL_BUTTON_DP = 44;
+    private static final int BAR_PAD_DP = 6;
+    private static final int BAR_GAP_DP = 8;
     private static final int ROW_HEIGHT_DP = 36;
     private static final int LEVEL_WIDTH_DP = 16;
     private static final int MAX_DEPTH = 12;
@@ -100,13 +103,14 @@ public final class Workspace {
     private LinearLayout playButton;
     private TextView resetButton;
     private IconView playIcon;
-    private TextView toggle;
+    private LinearLayout controlsBar;
+    private IconView fullscreenIcon;
     private TextView projectTitle;
     private TextView statusView;
     private LinearLayout treeBox;
     private EditText search;
 
-    private boolean open = true;
+    private boolean fullscreen = false;
     private boolean onLeft = true; // restaurado das preferencias no construtor
     private int insetLeft;
     private int insetTop;
@@ -230,23 +234,32 @@ public final class Workspace {
         panel.addView(statusView, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        toggle = new TextView(activity);
-        toggle.setGravity(Gravity.CENTER);
-        toggle.setTextColor(COLOR_TEXT);
-        toggle.setTextSize(18);
-        toggle.setBackground(box(COLOR_PANEL, 20, true));
-        toggle.setOnClickListener(v -> {
-            open = !open;
+        // Rodape do painel: botoes de acao (perto dos dedos).
+        View footerDivider = new View(activity);
+        footerDivider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams footerDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        footerDividerLp.setMargins(0, dp(8), 0, dp(10));
+        panel.addView(footerDivider, footerDividerLp);
+
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.addView(footerIconButton(IconView.PLUS, v -> showAddMenu(v)), footerButtonParams(true));
+        footer.addView(footerGlyphButton("\u21BB", v -> renderTree()), footerButtonParams(false));
+        footer.addView(footerGlyphButton("\u21C4", v -> {
+            onLeft = !onLeft;
             applyLayout();
-        });
+            saveState();
+        }), footerButtonParams(false));
+        panel.addView(footer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
 
         // Botao de play/pause (so aparece com um projeto aberto).
         playIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
         playButton = new LinearLayout(activity);
         playButton.setGravity(Gravity.CENTER);
-        playButton.setBackground(box(COLOR_PANEL, 20, true));
-        playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(18), dp(18)));
-        playButton.setVisibility(View.GONE);
+        playButton.setBackground(box(COLOR_FIELD, 22, false));
+        playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         playButton.setOnClickListener(v -> {
             playing = !playing;
             sendCommand(playing ? "play" : "pause", "");
@@ -256,10 +269,9 @@ public final class Workspace {
         // Console: mostra o que o jogo escreve com print() e os erros.
         consoleButton = new LinearLayout(activity);
         consoleButton.setGravity(Gravity.CENTER);
-        consoleButton.setBackground(box(COLOR_PANEL, 20, true));
+        consoleButton.setBackground(box(COLOR_FIELD, 22, false));
         consoleButton.addView(new IconView(activity, IconView.CONSOLE, COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(18), dp(18)));
-        consoleButton.setVisibility(View.GONE);
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
         consoleButton.setOnClickListener(v -> {
             consoleOpen = !consoleOpen;
             applyLayout();
@@ -275,9 +287,28 @@ public final class Workspace {
         resetButton.setGravity(Gravity.CENTER);
         resetButton.setTextColor(COLOR_TEXT);
         resetButton.setTextSize(20);
-        resetButton.setBackground(box(COLOR_PANEL, 20, true));
-        resetButton.setVisibility(View.GONE);
+        resetButton.setBackground(box(COLOR_FIELD, 22, false));
         resetButton.setOnClickListener(v -> resetScene());
+
+        // Botao de tela cheia: esconde pastas e editor e deixa so o jogo.
+        fullscreenIcon = new IconView(activity, IconView.FULLSCREEN, COLOR_TEXT);
+        LinearLayout fullscreenButton = new LinearLayout(activity);
+        fullscreenButton.setGravity(Gravity.CENTER);
+        fullscreenButton.setBackground(box(COLOR_FIELD, 22, false));
+        fullscreenButton.addView(fullscreenIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
+
+        // Barra de controles do jogo, embaixo (perto dos dedos).
+        controlsBar = new LinearLayout(activity);
+        controlsBar.setOrientation(LinearLayout.HORIZONTAL);
+        controlsBar.setGravity(Gravity.CENTER_VERTICAL);
+        controlsBar.setBackground(box(COLOR_PANEL, 30, true));
+        controlsBar.setPadding(dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP));
+        controlsBar.setVisibility(View.GONE);
+        controlsBar.addView(playButton, barButtonParams(true));
+        controlsBar.addView(resetButton, barButtonParams(false));
+        controlsBar.addView(consoleButton, barButtonParams(false));
+        controlsBar.addView(fullscreenButton, barButtonParams(false));
 
         placeholder = buildPlaceholder();
 
@@ -309,11 +340,8 @@ public final class Workspace {
         root.addView(placeholder);
         root.addView(editorView);
         root.addView(panel);
-        root.addView(toggle);
-        root.addView(playButton);
-        root.addView(resetButton);
-        root.addView(consoleButton);
         root.addView(consolePanel);
+        root.addView(controlsBar);
 
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -372,41 +400,56 @@ public final class Workspace {
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
 
-        header.addView(iconButton(IconView.PLUS, v -> showAddMenu(v)), headerButtonParams());
-        header.addView(headerButton("\u21BB", v -> renderTree()), headerButtonParams());
-        header.addView(headerButton("\u21C4", v -> {
-            onLeft = !onLeft;
-            applyLayout();
-            saveState();
-        }), headerButtonParams());
         return header;
     }
 
-    private TextView headerButton(String glyph, View.OnClickListener listener) {
+    private LinearLayout footerIconButton(int kind, View.OnClickListener listener) {
+        LinearLayout button = new LinearLayout(activity);
+        button.setGravity(Gravity.CENTER);
+        button.setBackground(box(COLOR_FIELD, 12, false));
+        button.addView(new IconView(activity, kind, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
+        button.setOnClickListener(listener);
+        return button;
+    }
+
+    private TextView footerGlyphButton(String glyph, View.OnClickListener listener) {
         TextView button = new TextView(activity);
         button.setText(glyph);
         button.setGravity(Gravity.CENTER);
-        button.setTextColor(COLOR_MUTED);
-        button.setTextSize(16);
-        button.setBackground(box(COLOR_FIELD, 10, false));
+        button.setTextColor(COLOR_TEXT);
+        button.setTextSize(20);
+        button.setBackground(box(COLOR_FIELD, 12, false));
         button.setOnClickListener(listener);
         return button;
     }
 
-    private LinearLayout iconButton(int kind, View.OnClickListener listener) {
-        LinearLayout button = new LinearLayout(activity);
-        button.setGravity(Gravity.CENTER);
-        button.setBackground(box(COLOR_FIELD, 10, false));
-        button.addView(new IconView(activity, kind, COLOR_MUTED),
-            new LinearLayout.LayoutParams(dp(18), dp(18)));
-        button.setOnClickListener(listener);
-        return button;
-    }
-
-    private LinearLayout.LayoutParams headerButtonParams() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(32), dp(32));
-        lp.setMargins(dp(6), 0, 0, 0);
+    private LinearLayout.LayoutParams footerButtonParams(boolean first) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+        if (!first) {
+            lp.setMargins(dp(8), 0, 0, 0);
+        }
         return lp;
+    }
+
+    private LinearLayout.LayoutParams barButtonParams(boolean first) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            dp(CONTROL_BUTTON_DP), dp(CONTROL_BUTTON_DP));
+        if (!first) {
+            lp.setMargins(dp(BAR_GAP_DP), 0, 0, 0);
+        }
+        return lp;
+    }
+
+    /** Tela cheia: some tudo (pastas, editor, console) e o jogo ocupa a area toda. */
+    private void setFullscreen(boolean on) {
+        fullscreen = on;
+        if (ui != null) {
+            ui.dismiss();
+        }
+        fullscreenIcon.setKind(on ? IconView.FULLSCREEN_EXIT : IconView.FULLSCREEN);
+        applyLayout();
     }
 
     private View buildSearch() {
@@ -452,7 +495,8 @@ public final class Workspace {
 
     private void applyLayout() {
         int sideInset = onLeft ? insetLeft : insetRight;
-        boolean editorOpen = editor != null && editor.isOpen();
+        boolean panelShown = !fullscreen;
+        boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
         if (ui != null) {
             ui.topInset = insetTop;
         }
@@ -470,12 +514,12 @@ public final class Workspace {
         int cursor = sideInset;
         int panelOffset = 0;
         int editorOffset = 0;
-        if (open) {
+        if (panelShown) {
             panelOffset = cursor + margin;
             cursor += margin + panelWidth + margin;
         }
         if (editorOpen) {
-            editorOffset = open ? cursor : cursor + margin;
+            editorOffset = panelShown ? cursor : cursor + margin;
             cursor = editorOffset + editorWidth + margin;
         }
         int reserved = cursor - sideInset;
@@ -528,7 +572,7 @@ public final class Workspace {
             panelLp.rightMargin = panelOffset;
         }
         panel.setLayoutParams(panelLp);
-        panel.setVisibility(open ? View.VISIBLE : View.GONE);
+        panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
 
         // Editor de codigo (tambem acompanha o teclado). Expandido, ele vai ate a
         // outra borda e cobre a area do jogo.
@@ -549,58 +593,31 @@ public final class Workspace {
         editorView.setLayoutParams(editorLp);
         editorView.setVisibility(editorOpen ? View.VISIBLE : View.GONE);
 
-        // Botao de abrir/fechar: canto de cima da area do jogo, junto ao que vem antes.
-        RelativeLayout.LayoutParams toggleLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
-        toggleLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        toggleLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        toggleLp.topMargin = insetTop + margin;
-        if (onLeft) {
-            toggleLp.leftMargin = sideInset + reserved + margin;
+        // Barra de controles do jogo: embaixo. Centralizada na area do jogo; em tela
+        // cheia vira uma barrinha translucida no canto, para nao atrapalhar.
+        int buttonCount = fullscreen ? 3 : 4;
+        int barWidth = buttonCount * dp(CONTROL_BUTTON_DP) + (buttonCount - 1) * dp(BAR_GAP_DP)
+            + 2 * dp(BAR_PAD_DP);
+        int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
+        int regionStart = insetLeft + (onLeft ? reserved : 0);
+        int regionWidth = root.getWidth() - insetLeft - insetRight - reserved;
+        int barX;
+        if (root.getWidth() <= 0) {
+            barX = 0;
+        } else if (fullscreen) {
+            barX = onLeft ? insetLeft + margin : root.getWidth() - insetRight - margin - barWidth;
         } else {
-            toggleLp.rightMargin = sideInset + reserved + margin;
+            barX = regionStart + Math.max(0, (regionWidth - barWidth) / 2);
         }
-        toggle.setLayoutParams(toggleLp);
+        RelativeLayout.LayoutParams barLp = new RelativeLayout.LayoutParams(barWidth, barHeight);
+        barLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+        barLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        barLp.leftMargin = barX;
+        barLp.bottomMargin = insetBottom + margin;
+        controlsBar.setLayoutParams(barLp);
+        controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
 
-        // Botao de play/pause: logo ao lado do botao de abrir/fechar.
-        RelativeLayout.LayoutParams playLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
-        playLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        playLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        playLp.topMargin = insetTop + margin;
-        int playEdge = sideInset + reserved + margin + dp(40) + margin;
-        if (onLeft) {
-            playLp.leftMargin = playEdge;
-        } else {
-            playLp.rightMargin = playEdge;
-        }
-        playButton.setLayoutParams(playLp);
-
-        // Botao de reset: ao lado do play.
-        RelativeLayout.LayoutParams resetLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
-        resetLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        resetLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        resetLp.topMargin = insetTop + margin;
-        int resetEdge = playEdge + dp(40) + margin;
-        if (onLeft) {
-            resetLp.leftMargin = resetEdge;
-        } else {
-            resetLp.rightMargin = resetEdge;
-        }
-        resetButton.setLayoutParams(resetLp);
-
-        // Botao do console: ao lado do reset.
-        RelativeLayout.LayoutParams consoleBtnLp = new RelativeLayout.LayoutParams(dp(40), dp(40));
-        consoleBtnLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        consoleBtnLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        consoleBtnLp.topMargin = insetTop + margin;
-        int consoleEdge = resetEdge + dp(40) + margin;
-        if (onLeft) {
-            consoleBtnLp.leftMargin = consoleEdge;
-        } else {
-            consoleBtnLp.rightMargin = consoleEdge;
-        }
-        consoleButton.setLayoutParams(consoleBtnLp);
-
-        // Painel do console: na parte de baixo da area do jogo.
+        // Painel do console: na parte de baixo da area do jogo, acima da barra.
         int consoleHeight = dp(260);
         if (baseH > 0f) {
             consoleHeight = Math.min(consoleHeight, (int) (baseH * 0.4f));
@@ -610,12 +627,8 @@ public final class Workspace {
         consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         consoleLp.leftMargin = insetLeft + (onLeft ? reserved : 0) + margin;
         consoleLp.rightMargin = insetRight + (onLeft ? 0 : reserved) + margin;
-        consoleLp.bottomMargin = insetBottom + margin;
+        consoleLp.bottomMargin = insetBottom + margin + barHeight + margin;
         consolePanel.setLayoutParams(consoleLp);
-
-        // A seta aponta para onde o painel vai se mover ao tocar.
-        boolean pointLeft = (onLeft == open);
-        toggle.setText(pointLeft ? "\u2039" : "\u203A");
 
         updateControlsVisibility();
     }
@@ -1103,15 +1116,16 @@ public final class Workspace {
         updateControlsVisibility();
     }
 
-    /** Com o editor expandido, os botoes da area do jogo somem (ela fica coberta). */
+    /**
+     * A barra de controles aparece com um projeto aberto. Some enquanto o editor
+     * expandido cobre a area do jogo. Em tela cheia o botao do console some.
+     */
     private void updateControlsVisibility() {
-        boolean show = !(editor != null && editor.isOpen() && editorExpanded);
-        toggle.setVisibility(show ? View.VISIBLE : View.GONE);
-        int projectVisibility = (activeProject != null && show) ? View.VISIBLE : View.GONE;
-        playButton.setVisibility(projectVisibility);
-        resetButton.setVisibility(projectVisibility);
-        consoleButton.setVisibility(projectVisibility);
-        consolePanel.setVisibility((consoleOpen && show && activeProject != null) ? View.VISIBLE : View.GONE);
+        boolean expandedEditor = editor != null && editor.isOpen() && editorExpanded && !fullscreen;
+        boolean showBar = activeProject != null && !expandedEditor;
+        controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
+        consoleButton.setVisibility(fullscreen ? View.GONE : View.VISIBLE);
+        consolePanel.setVisibility((consoleOpen && showBar && !fullscreen) ? View.VISIBLE : View.GONE);
     }
 
     /** Volta a cena ao inicio: recarrega o projeto, pausado, no primeiro quadro. */
@@ -1217,7 +1231,9 @@ public final class Workspace {
     private void updateConsole() {
         String text = readTail(new File(channelDir, "console.txt"), 32768);
         if (text == null) {
-            text = "";
+            text = "O console ainda nao recebeu nada do executor.\n"
+                + "Se isto continuar depois de abrir um projeto, o arquivo\n"
+                + "app/src/normal/assets/main.lua nao e a versao 2.";
         }
         if (!text.equals(lastConsole)) {
             lastConsole = text;
@@ -1383,6 +1399,8 @@ public final class Workspace {
         static final int COLLAPSE = 7;
         static final int PLUS = 8;
         static final int CONSOLE = 9;
+        static final int FULLSCREEN = 10;
+        static final int FULLSCREEN_EXIT = 11;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -1427,6 +1445,34 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case FULLSCREEN:
+                    path.moveTo(4f, 9f);
+                    path.lineTo(4f, 4f);
+                    path.lineTo(9f, 4f);
+                    path.moveTo(15f, 4f);
+                    path.lineTo(20f, 4f);
+                    path.lineTo(20f, 9f);
+                    path.moveTo(20f, 15f);
+                    path.lineTo(20f, 20f);
+                    path.lineTo(15f, 20f);
+                    path.moveTo(9f, 20f);
+                    path.lineTo(4f, 20f);
+                    path.lineTo(4f, 15f);
+                    break;
+                case FULLSCREEN_EXIT:
+                    path.moveTo(4f, 9f);
+                    path.lineTo(9f, 9f);
+                    path.lineTo(9f, 4f);
+                    path.moveTo(15f, 4f);
+                    path.lineTo(15f, 9f);
+                    path.lineTo(20f, 9f);
+                    path.moveTo(20f, 15f);
+                    path.lineTo(15f, 15f);
+                    path.lineTo(15f, 20f);
+                    path.moveTo(9f, 20f);
+                    path.lineTo(9f, 15f);
+                    path.lineTo(4f, 15f);
                     break;
                 case CONSOLE:
                     path.moveTo(5f, 7f);

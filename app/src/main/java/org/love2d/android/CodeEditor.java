@@ -117,24 +117,29 @@ final class CodeEditor {
         dirtyMark.setVisibility(View.GONE);
         header.addView(dirtyMark);
 
-        expandIcon = new Workspace.IconView(activity, Workspace.IconView.EXPAND, Workspace.COLOR_MUTED);
+        // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+
+        expandIcon = new Workspace.IconView(activity, Workspace.IconView.EXPAND, Workspace.COLOR_TEXT);
         LinearLayout expandButton = new LinearLayout(activity);
         expandButton.setGravity(Gravity.CENTER);
-        expandButton.setBackground(box(Workspace.COLOR_FIELD, 10, false));
-        expandButton.addView(expandIcon, new LinearLayout.LayoutParams(dp(18), dp(18)));
+        expandButton.setBackground(box(Workspace.COLOR_FIELD, 12, false));
+        expandButton.addView(expandIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         expandButton.setOnClickListener(v -> listener.onExpandToggle());
-        LinearLayout.LayoutParams expandLp = new LinearLayout.LayoutParams(dp(32), dp(32));
-        expandLp.setMargins(0, 0, dp(6), 0);
-        header.addView(expandButton, expandLp);
+        LinearLayout.LayoutParams expandLp = new LinearLayout.LayoutParams(dp(52), dp(44));
+        expandLp.setMargins(0, 0, dp(10), 0);
+        footer.addView(expandButton, expandLp);
 
         TextView close = new TextView(activity);
         close.setText("\u00D7");
         close.setGravity(Gravity.CENTER);
-        close.setTextColor(Workspace.COLOR_MUTED);
-        close.setTextSize(22);
-        close.setBackground(box(Workspace.COLOR_FIELD, 10, false));
+        close.setTextColor(Workspace.COLOR_TEXT);
+        close.setTextSize(24);
+        close.setBackground(box(Workspace.COLOR_FIELD, 12, false));
         close.setOnClickListener(v -> close());
-        header.addView(close, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        footer.addView(close, new LinearLayout.LayoutParams(dp(52), dp(44)));
 
         view.addView(header, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -219,6 +224,16 @@ final class CodeEditor {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         view.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // Rodape (expandir / fechar), logo acima do teclado quando ele esta aberto.
+        View footerDivider = new View(activity);
+        footerDivider.setBackgroundColor(Workspace.COLOR_BORDER);
+        LinearLayout.LayoutParams footerDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        footerDividerLp.setMargins(0, dp(6), 0, dp(8));
+        view.addView(footerDivider, footerDividerLp);
+        view.addView(footer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // O texto ocupa pelo menos a altura visivel (para tocar na parte vazia).
         scroll.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
