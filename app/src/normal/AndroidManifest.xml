@@ -2,7 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <application android:icon="@drawable/love">
+    <application
+        android:icon="@mipmap/codelove_icon"
+        android:roundIcon="@mipmap/codelove_icon"
+        tools:replace="android:icon">
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -13,6 +17,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
         <!--
             Important: GameActivity class name MUST be explicitly written as
             "org.love2d.android.GameActivity" without any shortcuts.
@@ -26,11 +31,13 @@
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
             </intent-filter>
         </activity>
+
         <activity
             android:name=".AboutActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:theme="@style/Theme.AppCompat.DayNight" />
+
         <provider
             android:name="org.love2d.android.LoveDocumentsProvider"
             android:authorities="${applicationId}.documents"
