@@ -2,10 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <application
-        android:icon="@mipmap/codelove_icon"
-        android:roundIcon="@mipmap/codelove_icon"
-        tools:replace="android:icon">
+    <application android:icon="@drawable/love">
         <activity
             android:name=".MainActivity"
             android:exported="true"
