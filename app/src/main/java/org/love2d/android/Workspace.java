@@ -153,6 +153,14 @@ public final class Workspace {
         Workspace workspace = new Workspace(activity, (RelativeLayout) layout, surface, games);
         currentInstance = workspace;
         workspace.build();
+        workspace.showPreviousCrashReport();
+    }
+
+    private void showPreviousCrashReport() {
+        String report = CrashDiagnostics.consumePreviousExitReport(activity);
+        if (report != null) {
+            showNotice("Diagnostico do encerramento anterior", report);
+        }
     }
 
     /** Sincroniza o polling da interface com o ciclo de vida da Activity SDL. */
@@ -974,6 +982,11 @@ public final class Workspace {
      * ultrapassa a altura disponivel do painel.
      */
     private void showProjectNotice(String message) {
+        CrashDiagnostics.log(activity, "Project notice shown");
+        showNotice("Nao foi possivel adicionar o projeto", message);
+    }
+
+    private void showNotice(String titleText, String message) {
         if (projectNotice != null) {
             root.removeView(projectNotice);
             projectNotice = null;
@@ -986,7 +999,7 @@ public final class Workspace {
         sheet.setElevation(dp(12));
 
         TextView title = new TextView(activity);
-        title.setText("Nao foi possivel adicionar o projeto");
+        title.setText(titleText);
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(15);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1101,6 +1114,7 @@ public final class Workspace {
     }
 
     private void addExistingProject() {
+        CrashDiagnostics.log(activity, "SAF picker launch requested");
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
             | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -1126,18 +1140,23 @@ public final class Workspace {
         }
 
         try {
+            CrashDiagnostics.log(activity, "SAF result received; resultCode=RESULT_OK");
             Uri treeUri = data.getData();
             int grantedFlags = data.getFlags()
                 & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            CrashDiagnostics.log(activity, "SAF inspectProject started");
             SafProjectManager.ProjectSelection selection =
                 SafProjectManager.inspectProject(activity, treeUri);
+            CrashDiagnostics.log(activity, "SAF inspectProject finished; valid=" + selection.isValid());
             if (!selection.isValid()) {
                 workspace.showProjectNotice(selection.error);
                 return;
             }
 
+            CrashDiagnostics.log(activity, "SAF register started");
             String error = SafProjectManager.register(activity, treeUri, grantedFlags,
                 selection.documentId, selection.displayName);
+            CrashDiagnostics.log(activity, "SAF register finished; success=" + (error == null));
             if (error != null) {
                 workspace.showProjectNotice(error);
             } else {
@@ -1145,6 +1164,7 @@ public final class Workspace {
                     + "\" validado. O acesso foi salvo; a integracao com a arvore e a sincronizacao virao na proxima etapa.");
             }
         } catch (RuntimeException e) {
+            CrashDiagnostics.log(activity, "SAF result handler caught RuntimeException", e);
             Log.e(TAG, "Falha inesperada ao processar a pasta selecionada pelo SAF", e);
             workspace.showProjectNotice(
                 "O Android encontrou um erro inesperado ao processar essa pasta. "
