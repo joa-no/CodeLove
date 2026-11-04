@@ -1196,16 +1196,22 @@ public final class Workspace {
         final File file = row.file;
         List<String> labels = new ArrayList<String>();
         List<Runnable> actions = new ArrayList<Runnable>();
+        boolean externalProjectRoot = row.dir
+            && SafProjectManager.isWorkingCopyRoot(activity, file);
         if (row.dir) {
             labels.add("Novo arquivo aqui");
             actions.add(() -> newFile(file));
             labels.add("Nova pasta aqui");
             actions.add(() -> newFolder(file));
         }
-        labels.add("Renomear");
-        actions.add(() -> rename(file));
-        labels.add("Excluir");
-        actions.add(() -> delete(file));
+        // A raiz da copia externa mantem o vinculo persistido com a pasta SAF.
+        // Renomear/apagar sera habilitado junto com o gerenciamento de vinculos.
+        if (!externalProjectRoot) {
+            labels.add("Renomear");
+            actions.add(() -> rename(file));
+            labels.add("Excluir");
+            actions.add(() -> delete(file));
+        }
         ui.showMenu(anchor, labels, actions);
     }
 
