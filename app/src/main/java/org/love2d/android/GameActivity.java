@@ -151,6 +151,7 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onDestroy() {
+        Workspace.onHostDestroy(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
             vibrator.cancel();
@@ -161,11 +162,18 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onPause() {
+        Workspace.onHostPause(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
             vibrator.cancel();
         }
         super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Workspace.onHostResume(this);
     }
 
     @Override
