@@ -752,16 +752,3 @@ public class LoveDocumentsProvider extends DocumentsProvider {
     }
 
 }
-        final int splitIndex = docId.indexOf(':', 1);
-        if (splitIndex < 0) {
-            throw new FileNotFoundException("Missing root for " + docId);
-        } else {
-            final String path = docId.substring(splitIndex + 1);
-            target = new File(target, path);
-            if (!target.exists()) {
-                throw new FileNotFoundException("Missing file for " + docId + " at " + target);
-            }
-            return target;
-        }
-    }
-}
