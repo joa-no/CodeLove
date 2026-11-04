@@ -71,10 +71,14 @@ final class SafProjectManager {
             return "Essa pasta nao concedeu permissao de leitura e escrita.";
         }
 
+        boolean hadPermission = hasPersistedReadWritePermission(activity, treeUri);
         try {
             activity.getContentResolver().takePersistableUriPermission(treeUri, persistableFlags);
         } catch (SecurityException e) {
             return "O Android nao permitiu guardar o acesso permanente a essa pasta.";
+        }
+        if (!hasPersistedReadWritePermission(activity, treeUri)) {
+            return "O Android nao confirmou a autorizacao persistente dessa pasta.";
         }
 
         android.content.SharedPreferences prefs =
@@ -96,13 +100,26 @@ final class SafProjectManager {
             projects.put(entry);
 
             if (!prefs.edit().putString(KEY_PROJECTS, projects.toString()).commit()) {
+                releaseNewPermission(activity, treeUri, persistableFlags, hadPermission);
                 return "O acesso foi concedido, mas nao consegui salvar o registro do projeto.";
             }
         } catch (Exception e) {
+            releaseNewPermission(activity, treeUri, persistableFlags, hadPermission);
             return "Nao consegui registrar essa pasta no CodeLove.";
         }
 
         return null;
+    }
+
+    private static void releaseNewPermission(Context context, Uri treeUri,
+                                              int flags, boolean hadPermission) {
+        if (hadPermission) {
+            return;
+        }
+        try {
+            context.getContentResolver().releasePersistableUriPermission(treeUri, flags);
+        } catch (SecurityException ignored) {
+        }
     }
 
     static boolean hasPersistedReadWritePermission(Context context, Uri treeUri) {
