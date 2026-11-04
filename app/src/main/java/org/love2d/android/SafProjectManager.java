@@ -11,26 +11,178 @@ import android.provider.OpenableColumns;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Registro das pastas de projeto escolhidas pelo seletor SAF do Android.
+ * Gerencia a autorizacao SAF e identifica a raiz real de um projeto LÖVE.
  *
- * Nesta primeira etapa, guarda a autorizacao persistente e os metadados.
- * A copia de trabalho e a sincronizacao com o Workspace serao integradas
- * nas etapas seguintes.
+ * O usuario pode selecionar:
+ * - a propria pasta do jogo, com main.lua na raiz; ou
+ * - uma pasta-container com exatamente uma pasta de jogo diretamente dentro.
+ *
+ * A URI persistida continua sendo a tree URI autorizada pelo Android.
+ * projectDocumentId identifica a raiz do jogo dentro dessa tree.
  */
 final class SafProjectManager {
     private static final String PREFS_NAME = "codelove_saf";
     private static final String KEY_PROJECTS = "projects";
 
+    static final class ProjectSelection {
+        final String documentId;
+        final String displayName;
+        final String error;
+
+        private ProjectSelection(String documentId, String displayName, String error) {
+            this.documentId = documentId;
+            this.displayName = displayName;
+            this.error = error;
+        }
+
+        static ProjectSelection valid(String id, String name) {
+            return new ProjectSelection(id, name, null);
+        }
+
+        static ProjectSelection invalid(String message) {
+            return new ProjectSelection(null, null, message);
+        }
+
+        boolean isValid() {
+            return error == null && documentId != null;
+        }
+    }
+
     private SafProjectManager() {
     }
 
     static String getDisplayName(Context context, Uri treeUri) {
-        Cursor cursor = null;
         try {
             String documentId = DocumentsContract.getTreeDocumentId(treeUri);
+            String name = queryDisplayName(context, treeUri, documentId);
+            if (name != null) return name;
+        } catch (Exception ignored) {
+        }
+        String fallback = treeUri == null ? null : treeUri.getLastPathSegment();
+        return fallback == null || fallback.trim().isEmpty()
+            ? "Projeto externo" : fallback;
+    }
+
+    /**
+     * Verifica a estrutura antes de guardar a autorizacao.
+     * Aceita a raiz do jogo ou um container com uma unica pasta de jogo.
+     */
+    static ProjectSelection inspectProject(Context context, Uri treeUri) {
+        if (treeUri == null || !"content".equals(treeUri.getScheme())) {
+            return ProjectSelection.invalid("O Android retornou uma pasta invalida.");
+        }
+
+        try {
+            String rootId = DocumentsContract.getTreeDocumentId(treeUri);
+            if (rootId == null || rootId.isEmpty()) {
+                return ProjectSelection.invalid("Nao consegui identificar a pasta selecionada.");
+            }
+
+            if (hasMainLua(context, treeUri, rootId)) {
+                String name = queryDisplayName(context, treeUri, rootId);
+                return ProjectSelection.valid(rootId, name == null ? "Projeto externo" : name);
+            }
+
+            ArrayList<ProjectSelection> candidates = new ArrayList<ProjectSelection>();
+            Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId);
+            Cursor cursor = null;
+            try {
+                cursor = context.getContentResolver().query(childrenUri,
+                    new String[]{
+                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                        DocumentsContract.Document.COLUMN_MIME_TYPE
+                    }, null, null, null);
+
+                if (cursor == null) {
+                    return ProjectSelection.invalid(
+                        "O Android nao conseguiu ler o conteudo da pasta selecionada.");
+                }
+
+                int idColumn = cursor.getColumnIndex(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID);
+                int nameColumn = cursor.getColumnIndex(
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+                int mimeColumn = cursor.getColumnIndex(
+                    DocumentsContract.Document.COLUMN_MIME_TYPE);
+                if (idColumn < 0 || mimeColumn < 0) {
+                    return ProjectSelection.invalid(
+                        "O provedor de arquivos nao informou os dados necessarios da pasta.");
+                }
+
+                while (cursor.moveToNext()) {
+                    String mime = cursor.getString(mimeColumn);
+                    if (!DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) continue;
+
+                    String childId = cursor.getString(idColumn);
+                    if (childId == null || childId.isEmpty()) continue;
+                    if (hasMainLua(context, treeUri, childId)) {
+                        String name = nameColumn >= 0 ? cursor.getString(nameColumn) : null;
+                        if (name == null || name.trim().isEmpty()) {
+                            name = queryDisplayName(context, treeUri, childId);
+                        }
+                        candidates.add(ProjectSelection.valid(childId,
+                            name == null ? "Projeto externo" : name));
+                    }
+                }
+            } finally {
+                if (cursor != null) cursor.close();
+            }
+
+            if (candidates.size() == 1) return candidates.get(0);
+            if (candidates.size() > 1) {
+                return ProjectSelection.invalid(
+                    "Essa pasta contem mais de um projeto LÖVE. Selecione diretamente a pasta do jogo que deseja adicionar.");
+            }
+            return ProjectSelection.invalid(
+                "Nao encontrei main.lua. Selecione a pasta do jogo, com main.lua diretamente dentro dela, ou uma pasta que contenha apenas uma pasta de jogo.");
+        } catch (SecurityException e) {
+            return ProjectSelection.invalid(
+                "O Android nao permitiu ler essa pasta. Verifique a autorizacao e tente novamente.");
+        } catch (Exception e) {
+            return ProjectSelection.invalid(
+                "Nao consegui verificar a estrutura dessa pasta. Tente selecionar a pasta do jogo diretamente.");
+        }
+    }
+
+    private static boolean hasMainLua(Context context, Uri treeUri, String documentId) {
+        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId);
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(childrenUri,
+                new String[]{
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE
+                }, null, null, null);
+            if (cursor == null) return false;
+
+            int nameColumn = cursor.getColumnIndex(
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME);
+            int mimeColumn = cursor.getColumnIndex(
+                DocumentsContract.Document.COLUMN_MIME_TYPE);
+            if (nameColumn < 0) return false;
+
+            while (cursor.moveToNext()) {
+                String name = cursor.getString(nameColumn);
+                if ("main.lua".equals(name)) {
+                    if (mimeColumn < 0) return true;
+                    String mime = cursor.getString(mimeColumn);
+                    return !DocumentsContract.Document.MIME_TYPE_DIR.equals(mime);
+                }
+            }
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return false;
+    }
+
+    private static String queryDisplayName(Context context, Uri treeUri, String documentId) {
+        Cursor cursor = null;
+        try {
             Uri documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId);
             cursor = context.getContentResolver().query(documentUri,
                 new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null);
@@ -38,30 +190,24 @@ final class SafProjectManager {
                 int column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
                 if (column >= 0) {
                     String name = cursor.getString(column);
-                    if (name != null && !name.trim().isEmpty()) {
-                        return name;
-                    }
+                    if (name != null && !name.trim().isEmpty()) return name;
                 }
             }
-        } catch (Exception ignored) {
         } finally {
-            if (cursor != null) {
-                cursor.close();
-            }
+            if (cursor != null) cursor.close();
         }
-
-        String fallback = treeUri.getLastPathSegment();
-        return fallback == null || fallback.trim().isEmpty()
-            ? "Projeto externo" : fallback;
+        return null;
     }
 
     /**
-     * Registra uma pasta apenas quando o provedor concedeu leitura e escrita.
-     * Retorna null em caso de sucesso ou uma mensagem adequada para o usuario.
+     * Registra a tree URI e a raiz validada do projeto.
+     * Retorna null em caso de sucesso ou uma mensagem para o usuario.
      */
-    static String register(Activity activity, Uri treeUri, int grantedFlags, String displayName) {
-        if (treeUri == null || !"content".equals(treeUri.getScheme())) {
-            return "O Android retornou uma pasta invalida.";
+    static String register(Activity activity, Uri treeUri, int grantedFlags,
+                           String projectDocumentId, String displayName) {
+        if (treeUri == null || !"content".equals(treeUri.getScheme())
+            || projectDocumentId == null || projectDocumentId.isEmpty()) {
+            return "A pasta do projeto e invalida.";
         }
 
         int requiredFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -95,6 +241,7 @@ final class SafProjectManager {
 
             JSONObject entry = new JSONObject();
             entry.put("uri", treeUri.toString());
+            entry.put("projectDocumentId", projectDocumentId);
             entry.put("name", displayName == null ? "Projeto externo" : displayName);
             entry.put("flags", persistableFlags);
             projects.put(entry);
@@ -113,9 +260,7 @@ final class SafProjectManager {
 
     private static void releaseNewPermission(Context context, Uri treeUri,
                                               int flags, boolean hadPermission) {
-        if (hadPermission) {
-            return;
-        }
+        if (hadPermission) return;
         try {
             context.getContentResolver().releasePersistableUriPermission(treeUri, flags);
         } catch (SecurityException ignored) {
