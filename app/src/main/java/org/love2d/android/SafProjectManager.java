@@ -398,7 +398,9 @@ final class SafProjectManager {
         StringBuilder safe = new StringBuilder();
         for (int i = 0; i < value.length() && safe.length() < 48; i++) {
             char ch = value.charAt(i);
-            safe.append(ch < 32 || "/\\\\:*?\\"<>|".indexOf(ch) >= 0 ? '_' : ch);
+            boolean invalid = ch < 32 || ch == '/' || ch == '\\' || ch == ':'
+                || ch == '*' || ch == '?' || ch == '"' || ch == '<' || ch == '>' || ch == '|';
+            safe.append(invalid ? '_' : ch);
         }
         String result = safe.toString().trim();
         return result.isEmpty() || result.equals(".") || result.equals("..") ? "Projeto" : result;
@@ -450,7 +452,7 @@ final class SafProjectManager {
 
     private static boolean isSafeDocumentName(String name) {
         return name != null && !name.trim().isEmpty() && !name.equals(".") && !name.equals("..")
-            && name.indexOf('/') < 0 && name.indexOf('\\\\') < 0;
+            && name.indexOf('/') < 0 && name.indexOf('\\') < 0;
     }
 
     private static void copyDocumentFile(Context context, Uri treeUri, String documentId, File target)
