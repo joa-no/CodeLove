@@ -155,6 +155,33 @@ public final class Workspace {
         workspace.build();
     }
 
+    /** Sincroniza o polling da interface com o ciclo de vida da Activity SDL. */
+    public static void onHostResume(Activity activity) {
+        Workspace workspace = currentInstance;
+        if (workspace != null && workspace.activity == activity && !workspace.disposed) {
+            workspace.hostResumed = true;
+            workspace.startStatusPolling();
+        }
+    }
+
+    public static void onHostPause(Activity activity) {
+        Workspace workspace = currentInstance;
+        if (workspace != null && workspace.activity == activity) {
+            workspace.hostResumed = false;
+            workspace.stopStatusPolling();
+        }
+    }
+
+    public static void onHostDestroy(Activity activity) {
+        Workspace workspace = currentInstance;
+        if (workspace != null && workspace.activity == activity) {
+            workspace.hostResumed = false;
+            workspace.disposed = true;
+            workspace.stopStatusPolling();
+            currentInstance = null;
+        }
+    }
+
     /** Pasta do canal de comandos (Java -> executor em Lua). */
     public static File channelDir(Context context) {
         return new File(context.getFilesDir(), "codelove");
@@ -381,15 +408,15 @@ public final class Workspace {
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View v) {
+                startStatusPolling();
             }
 
             @Override
             public void onViewDetachedFromWindow(View v) {
-                root.removeCallbacks(statusPoller);
+                stopStatusPolling();
                 editor.saveNow();
             }
         });
-        root.postDelayed(statusPoller, 700);
 
         // Acompanha as barras do sistema (relogio no topo, gestos embaixo).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -1612,21 +1639,49 @@ public final class Workspace {
     }
 
     /** Mostra, no pe do painel, a ultima mensagem do executor. */
+    private boolean hostResumed = false;
+    private boolean disposed = false;
+
+    private boolean canPollStatus() {
+        return hostResumed && !disposed && currentInstance == this
+            && root.isAttachedToWindow() && !activity.isFinishing()
+            && (android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed());
+    }
+
+    private void startStatusPolling() {
+        if (!canPollStatus()) return;
+        root.removeCallbacks(statusPoller);
+        root.postDelayed(statusPoller, 700);
+    }
+
+    private void stopStatusPolling() {
+        root.removeCallbacks(statusPoller);
+    }
+
     private final Runnable statusPoller = new Runnable() {
         @Override
         public void run() {
-            String text = readText(new File(channelDir, "status.txt"));
-            if (text != null) {
-                text = text.trim();
-                if (!text.isEmpty() && !text.equals(lastStatus)) {
-                    lastStatus = text;
-                    statusView.setText(text);
+            if (!canPollStatus()) return;
+
+            try {
+                String text = readText(new File(channelDir, "status.txt"));
+                if (text != null) {
+                    text = text.trim();
+                    if (!text.isEmpty() && !text.equals(lastStatus)) {
+                        lastStatus = text;
+                        statusView.setText(text);
+                    }
                 }
+                if (consoleOpen) {
+                    updateConsole();
+                }
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Falha ao atualizar o status/console do CodeLove", e);
             }
-            if (consoleOpen) {
-                updateConsole();
+
+            if (canPollStatus()) {
+                root.postDelayed(this, 700);
             }
-            root.postDelayed(this, 700);
         }
     };
 
