@@ -1160,15 +1160,28 @@ public final class Workspace {
             if (error != null) {
                 workspace.showProjectNotice(error);
             } else {
-                SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
-                    activity, treeUri, selection.documentId, selection.displayName, workspace.gamesDir);
-                if (!copy.isSuccess()) {
-                    workspace.showProjectNotice(copy.error);
-                } else {
-                    workspace.expanded.add(copy.directory.getAbsolutePath());
-                    workspace.renderTree();
-                    workspace.toast("Projeto importado como copia local. As alteracoes ainda nao sao sincronizadas com a pasta original.");
-                }
+                workspace.toast("Importando projeto para o armazenamento local...");
+                final Workspace targetWorkspace = workspace;
+                final Uri selectedTreeUri = treeUri;
+                final SafProjectManager.ProjectSelection selectedProject = selection;
+                new Thread(() -> {
+                    SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
+                        activity, selectedTreeUri, selectedProject.documentId,
+                        selectedProject.displayName, targetWorkspace.gamesDir);
+                    activity.runOnUiThread(() -> {
+                        if (currentInstance != targetWorkspace || targetWorkspace.disposed
+                            || activity.isFinishing()) {
+                            return;
+                        }
+                        if (!copy.isSuccess()) {
+                            targetWorkspace.showProjectNotice(copy.error);
+                        } else {
+                            targetWorkspace.expanded.add(copy.directory.getAbsolutePath());
+                            targetWorkspace.renderTree();
+                            targetWorkspace.toast("Projeto importado como copia local. As alteracoes ainda nao sao sincronizadas com a pasta original.");
+                        }
+                    });
+                }, "CodeLove-SAF-Import").start();
             }
         } catch (RuntimeException e) {
             CrashDiagnostics.log(activity, "SAF result handler caught RuntimeException", e);
