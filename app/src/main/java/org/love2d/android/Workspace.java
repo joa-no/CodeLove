@@ -111,6 +111,7 @@ public final class Workspace {
     private IconView fullscreenIcon;
     private TextView projectTitle;
     private TextView statusView;
+    private LinearLayout projectNotice;
     private LinearLayout treeBox;
     private EditText search;
 
@@ -940,6 +941,101 @@ public final class Workspace {
         Toast.makeText(activity, message, Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * Aviso persistente do CodeLove para erros de selecao de projeto.
+     * O texto pode ter qualquer tamanho pratico: a area central rola quando
+     * ultrapassa a altura disponivel do painel.
+     */
+    private void showProjectNotice(String message) {
+        if (projectNotice != null) {
+            root.removeView(projectNotice);
+            projectNotice = null;
+        }
+
+        LinearLayout sheet = new LinearLayout(activity);
+        sheet.setOrientation(LinearLayout.VERTICAL);
+        sheet.setBackground(box(COLOR_PANEL, 18, true));
+        sheet.setPadding(dp(16), dp(14), dp(16), dp(12));
+        sheet.setElevation(dp(12));
+
+        TextView title = new TextView(activity);
+        title.setText("Nao foi possivel adicionar o projeto");
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(15);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        sheet.addView(title, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ScrollView messageScroll = new ScrollView(activity);
+        messageScroll.setFillViewport(false);
+        messageScroll.setVerticalScrollBarEnabled(true);
+        TextView body = new TextView(activity);
+        body.setText(message == null ? "Ocorreu um erro inesperado." : message);
+        body.setTextColor(COLOR_MUTED);
+        body.setTextSize(13);
+        body.setLineSpacing(dp(2), 1.0f);
+        body.setTextIsSelectable(true);
+        body.setPadding(0, dp(9), dp(4), dp(9));
+        messageScroll.addView(body, new ScrollView.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams messageLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(150));
+        messageLp.setMargins(0, dp(2), 0, dp(10));
+        sheet.addView(messageScroll, messageLp);
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(COLOR_BORDER);
+        sheet.addView(divider, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
+
+        LinearLayout actions = new LinearLayout(activity);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        actions.setPadding(0, dp(10), 0, 0);
+
+        TextView close = new TextView(activity);
+        close.setText("Fechar");
+        close.setTextColor(COLOR_MUTED);
+        close.setTextSize(13);
+        close.setGravity(Gravity.CENTER);
+        close.setBackground(box(COLOR_FIELD, 10, true));
+        close.setPadding(dp(12), 0, dp(12), 0);
+        actions.addView(close, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        close.setOnClickListener(v -> dismissProjectNotice());
+
+        View gap = new View(activity);
+        actions.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
+
+        TextView retry = new TextView(activity);
+        retry.setText("Selecionar novamente");
+        retry.setTextColor(COLOR_TEXT);
+        retry.setTextSize(13);
+        retry.setGravity(Gravity.CENTER);
+        retry.setBackground(box(COLOR_LUA, 10, false));
+        retry.setPadding(dp(12), 0, dp(12), 0);
+        actions.addView(retry, new LinearLayout.LayoutParams(0, dp(42), 1.5f));
+        retry.setOnClickListener(v -> {
+            dismissProjectNotice();
+            addExistingProject();
+        });
+        sheet.addView(actions);
+
+        RelativeLayout.LayoutParams sheetLp = new RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        sheetLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
+        sheetLp.setMargins(dp(12), 0, dp(12), Math.max(dp(12), insetBottom));
+        projectNotice = sheet;
+        root.addView(sheet, sheetLp);
+        sheet.bringToFront();
+    }
+
+    private void dismissProjectNotice() {
+        if (projectNotice != null) {
+            root.removeView(projectNotice);
+            projectNotice = null;
+        }
+    }
+
     private void rememberFolder(Row row) {
         if (activeProject != null && isInside(row.file, activeProject)) {
             lastFolder = row.dir ? row.file : row.file.getParentFile();
@@ -1005,14 +1101,14 @@ public final class Workspace {
         SafProjectManager.ProjectSelection selection =
             SafProjectManager.inspectProject(activity, treeUri);
         if (!selection.isValid()) {
-            workspace.toast(selection.error);
+            workspace.showProjectNotice(selection.error);
             return;
         }
 
         String error = SafProjectManager.register(activity, treeUri, grantedFlags,
             selection.documentId, selection.displayName);
         if (error != null) {
-            workspace.toast(error);
+            workspace.showProjectNotice(error);
         } else {
             workspace.toast("Projeto \"" + selection.displayName
                 + "\" validado. O acesso foi salvo; a integracao com a arvore e a sincronizacao virao na proxima etapa.");
