@@ -4,18 +4,18 @@
 -- no painel SEM reiniciar o app, desenha o primeiro quadro (pausado) e so mexe
 -- o jogo quando o play e apertado.
 --
--- Conversa com o painel (Java) por dois arquivos na pasta do "canal":
---   commands.txt  (o painel escreve)  -> uma linha por comando: nome<TAB>argumento
---   status.txt    (este arquivo escreve) -> a ultima mensagem, mostrada no painel
---   console.txt   (este arquivo escreve) -> o que o jogo escreveu com print(), e os erros
+-- Conversa com o painel (Java) por arquivos na pasta do "canal":
+--   commands/command-NNNNNNNNNN.txt (Java publica; Lua consome em ordem)
+--   status.txt  (este arquivo escreve) -> a ultima mensagem, mostrada no painel
+--   console.txt (este arquivo escreve) -> o que o jogo escreveu com print(), e os erros
 
-local VERSION = 2
+local VERSION = 3
 local MAX_LOG_LINES = 300 -- linhas guardadas no console
 local POLL_INTERVAL = 0.2 -- de quanto em quanto tempo olha o arquivo de comandos
 
 local host = {
-  channelDir = nil,  -- pasta do canal (onde ficam commands.txt e status.txt)
-  processed = 0,     -- quantas linhas de commands.txt ja foram tratadas
+  channelDir = nil,  -- pasta do canal (onde ficam commands/ e status.txt)
+  processed = 0,     -- ultimo numero de comando consumido
   pollTimer = 0,
   project = nil,     -- { path, name, callbacks, mounted }
   playing = false,
@@ -228,18 +228,23 @@ end
 
 local function pollCommands()
   if not host.channelDir then return end
-  local data = readFile(host.channelDir .. "/commands.txt")
-  if not data or data == "" then return end
+  local queueDir = host.channelDir .. "/commands"
 
-  local index = 0
-  -- so linhas completas (terminadas em \n)
-  for line in data:gmatch("([^\n]*)\n") do
-    index = index + 1
-    if index > host.processed then
-      host.processed = index
-      local command, argument = line:match("^([^\t]*)\t?(.*)$")
-      handleCommand(command, argument)
+  -- Cada comando tem seu proprio arquivo. Java so publica o arquivo final depois
+  -- de terminar a escrita; Lua apaga cada arquivo apos processa-lo. Assim, nao
+  -- existe disputa entre ler e truncar um arquivo compartilhado.
+  while true do
+    local index = host.processed + 1
+    local path = string.format("%s/command-%010d.txt", queueDir, index)
+    local data = readFile(path)
+    if data == nil then
+      break -- ainda nao chegou o proximo numero; preserva a ordem da fila
     end
+
+    local command, argument = data:match("^([^\t]*)\t?(.*)$")
+    handleCommand(command, argument)
+    host.processed = index
+    os.remove(path)
   end
 end
 
