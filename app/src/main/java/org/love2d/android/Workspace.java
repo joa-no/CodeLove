@@ -1002,13 +1002,20 @@ public final class Workspace {
         Uri treeUri = data.getData();
         int grantedFlags = data.getFlags()
             & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        String displayName = SafProjectManager.getDisplayName(activity, treeUri);
-        String error = SafProjectManager.register(activity, treeUri, grantedFlags, displayName);
+        SafProjectManager.ProjectSelection selection =
+            SafProjectManager.inspectProject(activity, treeUri);
+        if (!selection.isValid()) {
+            workspace.toast(selection.error);
+            return;
+        }
+
+        String error = SafProjectManager.register(activity, treeUri, grantedFlags,
+            selection.documentId, selection.displayName);
         if (error != null) {
             workspace.toast(error);
         } else {
-            workspace.toast("Acesso a \"" + displayName
-                + "\" autorizado e salvo. A sincronizacao sera ativada na proxima etapa.");
+            workspace.toast("Projeto \"" + selection.displayName
+                + "\" validado. O acesso foi salvo; a integracao com a arvore e a sincronizacao virao na proxima etapa.");
         }
     }
 
