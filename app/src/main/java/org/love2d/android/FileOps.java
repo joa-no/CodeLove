@@ -63,16 +63,81 @@ final class FileOps {
         return name.indexOf('.') >= 0 ? name : name + ".lua";
     }
 
-    /** Cria a pasta do projeto com um main.lua inicial. Devolve nulo se falhar. */
+    /**
+     * Cria o projeto em uma pasta temporaria fora da arvore de projetos e so o
+     * publica depois que main.lua estiver completamente gravado. Se qualquer
+     * etapa falhar, tenta remover a pasta temporaria e nao deixa um projeto parcial.
+     */
     static File createProject(File gamesDir, String name) {
-        File project = new File(gamesDir, name);
-        if (!project.mkdirs()) {
+        if (gamesDir == null || checkName(gamesDir, name) != null) {
             return null;
         }
-        if (!writeText(new File(project, "main.lua"), NEW_PROJECT_MAIN)) {
+
+        File staging = null;
+        boolean published = false;
+        try {
+            File gamesRoot = gamesDir.getCanonicalFile();
+            if (!gamesRoot.isDirectory()) {
+                return null;
+            }
+
+            File project = new File(gamesRoot, name);
+            if (!gamesRoot.equals(project.getCanonicalFile().getParentFile())
+                || project.exists()) {
+                return null;
+            }
+
+            File stagingRoot = gamesRoot.getParentFile();
+            if (stagingRoot == null || !stagingRoot.isDirectory()) {
+                return null;
+            }
+
+            // A pasta temporaria fica fora de games/, portanto nunca aparece na arvore.
+            for (int attempt = 0; attempt < 10; attempt++) {
+                staging = new File(stagingRoot,
+                    ".codelove-project-" + System.nanoTime() + "-" + attempt + ".tmp");
+                if (staging.mkdir()) {
+                    break;
+                }
+                staging = null;
+            }
+            if (staging == null) {
+                return null;
+            }
+
+            File main = new File(staging, "main.lua");
+            if (!writeTextAndSync(main, NEW_PROJECT_MAIN)) {
+                return null;
+            }
+
+            // Revalida o destino imediatamente antes da publicacao.
+            if (project.exists()
+                || !gamesRoot.equals(project.getCanonicalFile().getParentFile())
+                || !staging.renameTo(project)) {
+                return null;
+            }
+
+            published = true;
+            return project;
+        } catch (IOException e) {
             return null;
+        } finally {
+            if (!published && staging != null && staging.exists()) {
+                deleteRecursive(staging);
+            }
         }
-        return project;
+    }
+
+    /** Grava o arquivo inicial por completo antes de publicar a pasta do projeto. */
+    private static boolean writeTextAndSync(File file, String text) {
+        try (FileOutputStream out = new FileOutputStream(file)) {
+            out.write(text.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            out.getFD().sync();
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /** Cria um arquivo vazio. Devolve nulo se falhar. */
