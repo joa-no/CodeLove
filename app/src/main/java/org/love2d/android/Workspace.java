@@ -65,7 +65,6 @@ public final class Workspace {
 
     private static final int PANEL_WIDTH_DP = 272;
     private static final int MARGIN_DP = 8;
-    private static final int EDITOR_WIDTH_DP = 360;
     private static final int CONTROL_BUTTON_DP = 44;
     private static final int BAR_PAD_DP = 6;
     private static final int BAR_GAP_DP = 8;
@@ -85,7 +84,6 @@ public final class Workspace {
 
     private File activeProject = null; // projeto aberto agora (nulo se nenhum)
     private boolean playing = false;
-    private boolean editorExpanded = false;
     private String lastStatus = "";
 
     private OverlayUi ui;
@@ -104,6 +102,7 @@ public final class Workspace {
     private LinearLayout playButton;
     private TextView resetButton;
     private IconView playIcon;
+    private IconView footerPlayIcon;
     private LinearLayout controlsBar;
     private IconView fullscreenIcon;
     private TextView projectTitle;
@@ -277,19 +276,16 @@ public final class Workspace {
         panel.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
 
-        // Botao de play/pause (so aparece com um projeto aberto).
+        // Controles do jogo: a versao da barra flutuante continua disponivel
+        // quando o editor esta fechado ou em tela cheia.
         playIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
         playButton = new LinearLayout(activity);
         playButton.setGravity(Gravity.CENTER);
         playButton.setBackground(box(COLOR_FIELD, 22, false));
         playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        playButton.setOnClickListener(v -> {
-            playing = !playing;
-            sendCommand(playing ? "play" : "pause", "");
-            updatePlayButton();
-        });
+        playButton.setOnClickListener(v -> togglePlayback());
 
-        // Console: mostra o que o jogo escreve com print() e os erros.
+        // Console: o botao sera inserido no rodape do editor.
         consoleButton = new LinearLayout(activity);
         consoleButton.setGravity(Gravity.CENTER);
         consoleButton.setBackground(box(COLOR_FIELD, 22, false));
@@ -304,7 +300,7 @@ public final class Workspace {
         });
         consolePanel = buildConsolePanel();
 
-        // Botao de reset: volta a cena ao estado inicial (pausada).
+        // Reset: mantem a acao tanto na barra flutuante quanto no rodape do editor.
         resetButton = new TextView(activity);
         resetButton.setText("\u21BA");
         resetButton.setGravity(Gravity.CENTER);
@@ -313,7 +309,7 @@ public final class Workspace {
         resetButton.setBackground(box(COLOR_FIELD, 22, false));
         resetButton.setOnClickListener(v -> resetScene());
 
-        // Botao de tela cheia: esconde pastas e editor e deixa so o jogo.
+        // Tela cheia continua sendo um controle separado da barra do editor.
         fullscreenIcon = new IconView(activity, IconView.FULLSCREEN, COLOR_TEXT);
         LinearLayout fullscreenButton = new LinearLayout(activity);
         fullscreenButton.setGravity(Gravity.CENTER);
@@ -321,7 +317,7 @@ public final class Workspace {
         fullscreenButton.addView(fullscreenIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
 
-        // Barra de controles do jogo, embaixo (perto dos dedos).
+        // Barra flutuante usada quando o editor esta fechado ou em tela cheia.
         controlsBar = new LinearLayout(activity);
         controlsBar.setOrientation(LinearLayout.HORIZONTAL);
         controlsBar.setGravity(Gravity.CENTER_VERTICAL);
@@ -330,8 +326,23 @@ public final class Workspace {
         controlsBar.setVisibility(View.GONE);
         controlsBar.addView(playButton, barButtonParams(true));
         controlsBar.addView(resetButton, barButtonParams(false));
-        controlsBar.addView(consoleButton, barButtonParams(false));
         controlsBar.addView(fullscreenButton, barButtonParams(false));
+
+        // Controles equivalentes na barra inferior do editor.
+        footerPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
+        LinearLayout footerPlayButton = new LinearLayout(activity);
+        footerPlayButton.setGravity(Gravity.CENTER);
+        footerPlayButton.setBackground(box(COLOR_FIELD, 22, false));
+        footerPlayButton.addView(footerPlayIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        footerPlayButton.setOnClickListener(v -> togglePlayback());
+
+        TextView footerResetButton = new TextView(activity);
+        footerResetButton.setText("\u21BA");
+        footerResetButton.setGravity(Gravity.CENTER);
+        footerResetButton.setTextColor(COLOR_TEXT);
+        footerResetButton.setTextSize(20);
+        footerResetButton.setBackground(box(COLOR_FIELD, 22, false));
+        footerResetButton.setOnClickListener(v -> resetScene());
 
         placeholder = buildPlaceholder();
 
@@ -343,20 +354,14 @@ public final class Workspace {
 
             @Override
             public void onClosed() {
-                editorExpanded = false;
-                editor.setExpanded(false);
                 applyLayout();
                 renderTree();
                 saveState();
             }
-
-            @Override
-            public void onExpandToggle() {
-                editorExpanded = !editorExpanded;
-                editor.setExpanded(editorExpanded);
-                applyLayout();
-            }
         });
+        editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, 0);
+        editor.addFooterControl(footerResetButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
+        editor.addFooterControl(consoleButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editorView = editor.getView();
         editorView.setVisibility(View.GONE);
 
@@ -570,12 +575,8 @@ public final class Workspace {
         float baseW = root.getWidth() - insetLeft - insetRight;
         float baseH = root.getHeight() - insetTop - insetBottom;
 
-        int editorWidth = dp(EDITOR_WIDTH_DP);
-        if (baseW > 0f) {
-            editorWidth = Math.min(editorWidth, (int) (baseW * 0.45f));
-        }
-
-        // Da borda da tela para dentro: [painel] [editor] e, por fim, a area do jogo.
+        // Da borda da tela para dentro: [painel] [editor].
+        // O editor ocupa sempre todo o espaco restante, sem modo expandido.
         int cursor = sideInset;
         int panelOffset = 0;
         int editorOffset = 0;
@@ -583,22 +584,24 @@ public final class Workspace {
             panelOffset = cursor + margin;
             cursor += margin + panelWidth + margin;
         }
+        int editorWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         if (editorOpen) {
             editorOffset = panelShown ? cursor : cursor + margin;
-            cursor = editorOffset + editorWidth + margin;
+            if (baseW > 0f) {
+                editorWidth = Math.max(0, (int) baseW - (editorOffset - sideInset) - margin);
+                cursor = editorOffset + editorWidth + margin;
+            } else {
+                cursor = editorOffset + margin;
+            }
         }
         int reserved = cursor - sideInset;
 
-        // Console: painel encaixado embaixo da area do jogo (o jogo encolhe para dar lugar).
-        boolean expandedEditor = editorOpen && editorExpanded;
-        boolean consoleShown = consoleOpen && activeProject != null && !fullscreen && !expandedEditor;
+        // O console sobrepoe a parte inferior do codigo, dentro dos limites do editor.
         int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
         int consoleHeight = dp(220);
         if (baseH > 0f) {
             consoleHeight = Math.min(consoleHeight, (int) (baseH * 0.38f));
         }
-        // pilha de baixo: [console] [barra de controles]
-        int stack = consoleShown ? (consoleHeight + margin + barHeight + margin) : 0;
 
         // A area do jogo SEMPRE tem o mesmo tamanho: a tela cheia, sem as barras do
         // sistema. Assim o jogo nao muda de resolucao quando o painel ou o teclado mudam.
@@ -615,9 +618,9 @@ public final class Workspace {
         float scale = 1f;
         float shiftX = 0f;
         float shiftY = 0f;
-        if (baseW > 0f && baseH > 0f && (reserved > 0 || stack > 0)) {
+        if (baseW > 0f && baseH > 0f && reserved > 0) {
             float availW = Math.max(1f, baseW - reserved);
-            float availH = Math.max(1f, baseH - stack);
+            float availH = baseH;
             scale = Math.min(1f, Math.min(availW / baseW, availH / baseH));
             shiftX = (onLeft ? reserved : 0f) + (availW - baseW * scale) / 2f;
             shiftY = (availH - baseH * scale) / 2f;
@@ -652,12 +655,8 @@ public final class Workspace {
         panel.setLayoutParams(panelLp);
         panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
 
-        // Editor de codigo (tambem acompanha o teclado). Expandido, ele vai ate a
-        // outra borda e cobre a area do jogo.
+        // Editor de codigo: ocupa todo o espaco restante e acompanha o teclado.
         int editorLayoutWidth = editorWidth;
-        if (editorOpen && editorExpanded && baseW > 0f) {
-            editorLayoutWidth = (int) baseW - (editorOffset - sideInset) - margin;
-        }
         RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
             editorLayoutWidth, ViewGroup.LayoutParams.MATCH_PARENT);
         editorLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
@@ -673,7 +672,7 @@ public final class Workspace {
 
         // Barra de controles do jogo: embaixo. Centralizada na area do jogo; em tela
         // cheia vira uma barrinha translucida no canto, para nao atrapalhar.
-        int buttonCount = fullscreen ? 3 : 4;
+        int buttonCount = 3;
         int barWidth = buttonCount * dp(CONTROL_BUTTON_DP) + (buttonCount - 1) * dp(BAR_GAP_DP)
             + 2 * dp(BAR_PAD_DP);
         int regionStart = insetLeft + (onLeft ? reserved : 0);
@@ -694,13 +693,20 @@ public final class Workspace {
         controlsBar.setLayoutParams(barLp);
         controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
 
-        // Painel do console: na parte de baixo da area do jogo, acima da barra.
+        // Console: sobrepoe o codigo, mas termina antes do rodape do editor.
         RelativeLayout.LayoutParams consoleLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
-        consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        consoleLp.leftMargin = insetLeft + (onLeft ? reserved : 0) + margin;
-        consoleLp.rightMargin = insetRight + (onLeft ? 0 : reserved) + margin;
-        consoleLp.bottomMargin = insetBottom + margin + barHeight + margin;
+        consoleLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        int consoleInset = dp(12);
+        if (onLeft) {
+            consoleLp.leftMargin = editorOffset + consoleInset;
+            consoleLp.rightMargin = insetRight + margin + consoleInset;
+        } else {
+            consoleLp.rightMargin = editorOffset + consoleInset;
+            consoleLp.leftMargin = insetLeft + margin + consoleInset;
+        }
+        // 12dp de padding inferior + divisor/margens + 44dp da barra de acoes.
+        consoleLp.bottomMargin = insetBottomIme + margin + dp(71);
         consolePanel.setLayoutParams(consoleLp);
 
         updateControlsVisibility();
@@ -1185,21 +1191,28 @@ public final class Workspace {
         saveState();
     }
 
+    private void togglePlayback() {
+        playing = !playing;
+        sendCommand(playing ? "play" : "pause", "");
+        updatePlayButton();
+    }
+
     private void updatePlayButton() {
-        playIcon.setKind(playing ? IconView.PAUSE : IconView.PLAY);
+        int kind = playing ? IconView.PAUSE : IconView.PLAY;
+        playIcon.setKind(kind);
+        footerPlayIcon.setKind(kind);
         updateControlsVisibility();
     }
 
     /**
-     * A barra de controles aparece com um projeto aberto. Some enquanto o editor
-     * expandido cobre a area do jogo. Em tela cheia o botao do console some.
+     * Com o editor aberto, os controles ficam no rodape dele. A barra flutuante
+     * permanece para quando o editor esta fechado ou em tela cheia.
      */
     private void updateControlsVisibility() {
-        boolean expandedEditor = editor != null && editor.isOpen() && editorExpanded && !fullscreen;
-        boolean showBar = activeProject != null && !expandedEditor;
+        boolean editorVisible = editor != null && editor.isOpen() && !fullscreen;
+        boolean showBar = activeProject != null && !editorVisible;
         controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
-        consoleButton.setVisibility(fullscreen ? View.GONE : View.VISIBLE);
-        consolePanel.setVisibility((consoleOpen && showBar && !fullscreen) ? View.VISIBLE : View.GONE);
+        consolePanel.setVisibility((consoleOpen && editorVisible) ? View.VISIBLE : View.GONE);
     }
 
     /** Volta a cena ao inicio: recarrega o projeto, pausado, no primeiro quadro. */
