@@ -362,6 +362,22 @@ final class SafProjectManager {
         boolean isSuccess() { return directory != null && error == null; }
     }
 
+    static boolean isWorkingCopyRoot(Context context, File directory) {
+        if (directory == null) return false;
+        try {
+            String candidate = directory.getCanonicalPath();
+            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_PROJECTS, "[]"));
+            for (int i = 0; i < projects.length(); i++) {
+                JSONObject item = projects.optJSONObject(i);
+                if (item == null) continue;
+                String path = item.optString("workingPath", "");
+                if (!path.isEmpty() && candidate.equals(new File(path).getCanonicalPath())) return true;
+            }
+        } catch (Exception ignored) { }
+        return false;
+    }
+
     private static String findWorkingPath(Context context, Uri treeUri) {
         try {
             JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -433,6 +449,9 @@ final class SafProjectManager {
                     throw new IOException("O projeto contem um nome de arquivo ou pasta invalido.");
                 }
                 File target = new File(destination, name);
+                if (target.exists()) {
+                    throw new IOException("O provedor retornou nomes duplicados dentro de uma pasta.");
+                }
                 if (!destination.getCanonicalFile().equals(target.getCanonicalFile().getParentFile())) {
                     throw new IOException("Um item do projeto tentou sair da pasta de destino.");
                 }
