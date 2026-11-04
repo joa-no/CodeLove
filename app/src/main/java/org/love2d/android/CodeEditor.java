@@ -51,8 +51,6 @@ final class CodeEditor {
         /** Chamado quando o editor foi fechado. */
         void onClosed();
 
-        /** Chamado ao tocar no botao de expandir/recolher. */
-        void onExpandToggle();
     }
 
     private static final String TAG = "CodeLove";
@@ -72,7 +70,8 @@ final class CodeEditor {
     private final TextView gutter;
     private final EditText input;
     private final ScrollView scroll;
-    private final Workspace.IconView expandIcon;
+    private final LinearLayout footer;
+    private final View footerSpacer;
 
     private final Runnable saveTask = new Runnable() {
         @Override
@@ -120,19 +119,14 @@ final class CodeEditor {
         header.addView(dirtyMark);
 
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
-        LinearLayout footer = new LinearLayout(activity);
+        footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
-        footer.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        footer.setGravity(Gravity.CENTER_VERTICAL);
 
-        expandIcon = new Workspace.IconView(activity, Workspace.IconView.EXPAND, Workspace.COLOR_TEXT);
-        LinearLayout expandButton = new LinearLayout(activity);
-        expandButton.setGravity(Gravity.CENTER);
-        expandButton.setBackground(box(Workspace.COLOR_FIELD, 12, false));
-        expandButton.addView(expandIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        expandButton.setOnClickListener(v -> listener.onExpandToggle());
-        LinearLayout.LayoutParams expandLp = new LinearLayout.LayoutParams(dp(52), dp(44));
-        expandLp.setMargins(0, 0, dp(10), 0);
-        footer.addView(expandButton, expandLp);
+        // Reserva o espaco entre os controles do projeto e o botao de fechar.
+        footerSpacer = new View(activity);
+        footer.addView(footerSpacer, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
         TextView close = new TextView(activity);
         close.setText("\u00D7");
@@ -250,9 +244,15 @@ final class CodeEditor {
         return view;
     }
 
-    /** Troca o icone do botao conforme o editor esteja expandido ou nao. */
-    void setExpanded(boolean expanded) {
-        expandIcon.setKind(expanded ? Workspace.IconView.COLLAPSE : Workspace.IconView.EXPAND);
+    /** Adiciona um controle na barra inferior, antes do espaco e do botao de fechar. */
+    void addFooterControl(View control, int widthDp, int gapDp) {
+        int index = footer.indexOfChild(footerSpacer);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            dp(widthDp), dp(44));
+        if (gapDp > 0) {
+            params.setMargins(dp(gapDp), 0, 0, 0);
+        }
+        footer.addView(control, index, params);
     }
 
     boolean isOpen() {
