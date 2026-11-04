@@ -78,6 +78,7 @@ public final class Workspace {
     private final View surface;
     private final File gamesDir;   // pasta onde ficam os projetos (pode ser nula)
     private final File channelDir; // pasta do canal de comandos com o executor (Lua)
+    private long commandSequence = 0L; // sequencia da fila Java -> Lua nesta execucao
     private final int panelWidth;
     private final int margin;
     private final Set<String> expanded = new HashSet<String>();
@@ -159,10 +160,32 @@ public final class Workspace {
      */
     public static String prepareChannel(Context context) {
         File dir = channelDir(context);
-        if (!dir.isDirectory()) {
-            dir.mkdirs();
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            throw new IllegalStateException("Nao foi possivel preparar o canal do CodeLove.");
         }
-        new File(dir, "commands.txt").delete();
+
+        // O executor comeca com a sequencia 1 em cada inicializacao. Limpa a fila
+        // anterior antes de iniciar o LOVE, sem tocar nos arquivos de status/console.
+        File queue = new File(dir, "commands");
+        if (queue.exists()) {
+            File[] pending = queue.listFiles();
+            if (pending == null) {
+                throw new IllegalStateException("Nao foi possivel ler a fila de comandos.");
+            }
+            for (File file : pending) {
+                if (!file.isFile() || !file.delete()) {
+                    throw new IllegalStateException("Nao foi possivel limpar a fila de comandos.");
+                }
+            }
+            if (!queue.delete()) {
+                throw new IllegalStateException("Nao foi possivel reiniciar a fila de comandos.");
+            }
+        }
+        if (!queue.mkdirs()) {
+            throw new IllegalStateException("Nao foi possivel criar a fila de comandos.");
+        }
+
+        new File(dir, "commands.txt").delete(); // remove o protocolo antigo, se existir
         new File(dir, "status.txt").delete();
         return dir.getAbsolutePath();
     }
@@ -1192,18 +1215,39 @@ public final class Workspace {
         updatePlayButton();
     }
 
-    /** Escreve uma linha no arquivo de comandos que o executor (Lua) le. */
-    private void sendCommand(String command, String argument) {
-        if (!channelDir.isDirectory() && !channelDir.mkdirs()) {
-            Log.w(TAG, "Sem pasta do canal: " + channelDir);
+    /**
+     * Publica um comando como arquivo independente. O rename do temporario
+     * torna a publicacao atomica para o leitor Lua: ele nunca ve um comando parcial.
+     */
+    private synchronized void sendCommand(String command, String argument) {
+        File queue = new File(channelDir, "commands");
+        if (!queue.isDirectory() && !queue.mkdirs()) {
+            Log.w(TAG, "Sem pasta da fila de comandos: " + queue);
             return;
         }
-        File file = new File(channelDir, "commands.txt");
-        try (FileOutputStream out = new FileOutputStream(file, true)) {
-            out.write((command + "\t" + argument + "\n").getBytes(StandardCharsets.UTF_8));
+
+        long next = commandSequence + 1L;
+        String name = String.format(Locale.ROOT, "command-%010d.txt", next);
+        File target = new File(queue, name);
+        File temp = new File(queue, name + ".tmp");
+        byte[] data = (command + "\t" + argument).getBytes(StandardCharsets.UTF_8);
+
+        try (FileOutputStream out = new FileOutputStream(temp)) {
+            out.write(data);
+            out.flush();
+            out.getFD().sync();
         } catch (IOException e) {
-            Log.w(TAG, "Falha ao enviar o comando " + command, e);
+            temp.delete();
+            Log.w(TAG, "Falha ao preparar o comando " + command, e);
+            return;
         }
+
+        if (!temp.renameTo(target)) {
+            temp.delete();
+            Log.w(TAG, "Falha ao publicar o comando " + command);
+            return;
+        }
+        commandSequence = next;
     }
 
     /** Painel do console: titulo, botao de limpar, botao de fechar e o texto. */
