@@ -94,6 +94,10 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         Log.v(TAG, "onCreate");
 
         mBaseDir = Objects.requireNonNull(getContext()).getExternalFilesDir(null);
+        if (mBaseDir == null) {
+            Log.e(TAG, "External files directory is unavailable");
+            return false;
+        }
         return true;
     }
 
@@ -170,6 +174,11 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         while (!pending.isEmpty()) {
             // Take a file from the list of unprocessed files
             final File file = pending.removeFirst();
+            try {
+                getCanonicalFileInsideRoot(file);
+            } catch (FileNotFoundException e) {
+                continue;
+            }
             if (file.isDirectory()) {
                 // If it's a directory, add all its children to the unprocessed list
                 File[] files = file.listFiles();
@@ -218,6 +227,11 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         while (!pending.isEmpty() && result.getCount() < MAX_SEARCH_RESULTS) {
             // Take a file from the list of unprocessed files
             final File file = pending.removeFirst();
+            try {
+                getCanonicalFileInsideRoot(file);
+            } catch (FileNotFoundException e) {
+                continue;
+            }
             if (file.isDirectory()) {
                 // If it's a directory, add all its children to the unprocessed list
                 File[] files = file.listFiles();
@@ -272,7 +286,12 @@ public class LoveDocumentsProvider extends DocumentsProvider {
 
         if (files != null) {
             for (File file : files) {
-                includeFile(result, null, file);
+                try {
+                    getCanonicalFileInsideRoot(file);
+                    includeFile(result, null, file);
+                } catch (FileNotFoundException e) {
+                    Log.w(TAG, "Skipping document outside provider root", e);
+                }
             }
         }
         return result;
@@ -287,13 +306,12 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         return ParcelFileDescriptor.open(file, accessMode);
     }
 
+    /** Returns true only when childFile is an immediate child of parentFile. */
     public boolean isChildFile(File parentFile, File childFile) {
         try {
             File canonicalParent = parentFile.getCanonicalFile();
             File canonicalChild = childFile.getCanonicalFile();
-            String parentPath = canonicalParent.getPath();
-            String childPath = canonicalChild.getPath();
-            return childPath.startsWith(parentPath + File.separator);
+            return canonicalParent.equals(canonicalChild.getParentFile());
         } catch (IOException e) {
             return false;
         }
@@ -305,8 +323,10 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         try {
             File parent = getFileForDocId(parentDocumentId);
             File child = getFileForDocId(documentId);
-            return isChildFile(parent, child);
-        } catch (FileNotFoundException e) {
+            String parentPath = parent.getCanonicalPath();
+            String childPath = child.getCanonicalPath();
+            return childPath.startsWith(parentPath + File.separator);
+        } catch (IOException e) {
             return false;
         }
     }
@@ -383,6 +403,9 @@ public class LoveDocumentsProvider extends DocumentsProvider {
     public void deleteDocument(String documentId) throws FileNotFoundException {
         Log.v(TAG, "deleteDocument");
         File file = getFileForDocId(documentId);
+        if (file.equals(getCanonicalBaseDir())) {
+            throw new FileNotFoundException("The provider root cannot be deleted");
+        }
         if (file.delete()) {
             Log.i(TAG, "Deleted file with id " + documentId);
         } else {
@@ -413,9 +436,14 @@ public class LoveDocumentsProvider extends DocumentsProvider {
     public String copyDocument(String sourceDocumentId, String sourceParentDocumentId,
                                String targetParentDocumentId) throws FileNotFoundException {
         Log.v(TAG, "copyDocument with document parent");
-        if (!isChildDocument(sourceParentDocumentId, sourceDocumentId)) {
-            throw new FileNotFoundException("Failed to copy document with id " +
-                sourceDocumentId + ". Parent is not: " + sourceParentDocumentId);
+        try {
+            if (!isChildFile(getFileForDocId(sourceParentDocumentId),
+                    getFileForDocId(sourceDocumentId))) {
+                throw new FileNotFoundException("Failed to copy document with id " +
+                    sourceDocumentId + ". Parent is not: " + sourceParentDocumentId);
+            }
+        } catch (IOException e) {
+            throw new FileNotFoundException("Failed to validate source parent");
         }
         return copyDocument(sourceDocumentId, targetParentDocumentId);
     }
