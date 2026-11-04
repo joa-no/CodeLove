@@ -12,7 +12,12 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.DocumentsContract;
+import android.provider.OpenableColumns;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -50,6 +55,8 @@ import java.util.Set;
 
 public final class Workspace {
     private static final String TAG = "CodeLove";
+    private static final int REQUEST_ADD_PROJECT_TREE = 4102;
+    private static Workspace currentInstance;
 
     // Cores inspiradas no desenho de referencia (tema escuro).
     static final int COLOR_OUTER = 0xFF0D0F16;
@@ -145,7 +152,9 @@ public final class Workspace {
             }
             ensureSampleProject(games);
         }
-        new Workspace(activity, (RelativeLayout) layout, surface, games).build();
+        Workspace workspace = new Workspace(activity, (RelativeLayout) layout, surface, games);
+        currentInstance = workspace;
+        workspace.build();
     }
 
     /** Pasta do canal de comandos (Java -> executor em Lua). */
@@ -956,6 +965,8 @@ public final class Workspace {
         List<Runnable> actions = new ArrayList<Runnable>();
         labels.add("Novo projeto");
         actions.add(() -> newProject());
+        labels.add("Adicionar projeto existente");
+        actions.add(() -> addExistingProject());
         final File folder = targetFolder();
         if (folder != null) {
             labels.add("Novo arquivo em " + folder.getName());
@@ -964,6 +975,44 @@ public final class Workspace {
             actions.add(() -> newFolder(folder));
         }
         ui.showMenu(anchor, labels, actions);
+    }
+
+    private void addExistingProject() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        try {
+            activity.startActivityForResult(intent, REQUEST_ADD_PROJECT_TREE);
+        } catch (Exception e) {
+            toast("Nao foi possivel abrir o seletor de pastas do Android.");
+            Log.e(TAG, "Falha ao abrir o seletor SAF", e);
+        }
+    }
+
+    static void handleActivityResult(Activity activity, int requestCode,
+                                     int resultCode, Intent data) {
+        if (requestCode != REQUEST_ADD_PROJECT_TREE) {
+            return;
+        }
+        Workspace workspace = currentInstance;
+        if (workspace == null || workspace.activity != activity
+            || resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
+            return;
+        }
+
+        Uri treeUri = data.getData();
+        int grantedFlags = data.getFlags()
+            & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        String displayName = SafProjectManager.getDisplayName(activity, treeUri);
+        String error = SafProjectManager.register(activity, treeUri, grantedFlags, displayName);
+        if (error != null) {
+            workspace.toast(error);
+        } else {
+            workspace.toast("Acesso a \"" + displayName
+                + "\" autorizado e salvo. A sincronizacao sera ativada na proxima etapa.");
+        }
     }
 
     private void showRowMenu(Row row, View anchor) {
