@@ -1,4 +1,4 @@
--- CodeLove: executor (runtime), versao 2.
+-- CodeLove: executor (runtime), versao 3.
 --
 -- Este arquivo roda dentro do LOVE o tempo todo. Ele carrega o projeto escolhido
 -- no painel SEM reiniciar o app, desenha o primeiro quadro (pausado) e so mexe
