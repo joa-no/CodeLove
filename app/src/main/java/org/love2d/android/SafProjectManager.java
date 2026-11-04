@@ -294,11 +294,17 @@ final class SafProjectManager {
         String existingPath = findWorkingPath(activity, treeUri);
         if (existingPath != null) {
             File existing = new File(existingPath);
-            if (existing.isDirectory() && new File(existing, "main.lua").isFile()) {
-                return ProjectCopy.success(existing);
+            try {
+                File canonicalExisting = existing.getCanonicalFile();
+                if (gamesDir.getCanonicalFile().equals(canonicalExisting.getParentFile())
+                    && canonicalExisting.isDirectory()
+                    && new File(canonicalExisting, "main.lua").isFile()) {
+                    return ProjectCopy.success(canonicalExisting);
+                }
+            } catch (IOException ignored) {
             }
             if (existing.exists()) {
-                return ProjectCopy.error("A copia local registrada esta incompleta. Ela foi preservada para evitar perda de dados.");
+                return ProjectCopy.error("A copia local registrada esta incompleta ou fora da pasta de projetos. Ela foi preservada para evitar perda de dados.");
             }
         }
 
