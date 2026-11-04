@@ -1008,7 +1008,7 @@ public final class Workspace {
 
         TextView retry = new TextView(activity);
         retry.setText("Selecionar novamente");
-        retry.setTextColor(COLOR_TEXT);
+        retry.setTextColor(0xFF1B1F2B);
         retry.setTextSize(13);
         retry.setGravity(Gravity.CENTER);
         retry.setBackground(box(0xFFA78BFA, 10, false));
@@ -1021,7 +1021,7 @@ public final class Workspace {
         sheet.addView(actions);
 
         int availableWidth = Math.max(dp(280), root.getWidth() - dp(32));
-        int sheetWidth = Math.min((int) (availableWidth * 0.72f), dp(460));
+        int sheetWidth = Math.min((int) (availableWidth * 0.82f), dp(540));
         RelativeLayout.LayoutParams sheetLp = new RelativeLayout.LayoutParams(
             sheetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
         sheetLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
@@ -1098,23 +1098,30 @@ public final class Workspace {
             return;
         }
 
-        Uri treeUri = data.getData();
-        int grantedFlags = data.getFlags()
-            & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        SafProjectManager.ProjectSelection selection =
-            SafProjectManager.inspectProject(activity, treeUri);
-        if (!selection.isValid()) {
-            workspace.showProjectNotice(selection.error);
-            return;
-        }
+        try {
+            Uri treeUri = data.getData();
+            int grantedFlags = data.getFlags()
+                & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            SafProjectManager.ProjectSelection selection =
+                SafProjectManager.inspectProject(activity, treeUri);
+            if (!selection.isValid()) {
+                workspace.showProjectNotice(selection.error);
+                return;
+            }
 
-        String error = SafProjectManager.register(activity, treeUri, grantedFlags,
-            selection.documentId, selection.displayName);
-        if (error != null) {
-            workspace.showProjectNotice(error);
-        } else {
-            workspace.toast("Projeto \"" + selection.displayName
-                + "\" validado. O acesso foi salvo; a integracao com a arvore e a sincronizacao virao na proxima etapa.");
+            String error = SafProjectManager.register(activity, treeUri, grantedFlags,
+                selection.documentId, selection.displayName);
+            if (error != null) {
+                workspace.showProjectNotice(error);
+            } else {
+                workspace.toast("Projeto \"" + selection.displayName
+                    + "\" validado. O acesso foi salvo; a integracao com a arvore e a sincronizacao virao na proxima etapa.");
+            }
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Falha inesperada ao processar a pasta selecionada pelo SAF", e);
+            workspace.showProjectNotice(
+                "O Android encontrou um erro inesperado ao processar essa pasta. "
+                + "O erro foi registrado para diagnostico. Tente novamente; se continuar, envie o registro do aplicativo.");
         }
     }
 
