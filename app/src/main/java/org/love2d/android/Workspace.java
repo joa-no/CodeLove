@@ -693,10 +693,12 @@ public final class Workspace {
         controlsBar.setLayoutParams(barLp);
         controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
 
-        // Console: sobrepoe o codigo, mas termina antes do rodape do editor.
+        // Console integrado ao editor: ancorado na parte inferior da tela,
+        // alinhado ao rodape do editor e limitado a largura do proprio editor.
         RelativeLayout.LayoutParams consoleLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
         consoleLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         int consoleInset = dp(12);
         if (onLeft) {
             consoleLp.leftMargin = editorOffset + consoleInset;
@@ -1267,7 +1269,8 @@ public final class Workspace {
     private LinearLayout buildConsolePanel() {
         LinearLayout panelBox = new LinearLayout(activity);
         panelBox.setOrientation(LinearLayout.VERTICAL);
-        panelBox.setBackground(box(COLOR_PANEL, 16, true));
+        // Sem cartao/bordas arredondadas: o console e uma extensao visual do editor.
+        panelBox.setBackground(box(COLOR_PANEL, 0, false));
         panelBox.setPadding(dp(12), dp(10), dp(12), dp(10));
         panelBox.setClickable(true); // nao deixa o toque passar para o jogo
         panelBox.setVisibility(View.GONE);
