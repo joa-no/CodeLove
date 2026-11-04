@@ -8,6 +8,9 @@ import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 
+import java.io.File;
+import java.io.IOException;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
