@@ -281,8 +281,42 @@ final class SafProjectManager {
     }
 
 
+    static final class RegisteredProject {
+        final Uri treeUri;
+        final String documentId;
+        final String displayName;
+        RegisteredProject(Uri treeUri, String documentId, String displayName) {
+            this.treeUri = treeUri;
+            this.documentId = documentId;
+            this.displayName = displayName;
+        }
+    }
+
+    static List<RegisteredProject> getProjectsNeedingImport(Context context) {
+        ArrayList<RegisteredProject> result = new ArrayList<RegisteredProject>();
+        try {
+            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_PROJECTS, "[]"));
+            for (int i = 0; i < projects.length(); i++) {
+                JSONObject item = projects.optJSONObject(i);
+                if (item == null) continue;
+                String uri = item.optString("uri", "");
+                String documentId = item.optString("projectDocumentId", "");
+                String name = item.optString("name", "Projeto externo");
+                String workingPath = item.optString("workingPath", "");
+                if (uri.isEmpty() || documentId.isEmpty()) continue;
+                if (workingPath.isEmpty() || !new File(workingPath).isDirectory()) {
+                    result.add(new RegisteredProject(Uri.parse(uri), documentId, name));
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.e("CodeLove", "Nao foi possivel ler os projetos SAF registrados", e);
+        }
+        return result;
+    }
+
     /** Cria uma copia de trabalho local sem substituir uma copia ja existente. */
-    static ProjectCopy ensureWorkingCopy(Activity activity, Uri treeUri,
+    static synchronized ProjectCopy ensureWorkingCopy(Activity activity, Uri treeUri,
                                          String projectDocumentId, String displayName,
                                          File gamesDir) {
         if (gamesDir == null || (!gamesDir.isDirectory() && !gamesDir.mkdirs())) {
