@@ -1160,8 +1160,15 @@ public final class Workspace {
             if (error != null) {
                 workspace.showProjectNotice(error);
             } else {
-                workspace.toast("Projeto \"" + selection.displayName
-                    + "\" validado. O acesso foi salvo; a integracao com a arvore e a sincronizacao virao na proxima etapa.");
+                SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
+                    activity, treeUri, selection.documentId, selection.displayName, workspace.gamesDir);
+                if (!copy.isSuccess()) {
+                    workspace.showProjectNotice(copy.error);
+                } else {
+                    workspace.expanded.add(copy.directory.getAbsolutePath());
+                    workspace.renderTree();
+                    workspace.toast("Projeto importado como copia local. As alteracoes ainda nao sao sincronizadas com a pasta original.");
+                }
             }
         } catch (RuntimeException e) {
             CrashDiagnostics.log(activity, "SAF result handler caught RuntimeException", e);
