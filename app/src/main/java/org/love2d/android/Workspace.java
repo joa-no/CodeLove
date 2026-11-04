@@ -1437,6 +1437,11 @@ public final class Workspace {
     // ------------------------------------------------------------------
 
     /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
+    private String projectDisplayName(File project) {
+        return SafProjectManager.isWorkingCopyRoot(activity, project)
+            ? project.getName() + " - copia local" : project.getName();
+    }
+
     private void selectProject(File project) {
         if (editor != null && editor.isOpen() && !isInside(editor.getFile(), project)
             && !editor.close()) {
@@ -1447,7 +1452,7 @@ public final class Workspace {
         expanded.add(project.getAbsolutePath());
         playing = false;
         sendCommand("open", project.getAbsolutePath());
-        projectTitle.setText(project.getName());
+        projectTitle.setText(projectDisplayName(project));
         placeholder.setVisibility(View.GONE);
         updatePlayButton();
         renderTree();
