@@ -1011,7 +1011,7 @@ public final class Workspace {
         retry.setTextColor(COLOR_TEXT);
         retry.setTextSize(13);
         retry.setGravity(Gravity.CENTER);
-        retry.setBackground(box(COLOR_LUA, 10, false));
+        retry.setBackground(box(0xFFA78BFA, 10, false));
         retry.setPadding(dp(12), 0, dp(12), 0);
         actions.addView(retry, new LinearLayout.LayoutParams(0, dp(42), 1.5f));
         retry.setOnClickListener(v -> {
@@ -1020,10 +1020,13 @@ public final class Workspace {
         });
         sheet.addView(actions);
 
+        int availableWidth = Math.max(dp(280), root.getWidth() - dp(32));
+        int sheetWidth = Math.min((int) (availableWidth * 0.72f), dp(460));
         RelativeLayout.LayoutParams sheetLp = new RelativeLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            sheetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
         sheetLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        sheetLp.setMargins(dp(12), 0, dp(12), Math.max(dp(12), insetBottom));
+        sheetLp.addRule(RelativeLayout.CENTER_HORIZONTAL);
+        sheetLp.setMargins(0, 0, 0, Math.max(dp(12), insetBottom));
         projectNotice = sheet;
         root.addView(sheet, sheetLp);
         sheet.bringToFront();
