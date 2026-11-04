@@ -154,6 +154,30 @@ public final class Workspace {
         currentInstance = workspace;
         workspace.build();
         workspace.showPreviousCrashReport();
+        workspace.importPreviouslyRegisteredProjects();
+    }
+
+    private void importPreviouslyRegisteredProjects() {
+        List<SafProjectManager.RegisteredProject> pending =
+            SafProjectManager.getProjectsNeedingImport(activity);
+        if (pending.isEmpty()) return;
+
+        toast("Preparando projetos externos ja autorizados...");
+        new Thread(() -> {
+            for (SafProjectManager.RegisteredProject project : pending) {
+                SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
+                    activity, project.treeUri, project.documentId, project.displayName, gamesDir);
+                activity.runOnUiThread(() -> {
+                    if (currentInstance != this || disposed || activity.isFinishing()) return;
+                    if (copy.isSuccess()) {
+                        expanded.add(copy.directory.getAbsolutePath());
+                        renderTree();
+                    } else {
+                        showProjectNotice(copy.error);
+                    }
+                });
+            }
+        }, "CodeLove-SAF-Restore").start();
     }
 
     private void showPreviousCrashReport() {
