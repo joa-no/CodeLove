@@ -138,6 +138,12 @@ public class GameActivity extends SDLActivity {
     }
 
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Workspace.handleActivityResult(this, requestCode, resultCode, data);
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         handleIntent(intent, false);
