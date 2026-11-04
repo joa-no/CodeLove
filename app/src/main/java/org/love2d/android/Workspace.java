@@ -1023,8 +1023,8 @@ public final class Workspace {
         File editedFile = editor.isOpen() ? editor.getFile() : null;
 
         // grava e fecha o editor se o arquivo aberto esta no que vai mudar de nome
-        if (editedFile != null && isInside(editedFile, target)) {
-            editor.close();
+        if (editedFile != null && isInside(editedFile, target) && !editor.close()) {
+            return;
         }
         if (isActiveProject) {
             sendCommand("close", "");
@@ -1086,8 +1086,8 @@ public final class Workspace {
     private void doDelete(File target) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
 
-        if (editor.isOpen() && isInside(editor.getFile(), target)) {
-            editor.close();
+        if (editor.isOpen() && isInside(editor.getFile(), target) && !editor.close()) {
+            return;
         }
         if (isActiveProject) {
             sendCommand("close", "");
@@ -1119,7 +1119,7 @@ public final class Workspace {
             applyLayout();
             renderTree();
             saveState();
-        } else {
+        } else if (!editor.hasUnsavedChanges()) {
             Toast.makeText(activity, "Esse arquivo nao abre no editor (binario ou grande demais).",
                 Toast.LENGTH_SHORT).show();
         }
@@ -1146,8 +1146,9 @@ public final class Workspace {
 
     /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
     private void selectProject(File project) {
-        if (editor != null && editor.isOpen() && !isInside(editor.getFile(), project)) {
-            editor.close();
+        if (editor != null && editor.isOpen() && !isInside(editor.getFile(), project)
+            && !editor.close()) {
+            return;
         }
         activeProject = project;
         lastFolder = null;
@@ -1183,7 +1184,9 @@ public final class Workspace {
         if (activeProject == null) {
             return;
         }
-        editor.saveNow();
+        if (!editor.saveNow()) {
+            return;
+        }
         playing = false;
         sendCommand("open", activeProject.getAbsolutePath());
         updatePlayButton();
