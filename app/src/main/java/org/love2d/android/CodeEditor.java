@@ -33,6 +33,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -82,6 +83,7 @@ final class CodeEditor {
 
     private File file;           // arquivo aberto (nulo se nenhum)
     private boolean dirty;       // tem alteracao ainda nao gravada
+    private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
     private boolean highlightLua;
     private int lineCount;
@@ -192,6 +194,7 @@ final class CodeEditor {
                     return;
                 }
                 dirty = true;
+                saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
                 applyHighlight(s);
@@ -260,9 +263,11 @@ final class CodeEditor {
         return file;
     }
 
-    /** Abre um arquivo no editor. Devolve false se nao for um texto que caiba aqui. */
+    /** Abre outro arquivo somente depois de preservar as alteracoes atuais. */
     boolean open(File target) {
-        saveNow();
+        if (!saveNow()) {
+            return false;
+        }
 
         String text = readText(target);
         if (text == null) {
@@ -286,9 +291,11 @@ final class CodeEditor {
         return true;
     }
 
-    /** Grava, fecha o arquivo e avisa. */
-    void close() {
-        saveNow();
+    /** Fecha somente se todas as alteracoes puderem ser gravadas. */
+    boolean close() {
+        if (!saveNow()) {
+            return false;
+        }
         file = null;
         loading = true;
         input.setText("");
@@ -296,42 +303,64 @@ final class CodeEditor {
         dirty = false;
         refreshDirtyMark();
         listener.onClosed();
+        return true;
     }
 
-    /** Grava agora, se houver alteracao pendente. */
-    void saveNow() {
+    /** Informa se ainda ha alteracoes que nao foram gravadas com sucesso. */
+    boolean hasUnsavedChanges() {
+        return dirty;
+    }
+
+    /** Grava agora. Em caso de falha, preserva o texto e informa o usuario. */
+    boolean saveNow() {
         input.removeCallbacks(saveTask);
         if (file == null || !dirty) {
-            return;
+            return true;
         }
 
+        File parent = file.getParentFile();
+        File temp = new File(parent, file.getName() + ".tmp");
         byte[] data = input.getText().toString().getBytes(StandardCharsets.UTF_8);
-        File temp = new File(file.getParentFile(), file.getName() + ".tmp");
 
-        boolean written = false;
-        try (FileOutputStream out = new FileOutputStream(temp)) {
-            out.write(data);
-            written = true;
-        } catch (IOException e) {
-            Log.w(TAG, "Falha ao gravar " + temp, e);
-        }
-
-        if (written && temp.renameTo(file)) {
-            // gravado com troca atomica
-        } else {
-            temp.delete();
-            // plano B: grava direto no arquivo
-            try (FileOutputStream out = new FileOutputStream(file)) {
-                out.write(data);
-            } catch (IOException e) {
-                Log.w(TAG, "Falha ao gravar " + file, e);
-                return;
+        try {
+            if (parent == null || !parent.isDirectory()) {
+                throw new IOException("A pasta do arquivo nao esta disponivel.");
             }
+
+            // O temporario fica na mesma pasta para que a troca seja atomica.
+            try (FileOutputStream out = new FileOutputStream(temp)) {
+                out.write(data);
+                out.flush();
+                out.getFD().sync();
+            }
+
+            // Nao gravar diretamente no original como alternativa: isso poderia
+            // truncar o arquivo se a escrita falhasse no meio.
+            if (!temp.renameTo(file)) {
+                throw new IOException("Nao foi possivel substituir o arquivo original.");
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "Falha ao salvar " + file, e);
+            temp.delete();
+            notifySaveFailure();
+            return false;
         }
 
         dirty = false;
+        saveFailureNotified = false;
         refreshDirtyMark();
         listener.onSaved(file);
+        return true;
+    }
+
+    private void notifySaveFailure() {
+        if (saveFailureNotified) {
+            return;
+        }
+        saveFailureNotified = true;
+        Toast.makeText(activity,
+            "Nao foi possivel salvar. Suas alteracoes continuam no editor.",
+            Toast.LENGTH_LONG).show();
     }
 
     // ------------------------------------------------------------------
