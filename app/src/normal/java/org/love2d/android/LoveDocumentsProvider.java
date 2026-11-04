@@ -43,9 +43,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Objects;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
  * Manages documents and exposes them to the Android system for sharing.
@@ -286,14 +288,27 @@ public class LoveDocumentsProvider extends DocumentsProvider {
     }
 
     public boolean isChildFile(File parentFile, File childFile) {
-        File realFileParent = childFile.getParentFile();
-        return realFileParent == null || realFileParent.equals(parentFile);
+        try {
+            File canonicalParent = parentFile.getCanonicalFile();
+            File canonicalChild = childFile.getCanonicalFile();
+            String parentPath = canonicalParent.getPath();
+            String childPath = canonicalChild.getPath();
+            return childPath.startsWith(parentPath + File.separator);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     @Override
     public boolean isChildDocument(String parentDocumentId, String documentId) {
         Log.v(TAG, "isChildDocument");
-        return documentId.startsWith(parentDocumentId);
+        try {
+            File parent = getFileForDocId(parentDocumentId);
+            File child = getFileForDocId(documentId);
+            return isChildFile(parent, child);
+        } catch (FileNotFoundException e) {
+            return false;
+        }
     }
 
     @Override
@@ -302,58 +317,65 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         Log.v(TAG, "createDocument");
 
         File parent = getFileForDocId(documentId);
-        File file = new File(parent.getPath(), displayName);
-        int conflictId = 1;
-        while (file.exists()) {
-            file = new File(parent.getPath(), displayName + "(" + conflictId++ + ")");
+        if (!parent.isDirectory()) {
+            throw new FileNotFoundException("Document parent is not a directory: " + documentId);
         }
-        try {
-            // Create the new File to copy into
-            boolean wasNewFileCreated = false;
-            if (Document.MIME_TYPE_DIR.equals(mimeType)) {
-                wasNewFileCreated = file.mkdir();
-            } else {
-                wasNewFileCreated = file.createNewFile();
+
+        validateDisplayName(displayName);
+        int conflictId = 0;
+        while (true) {
+            String candidateName = conflictId == 0
+                ? displayName
+                : displayName + "(" + conflictId + ")";
+            File file = getChildFile(parent, candidateName);
+            try {
+                boolean created = Document.MIME_TYPE_DIR.equals(mimeType)
+                    ? file.mkdir()
+                    : file.createNewFile();
+                if (created) {
+                    return getDocIdForFile(file);
+                }
+            } catch (IOException e) {
+                FileNotFoundException error = new FileNotFoundException(
+                    "Failed to create document with name " + displayName);
+                error.initCause(e);
+                throw error;
             }
 
-            if (!wasNewFileCreated) {
-                throw new FileNotFoundException("Failed to create document with name " +
-                    displayName + " and documentId " + documentId);
+            if (!file.exists()) {
+                throw new FileNotFoundException(
+                    "Failed to create document with name " + displayName);
             }
-        } catch (IOException e) {
-            throw new FileNotFoundException("Failed to create document with name " +
-                displayName + " and documentId " + documentId);
+            conflictId++;
         }
-        return getDocIdForFile(file);
     }
 
     @Override
     public String renameDocument(String documentId, String displayName)
         throws FileNotFoundException {
         Log.v(TAG, "renameDocument");
-        if (displayName == null) {
-            throw new FileNotFoundException("Failed to rename document, new name is null");
-        }
+        validateDisplayName(displayName);
 
-        // Create the destination file in the same directory as the source file
         File sourceFile = getFileForDocId(documentId);
-        File sourceParentFile = sourceFile.getParentFile();
-        if (sourceParentFile == null) {
-            throw new FileNotFoundException("Failed to rename document. File has no parent.");
-        }
-        File destFile = new File(sourceParentFile.getPath(), displayName);
-
-        // Try to do the rename
-        try {
-            boolean renameSucceeded = sourceFile.renameTo(destFile);
-            if (!renameSucceeded) {
-                throw new FileNotFoundException("Failed to rename document. Renamed failed.");
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Rename exception : " + e.getLocalizedMessage() + e.getCause());
-            throw new FileNotFoundException("Failed to rename document. Error: " + e.getMessage());
+        if (sourceFile.equals(getCanonicalBaseDir())) {
+            throw new FileNotFoundException("The provider root cannot be renamed");
         }
 
+        File sourceParent = sourceFile.getParentFile();
+        if (sourceParent == null || !sourceParent.isDirectory()) {
+            throw new FileNotFoundException("The source document has no valid parent");
+        }
+
+        File destFile = getChildFile(sourceParent, displayName);
+        if (sourceFile.equals(destFile)) {
+            return getDocIdForFile(sourceFile);
+        }
+        if (destFile.exists()) {
+            throw new FileNotFoundException("A document with that name already exists");
+        }
+        if (!sourceFile.renameTo(destFile)) {
+            throw new FileNotFoundException("Failed to rename document " + documentId);
+        }
         return getDocIdForFile(destFile);
     }
 
@@ -375,29 +397,14 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         File parent = getFileForDocId(parentDocumentId);
         File file = getFileForDocId(documentId);
 
-        if (file == null) {
+        if (file.equals(getCanonicalBaseDir()) || !isChildFile(parent, file)) {
+            throw new FileNotFoundException(
+                "Document is not a direct child of the supplied parent: " + documentId);
+        }
+        if (!file.delete()) {
             throw new FileNotFoundException("Failed to delete document with id " + documentId);
         }
-
-        // removeDocument is the same as deleteDocument but allows the parent to be specified
-        // Check here if the specified parentDocumentId matches the true parent of documentId
-        boolean doesFileParentMatch = false;
-        File fileParent = file.getParentFile();
-
-        if (fileParent == null || fileParent.equals(parent)) {
-            doesFileParentMatch = true;
-        }
-
-        // Remove the file if parent matches or file and parent are equal
-        if (parent.equals(file) || doesFileParentMatch) {
-            if (file.delete()) {
-                Log.i(TAG, "Deleted file with id " + documentId);
-            } else {
-                throw new FileNotFoundException("Failed to delete document with id " + documentId);
-            }
-        } else {
-            throw new FileNotFoundException("Failed to delete document with id " + documentId);
-        }
+        Log.i(TAG, "Deleted file with id " + documentId);
     }
 
     /**
@@ -419,53 +426,68 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         Log.v(TAG, "copyDocument");
 
         File parent = getFileForDocId(targetParentDocumentId);
-        File oldFile = getFileForDocId(sourceDocumentId);
-        File newFile = new File(parent.getPath(), oldFile.getName());
-        try {
-            int conflictId = 1;
-            while (newFile.exists()) {
-                newFile = new File(parent.getPath(), oldFile.getName() + "(" + conflictId++ + ")");
-            }
-            // Create the new File to copy into
-            boolean wasNewFileCreated = false;
-            boolean isDirectory = Document.MIME_TYPE_DIR.equals(getTypeForFile(oldFile));
-            if (isDirectory) {
-                if (newFile.mkdir()) {
-                    if (newFile.setWritable(true) && newFile.setReadable(true)) {
-                        wasNewFileCreated = true;
-                    }
-                }
-            } else {
-                if (newFile.createNewFile()) {
-                    if (newFile.setWritable(true) && newFile.setReadable(true)) {
-                        wasNewFileCreated = true;
-                    }
-                }
-            }
-
-            if (!wasNewFileCreated) {
-                throw new FileNotFoundException("Failed to copy document " + sourceDocumentId +
-                    ". Could not create new file.");
-            }
-
-            if (!isDirectory) {
-                // Copy the bytes into the new file
-                try (FileInputStream inStream = new FileInputStream(oldFile)) {
-                    try (FileOutputStream outStream = new FileOutputStream(newFile)) {
-                        // Transfer bytes from in to out
-                        byte[] buf = new byte[16384]; // disk: 8-64k
-                        int len;
-                        while ((len = inStream.read(buf)) > 0) {
-                            outStream.write(buf, 0, len);
-                        }
-                    }
-                }
-            }
-        } catch (IOException e) {
-            throw new FileNotFoundException("Failed to copy document: " + sourceDocumentId +
-                ". " + e.getMessage());
+        if (!parent.isDirectory()) {
+            throw new FileNotFoundException("Target parent is not a directory");
         }
-        return getDocIdForFile(newFile);
+        File oldFile = getFileForDocId(sourceDocumentId);
+        if (oldFile.equals(getCanonicalBaseDir())) {
+            throw new FileNotFoundException("The provider root cannot be copied");
+        }
+
+        int conflictId = 0;
+        File newFile;
+        boolean isDirectory = Document.MIME_TYPE_DIR.equals(getTypeForFile(oldFile));
+        while (true) {
+            String candidateName = conflictId == 0
+                ? oldFile.getName()
+                : oldFile.getName() + "(" + conflictId + ")";
+            newFile = getChildFile(parent, candidateName);
+            try {
+                boolean created = isDirectory
+                    ? newFile.mkdir()
+                    : newFile.createNewFile();
+                if (created) {
+                    break;
+                }
+            } catch (IOException e) {
+                FileNotFoundException error = new FileNotFoundException(
+                    "Failed to create copy of " + sourceDocumentId);
+                error.initCause(e);
+                throw error;
+            }
+            if (!newFile.exists()) {
+                throw new FileNotFoundException(
+                    "Failed to create copy of " + sourceDocumentId);
+            }
+            conflictId++;
+        }
+
+        try {
+            if (!isDirectory) {
+                try (FileInputStream inStream = new FileInputStream(oldFile);
+                     FileOutputStream outStream = new FileOutputStream(newFile)) {
+                    byte[] buffer = new byte[16384];
+                    int length;
+                    while ((length = inStream.read(buffer)) != -1) {
+                        outStream.write(buffer, 0, length);
+                    }
+                    outStream.flush();
+                    outStream.getFD().sync();
+                }
+            }
+            return getDocIdForFile(newFile);
+        } catch (IOException e) {
+            // Do not leave an incomplete copy behind.
+            if (newFile.isDirectory()) {
+                newFile.delete();
+            } else {
+                newFile.delete();
+            }
+            FileNotFoundException error = new FileNotFoundException(
+                "Failed to copy document " + sourceDocumentId + ": " + e.getMessage());
+            error.initCause(e);
+            throw error;
+        }
     }
 
     @Override
@@ -550,20 +572,18 @@ public class LoveDocumentsProvider extends DocumentsProvider {
      * @param file the File whose document ID you want
      * @return the corresponding document ID
      */
-    private String getDocIdForFile(File file) {
-        String path = file.getAbsolutePath();
+    private String getDocIdForFile(File file) throws FileNotFoundException {
+        File canonicalRoot = getCanonicalBaseDir();
+        File canonicalFile = getCanonicalFileInsideRoot(file);
+        String rootPath = canonicalRoot.getPath();
+        String filePath = canonicalFile.getPath();
 
-        // Start at first char of path under root
-        final String rootPath = mBaseDir.getPath();
-        if (rootPath.equals(path)) {
-            path = "";
-        } else if (rootPath.endsWith("/")) {
-            path = path.substring(rootPath.length());
-        } else {
-            path = path.substring(rootPath.length() + 1);
+        if (rootPath.equals(filePath)) {
+            return ROOT + ':';
         }
 
-        return ROOT + ':' + path;
+        String relativePath = filePath.substring(rootPath.length() + 1);
+        return ROOT + ':' + relativePath;
     }
 
     /**
@@ -637,10 +657,101 @@ public class LoveDocumentsProvider extends DocumentsProvider {
      * @return a File represented by the given document ID
      */
     private File getFileForDocId(String docId) throws FileNotFoundException {
-        File target = mBaseDir;
-        if (docId.equals(ROOT)) {
-            return target;
+        if (docId == null) {
+            throw new FileNotFoundException("Document ID is null");
         }
+
+        File canonicalRoot = getCanonicalBaseDir();
+        if (ROOT.equals(docId) || (ROOT + ":").equals(docId)) {
+            return canonicalRoot;
+        }
+        if (!docId.startsWith(ROOT + ":")) {
+            throw new FileNotFoundException("Invalid document root in ID: " + docId);
+        }
+
+        String relativePath = docId.substring(ROOT.length() + 1);
+        if (relativePath.isEmpty() || relativePath.startsWith("/")
+            || relativePath.indexOf('\0') >= 0) {
+            if (relativePath.isEmpty()) {
+                return canonicalRoot;
+            }
+            throw new FileNotFoundException("Invalid document path in ID");
+        }
+
+        // Reject traversal components explicitly, even when normalization would
+        // eventually resolve the path back inside the provider root.
+        String[] components = relativePath.split("[/\\\\]", -1);
+        for (String component : components) {
+            if (".".equals(component) || "..".equals(component)) {
+                throw new FileNotFoundException("Path traversal is not allowed");
+            }
+        }
+
+        File target = new File(canonicalRoot, relativePath);
+        File canonicalTarget = getCanonicalFileInsideRoot(target);
+        if (!canonicalTarget.exists()) {
+            throw new FileNotFoundException(
+                "Missing file for " + docId + " at " + canonicalTarget);
+        }
+        return canonicalTarget;
+    }
+
+    private File getCanonicalBaseDir() throws FileNotFoundException {
+        if (mBaseDir == null) {
+            throw new FileNotFoundException("The document provider storage is unavailable");
+        }
+        try {
+            File root = mBaseDir.getCanonicalFile();
+            if (!root.exists() || !root.isDirectory()) {
+                throw new FileNotFoundException("The document provider root is unavailable");
+            }
+            return root;
+        } catch (IOException e) {
+            FileNotFoundException error =
+                new FileNotFoundException("Unable to resolve the document provider root");
+            error.initCause(e);
+            throw error;
+        }
+    }
+
+    private File getCanonicalFileInsideRoot(File file) throws FileNotFoundException {
+        try {
+            File root = getCanonicalBaseDir();
+            File canonicalFile = file.getCanonicalFile();
+            String rootPath = root.getPath();
+            String filePath = canonicalFile.getPath();
+            if (!filePath.equals(rootPath)
+                && !filePath.startsWith(rootPath + File.separator)) {
+                throw new FileNotFoundException("Path is outside the document provider root");
+            }
+            return canonicalFile;
+        } catch (IOException e) {
+            FileNotFoundException error =
+                new FileNotFoundException("Unable to resolve document path");
+            error.initCause(e);
+            throw error;
+        }
+    }
+
+    private File getChildFile(File parent, String displayName) throws FileNotFoundException {
+        validateDisplayName(displayName);
+        File canonicalParent = getCanonicalFileInsideRoot(parent);
+        if (!canonicalParent.isDirectory()) {
+            throw new FileNotFoundException("Document parent is not a directory");
+        }
+        return getCanonicalFileInsideRoot(new File(canonicalParent, displayName));
+    }
+
+    private static void validateDisplayName(String displayName) throws FileNotFoundException {
+        if (displayName == null || displayName.isEmpty()
+            || ".".equals(displayName) || "..".equals(displayName)
+            || displayName.indexOf('/') >= 0 || displayName.indexOf('\\') >= 0
+            || displayName.indexOf('\0') >= 0 || new File(displayName).isAbsolute()) {
+            throw new FileNotFoundException("Invalid document name");
+        }
+    }
+
+}
         final int splitIndex = docId.indexOf(':', 1);
         if (splitIndex < 0) {
             throw new FileNotFoundException("Missing root for " + docId);
