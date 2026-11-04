@@ -212,19 +212,25 @@ final class SafProjectManager {
 
         int requiredFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
-        int persistableFlags = grantedFlags & requiredFlags;
-        if (persistableFlags != requiredFlags) {
-            return "Essa pasta nao concedeu permissao de leitura e escrita.";
-        }
-
         boolean hadPermission = hasPersistedReadWritePermission(activity, treeUri);
-        try {
-            activity.getContentResolver().takePersistableUriPermission(treeUri, persistableFlags);
-        } catch (SecurityException e) {
-            return "O Android nao permitiu guardar o acesso permanente a essa pasta.";
-        }
-        if (!hasPersistedReadWritePermission(activity, treeUri)) {
-            return "O Android nao confirmou a autorizacao persistente dessa pasta.";
+        int persistableFlags = hadPermission
+            ? requiredFlags : (grantedFlags & requiredFlags);
+
+        // Uma URI ja autorizada nao precisa ser persistida novamente. Alem de
+        // evitar uma operacao redundante no DocumentsProvider, isso torna a
+        // selecao repetida da mesma pasta idempotente.
+        if (!hadPermission) {
+            if (persistableFlags != requiredFlags) {
+                return "Essa pasta nao concedeu permissao de leitura e escrita.";
+            }
+            try {
+                activity.getContentResolver().takePersistableUriPermission(treeUri, persistableFlags);
+            } catch (SecurityException e) {
+                return "O Android nao permitiu guardar o acesso permanente a essa pasta.";
+            }
+            if (!hasPersistedReadWritePermission(activity, treeUri)) {
+                return "O Android nao confirmou a autorizacao persistente dessa pasta.";
+            }
         }
 
         android.content.SharedPreferences prefs =
