@@ -1208,7 +1208,7 @@ public final class Workspace {
                         } else {
                             targetWorkspace.expanded.add(copy.directory.getAbsolutePath());
                             targetWorkspace.renderTree();
-                            targetWorkspace.toast("Projeto importado como copia local. As alteracoes ainda nao sao sincronizadas com a pasta original.");
+                            targetWorkspace.toast("Projeto externo adicionado. As alteracoes serao sincronizadas com a pasta autorizada.");
                         }
                     });
                 }, "CodeLove-SAF-Import").start();
@@ -1448,8 +1448,7 @@ public final class Workspace {
 
     /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
     private String projectDisplayName(File project) {
-        return SafProjectManager.isWorkingCopyRoot(activity, project)
-            ? project.getName() + " - copia local" : project.getName();
+        return project.getName();
     }
 
     private void selectProject(File project) {
@@ -1515,11 +1514,11 @@ public final class Workspace {
                 if (currentInstance != this || disposed || activity.isFinishing()) return;
                 if (result.needsInitialChoice) {
                     new AlertDialog.Builder(activity)
-                        .setTitle("Primeira sincronizacao")
-                        .setMessage("Ainda nao existe um historico para saber qual lado foi alterado. Escolha explicitamente qual versao deve prevalecer. A outra sera atualizada para ficar igual.")
-                        .setPositiveButton("Enviar copia local", (dialog, which) ->
+                        .setTitle("Versoes ainda nao vinculadas")
+                        .setMessage("O CodeLove encontrou conteudos diferentes, mas ainda nao tem um historico confiavel para identificar as alteracoes. Escolha qual versao deve ser mantida. A outra sera atualizada para corresponder a ela.")
+                        .setPositiveButton("Manter versao do CodeLove", (dialog, which) ->
                             syncExternalProject(project, SafSyncEngine.INITIAL_LOCAL_TO_EXTERNAL, onSuccess))
-                        .setNegativeButton("Usar pasta externa", (dialog, which) ->
+                        .setNegativeButton("Manter versao externa", (dialog, which) ->
                             syncExternalProject(project, SafSyncEngine.INITIAL_EXTERNAL_TO_LOCAL, onSuccess))
                         .setNeutralButton("Cancelar", null)
                         .show();
@@ -1529,10 +1528,10 @@ public final class Workspace {
                     new AlertDialog.Builder(activity)
                         .setTitle("Conflitos de sincronizacao")
                         .setMessage(result.message)
-                        .setPositiveButton("Manter copia local", (dialog, which) ->
+                        .setPositiveButton("Manter versao do CodeLove", (dialog, which) ->
                             syncExternalProject(project, SafSyncEngine.INITIAL_NONE,
                                 SafSyncEngine.CONFLICT_KEEP_LOCAL, onSuccess))
-                        .setNegativeButton("Manter pasta externa", (dialog, which) ->
+                        .setNegativeButton("Manter versao externa", (dialog, which) ->
                             syncExternalProject(project, SafSyncEngine.INITIAL_NONE,
                                 SafSyncEngine.CONFLICT_KEEP_EXTERNAL, onSuccess))
                         .setNeutralButton("Cancelar", null)
