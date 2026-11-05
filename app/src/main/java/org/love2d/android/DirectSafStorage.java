@@ -28,7 +28,7 @@ import java.util.Map;
  * interface do CodeLove. Eles NAO representam uma copia do projeto no disco.
  * O conteudo real permanece no DocumentsProvider e e acessado pelo ContentResolver.
  */
-final class DirectSafStorage {
+final class DirectSafStorage implements CodeEditor.Storage {
     static final class Entry {
         final File file;
         final Uri uri;
