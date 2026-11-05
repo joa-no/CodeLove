@@ -1,34 +1,27 @@
-# Gradle files
+# Gradle
 .gradle/
-build/
+**/build/
 
-# Local configuration file (sdk path, etc)
+# Android Studio / local SDK
+.idea/
+*.iml
 local.properties
-
-# Log/OS Files
-*.log
-
-# Android Studio generated files and folders
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Build outputs
 *.apk
-output.json
-
-# IntelliJ
-*.iml
-.idea/
-
-# Keystore files
-*.jks
-*.keystore
-
-# Google Services (e.g. APIs or Firebase)
-google-services.json
-
-# Android Profiling
+*.aab
+*.apks
+*.log
 *.hprof
 
-# love-android specific
-app/src/main/assets/
-app/src/embed/assets/
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Assets generated locally for embedded game variants.
+# Keep the placeholder so the directory exists in a fresh checkout.
+app/src/embed/assets/*
+!app/src/embed/assets/.gitkeep
