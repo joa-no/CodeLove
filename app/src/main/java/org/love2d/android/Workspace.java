@@ -1496,7 +1496,11 @@ public final class Workspace {
         if (activeProject != null && isInside(file, activeProject)) {
             playing = false;
             if (activeSafStorage != null) {
-                prepareRuntimeProject(false);
+                final DirectSafStorage storage = activeSafStorage;
+                new Thread(() -> {
+                    if (storage != activeSafStorage || disposed) return;
+                    prepareRuntimeProject(false);
+                }, "CodeLove-SAF-RuntimeRefresh").start();
             } else {
                 sendCommand("open", activeProject.getAbsolutePath());
             }
@@ -1549,7 +1553,11 @@ public final class Workspace {
 
         editor.setStorage(storage != null ? storage::readText : null);
         if (storage != null) {
-            prepareRuntimeProject(false);
+            final DirectSafStorage selectedStorage = storage;
+            new Thread(() -> {
+                if (selectedStorage != activeSafStorage || disposed) return;
+                prepareRuntimeProject(false);
+            }, "CodeLove-SAF-RuntimeOpen").start();
         } else {
             deleteRuntimeProject();
             sendCommand("open", project.getAbsolutePath());
@@ -1574,11 +1582,25 @@ public final class Workspace {
         if (editor != null && !editor.saveNow()) return;
 
         if (activeSafStorage != null) {
-            if (!prepareRuntimeProject(true)) return;
-        } else {
-            sendCommand("open", activeProject.getAbsolutePath());
+            final DirectSafStorage storage = activeSafStorage;
+            final File project = activeProject;
+            new Thread(() -> {
+                if (storage != activeSafStorage || activeProject == null
+                    || !sameFile(activeProject, project) || disposed) return;
+                if (!prepareRuntimeProject(true)) return;
+                activity.runOnUiThread(() -> {
+                    if (currentInstance != this || disposed
+                        || storage != activeSafStorage
+                        || activeProject == null || !sameFile(activeProject, project)) return;
+                    playing = true;
+                    sendCommand("play", "");
+                    updatePlayButton();
+                });
+            }, "CodeLove-SAF-Play").start();
+            return;
         }
 
+        sendCommand("open", activeProject.getAbsolutePath());
         playing = true;
         sendCommand("play", "");
         updatePlayButton();
@@ -1596,10 +1618,24 @@ public final class Workspace {
         if (activeProject == null || !editor.saveNow()) return;
 
         if (activeSafStorage != null) {
-            if (!prepareRuntimeProject(true)) return;
-        } else {
-            sendCommand("open", activeProject.getAbsolutePath());
+            final DirectSafStorage storage = activeSafStorage;
+            final File project = activeProject;
+            new Thread(() -> {
+                if (storage != activeSafStorage || activeProject == null
+                    || !sameFile(activeProject, project) || disposed) return;
+                if (!prepareRuntimeProject(true)) return;
+                activity.runOnUiThread(() -> {
+                    if (currentInstance != this || disposed
+                        || storage != activeSafStorage
+                        || activeProject == null || !sameFile(activeProject, project)) return;
+                    playing = false;
+                    updatePlayButton();
+                });
+            }, "CodeLove-SAF-Reset").start();
+            return;
         }
+
+        sendCommand("open", activeProject.getAbsolutePath());
         playing = false;
         updatePlayButton();
     }
