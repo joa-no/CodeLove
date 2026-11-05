@@ -219,8 +219,12 @@ final class SafSyncEngine {
         for(String p:paths){
             Entry e=desired.get(p); File target=new File(root,p);
             ensureInside(root,target);
-            if(e.directory){if(!target.isDirectory()&&!target.mkdirs())throw new IOException("Nao consegui criar a pasta local "+p+".");}
+            if(e.directory){
+                if(target.exists()&&!target.isDirectory()&&!target.delete())throw new IOException("Nao consegui substituir o arquivo local por uma pasta: "+p+".");
+                if(!target.isDirectory()&&!target.mkdirs())throw new IOException("Nao consegui criar a pasta local "+p+".");
+            }
             else{
+                if(target.isDirectory()&&!FileOps.deleteRecursive(target))throw new IOException("Nao consegui substituir a pasta local por um arquivo: "+p+".");
                 Entry existing=scanEntryLocal(target,p);
                 if(existing!=null && sameState(existing,e)) continue;
                 File parent=target.getParentFile();
@@ -255,6 +259,12 @@ final class SafSyncEngine {
             String parentId=ids.get(parent);
             if(parentId==null) throw new IOException("Pasta superior ausente durante a sincronizacao: "+parent);
             String id=existing==null?null:existing.documentId;
+            if(existing!=null && existing.directory!=wanted.directory){
+                Uri oldUri=DocumentsContract.buildDocumentUriUsingTree(tree,existing.documentId);
+                if(!DocumentsContract.deleteDocument(a.getContentResolver(),oldUri))
+                    throw new IOException("Nao consegui substituir o item externo "+p+" por outro tipo.");
+                id=null;
+            }
             if(wanted.directory){
                 if(id==null){
                     Uri made=DocumentsContract.createDocument(a.getContentResolver(),
