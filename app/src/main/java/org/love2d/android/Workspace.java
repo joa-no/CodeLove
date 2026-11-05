@@ -1171,17 +1171,25 @@ public final class Workspace {
     }
 
     private void showAddMenu(View anchor) {
+        // Sem projeto aberto, o botao + inicia diretamente a selecao da pasta.
+        if (activeProject == null || activeSafStorage == null) {
+            addExistingProject();
+            return;
+        }
+
+        // Com um projeto aberto, o menu oferece apenas operacoes dentro dele.
+        final File folder = targetFolder();
+        if (folder == null) {
+            addExistingProject();
+            return;
+        }
+
         List<String> labels = new ArrayList<String>();
         List<Runnable> actions = new ArrayList<Runnable>();
-        labels.add("Adicionar projeto existente");
-        actions.add(() -> addExistingProject());
-        final File folder = targetFolder();
-        if (folder != null) {
-            labels.add("Novo arquivo em " + folder.getName());
-            actions.add(() -> newFile(folder));
-            labels.add("Nova pasta em " + folder.getName());
-            actions.add(() -> newFolder(folder));
-        }
+        labels.add("Novo arquivo em " + folder.getName());
+        actions.add(() -> newFile(folder));
+        labels.add("Nova pasta em " + folder.getName());
+        actions.add(() -> newFolder(folder));
         ui.showMenu(anchor, labels, actions);
     }
 

@@ -397,7 +397,9 @@ final class DirectSafStorage implements CodeEditor.Storage {
 
     private static String mimeFor(String name) {
         String lower = name.toLowerCase(java.util.Locale.ROOT);
-        if (lower.endsWith(".lua")) return "text/plain";
+        // text/plain faz alguns DocumentsProviders acrescentarem .txt ao nome.
+        // Lua e texto para o editor, mas usa um MIME proprio para preservar .lua.
+        if (lower.endsWith(".lua")) return "application/x-lua";
         if (lower.endsWith(".png")) return "image/png";
         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
         if (lower.endsWith(".gif")) return "image/gif";
