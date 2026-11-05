@@ -1118,8 +1118,6 @@ public final class Workspace {
     private void showAddMenu(View anchor) {
         List<String> labels = new ArrayList<String>();
         List<Runnable> actions = new ArrayList<Runnable>();
-        labels.add("Novo projeto");
-        actions.add(() -> newProject());
         labels.add("Adicionar projeto existente");
         actions.add(() -> addExistingProject());
         if (activeProject != null && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
@@ -1232,24 +1230,6 @@ public final class Workspace {
             actions.add(() -> delete(file));
         }
         ui.showMenu(anchor, labels, actions);
-    }
-
-    private void newProject() {
-        if (gamesDir == null) {
-            toast("Pasta de projetos indisponivel.");
-            return;
-        }
-        ui.askText("Novo projeto", "", "Criar",
-            text -> FileOps.checkName(gamesDir, text),
-            text -> {
-                File project = FileOps.createProject(gamesDir, text);
-                if (project == null) {
-                    toast("Nao consegui criar o projeto.");
-                    return;
-                }
-                selectProject(project);
-                openInEditor(new File(project, "main.lua"));
-            });
     }
 
     private void newFile(final File folder) {
