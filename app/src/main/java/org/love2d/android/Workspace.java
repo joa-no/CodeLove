@@ -190,6 +190,7 @@ public final class Workspace {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity && !workspace.disposed) {
             workspace.hostResumed = true;
+            workspace.renderTree();
             workspace.startStatusPolling();
         }
     }
@@ -1540,8 +1541,10 @@ public final class Workspace {
     }
 
     private void selectProjectInternal(File project, DirectSafStorage storage) {
-        if (editor != null && editor.isOpen() && !isInside(editor.getFile(), project)
-            && !editor.close()) {
+        boolean changingProject = activeProject == null
+            || !sameFile(activeProject, project)
+            || activeSafStorage != storage;
+        if (editor != null && editor.isOpen() && changingProject && !editor.close()) {
             return;
         }
 
