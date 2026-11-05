@@ -44,6 +44,11 @@ import java.util.List;
 import java.util.Locale;
 
 final class CodeEditor {
+    interface Storage {
+        String readText(File file, long maxBytes) throws IOException;
+        boolean writeText(File file, String text);
+    }
+
     interface Listener {
         /** Chamado quando o usuario altera o texto do editor. */
         void onEdited();
@@ -67,6 +72,7 @@ final class CodeEditor {
 
     private final Activity activity;
     private final Listener listener;
+    private Storage storage;
     private final LinearLayout view;
     private final TextView title;
     private final TextView dirtyMark;
@@ -267,13 +273,23 @@ final class CodeEditor {
         return file;
     }
 
+    void setStorage(Storage storage) {
+        this.storage = storage;
+    }
+
     /** Abre outro arquivo somente depois de preservar as alteracoes atuais. */
     boolean open(File target) {
         if (!saveNow()) {
             return false;
         }
 
-        String text = readText(target);
+        String text;
+        try {
+            text = storage != null ? storage.readText(target, MAX_BYTES) : readText(target);
+        } catch (IOException e) {
+            Log.w(TAG, "Falha ao ler " + target, e);
+            return false;
+        }
         if (text == null) {
             return false;
         }
@@ -322,32 +338,38 @@ final class CodeEditor {
             return true;
         }
 
-        File parent = file.getParentFile();
-        File temp = new File(parent, file.getName() + ".tmp");
-        byte[] data = input.getText().toString().getBytes(StandardCharsets.UTF_8);
+        String text = input.getText().toString();
 
-        try {
-            if (parent == null || !parent.isDirectory()) {
-                throw new IOException("A pasta do arquivo nao esta disponivel.");
+        if (storage != null) {
+            if (!storage.writeText(file, text)) {
+                notifySaveFailure();
+                return false;
             }
+        } else {
+            File parent = file.getParentFile();
+            File temp = new File(parent, file.getName() + ".tmp");
+            byte[] data = text.getBytes(StandardCharsets.UTF_8);
 
-            // O temporario fica na mesma pasta para que a troca seja atomica.
-            try (FileOutputStream out = new FileOutputStream(temp)) {
-                out.write(data);
-                out.flush();
-                out.getFD().sync();
-            }
+            try {
+                if (parent == null || !parent.isDirectory()) {
+                    throw new IOException("A pasta do arquivo nao esta disponivel.");
+                }
 
-            // Nao gravar diretamente no original como alternativa: isso poderia
-            // truncar o arquivo se a escrita falhasse no meio.
-            if (!temp.renameTo(file)) {
-                throw new IOException("Nao foi possivel substituir o arquivo original.");
+                try (FileOutputStream out = new FileOutputStream(temp)) {
+                    out.write(data);
+                    out.flush();
+                    out.getFD().sync();
+                }
+
+                if (!temp.renameTo(file)) {
+                    throw new IOException("Nao foi possivel substituir o arquivo original.");
+                }
+            } catch (IOException e) {
+                Log.w(TAG, "Falha ao salvar " + file, e);
+                temp.delete();
+                notifySaveFailure();
+                return false;
             }
-        } catch (IOException e) {
-            Log.w(TAG, "Falha ao salvar " + file, e);
-            temp.delete();
-            notifySaveFailure();
-            return false;
         }
 
         dirty = false;
