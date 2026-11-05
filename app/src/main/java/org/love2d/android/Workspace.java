@@ -90,6 +90,7 @@ public final class Workspace {
     private File activeProject = null; // projeto aberto agora (nulo se nenhum)
     private boolean playing = false;
     private boolean synchronizing = false;
+    private final Set<String> pendingExternalFiles = new HashSet<String>();
     private String lastStatus = "";
 
     private OverlayUi ui;
@@ -163,7 +164,6 @@ public final class Workspace {
             SafProjectManager.getProjectsNeedingImport(activity);
         if (pending.isEmpty()) return;
 
-        toast("Preparando projetos externos ja autorizados...");
         new Thread(() -> {
             for (SafProjectManager.RegisteredProject project : pending) {
                 SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
@@ -406,6 +406,15 @@ public final class Workspace {
 
         placeholder = buildPlaceholder();
 
+        TextView saveButton = new TextView(activity);
+        saveButton.setText("Salvar");
+        saveButton.setGravity(Gravity.CENTER);
+        saveButton.setTextColor(0xFF1B1F2B);
+        saveButton.setTextSize(13);
+        saveButton.setTypeface(Typeface.DEFAULT_BOLD);
+        saveButton.setBackground(box(COLOR_FOLDER, 12, false));
+        saveButton.setOnClickListener(v -> saveCurrentFile());
+
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
             @Override
             public void onSaved(File file) {
@@ -419,7 +428,8 @@ public final class Workspace {
                 saveState();
             }
         });
-        editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, 0);
+        editor.addFooterControl(saveButton, 68, 0);
+        editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editor.addFooterControl(footerResetButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editor.addFooterControl(consoleButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editorView = editor.getView();
@@ -1175,7 +1185,6 @@ public final class Workspace {
             if (error != null) {
                 workspace.showProjectNotice(error);
             } else {
-                workspace.toast("Importando projeto para o armazenamento local...");
                 final Workspace targetWorkspace = workspace;
                 final Uri selectedTreeUri = treeUri;
                 final SafProjectManager.ProjectSelection selectedProject = selection;
@@ -1193,7 +1202,7 @@ public final class Workspace {
                         } else {
                             targetWorkspace.expanded.add(copy.directory.getAbsolutePath());
                             targetWorkspace.renderTree();
-                            targetWorkspace.toast("Projeto externo adicionado. As alteracoes serao sincronizadas com a pasta autorizada.");
+                            targetWorkspace.toast("Pasta selecionada com sucesso.");
                         }
                     });
                 }, "CodeLove-SAF-Import").start();
@@ -1402,6 +1411,7 @@ public final class Workspace {
 
     private void openInEditor(File file) {
         if (editor.open(file)) {
+            editor.setSyncPending(pendingExternalFiles.contains(file.getAbsolutePath()));
             applyLayout();
             renderTree();
             saveState();
@@ -1420,9 +1430,40 @@ public final class Workspace {
     /** Depois de salvar: recarrega o projeto no executor, e o 1o quadro mostra o codigo novo. */
     private void onFileSaved(File file) {
         if (activeProject != null && isInside(file, activeProject)) {
+            if (SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
+                pendingExternalFiles.add(file.getAbsolutePath());
+                if (editor != null && editor.isOpen() && sameFile(editor.getFile(), file)) {
+                    editor.setSyncPending(true);
+                }
+            }
             playing = false;
             sendCommand("open", activeProject.getAbsolutePath());
             updatePlayButton();
+        }
+    }
+
+    /** Salva o arquivo aberto e, para projetos SAF, sincroniza a pasta externa. */
+    private void saveCurrentFile() {
+        if (editor == null || !editor.isOpen() || !editor.saveNow()) return;
+        if (activeProject != null
+            && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
+            final File project = activeProject;
+            syncExternalProject(project, SafSyncEngine.INITIAL_NONE, () -> {
+                clearPendingExternalFiles(project);
+                if (editor != null && editor.isOpen()
+                    && isInside(editor.getFile(), project)) {
+                    editor.setSyncPending(pendingExternalFiles.contains(
+                        editor.getFile().getAbsolutePath()));
+                }
+            });
+        }
+    }
+
+    private void clearPendingExternalFiles(File project) {
+        java.util.Iterator<String> iterator = pendingExternalFiles.iterator();
+        while (iterator.hasNext()) {
+            File pending = new File(iterator.next());
+            if (isInside(pending, project)) iterator.remove();
         }
     }
 
@@ -1483,14 +1524,12 @@ public final class Workspace {
 
     private void syncExternalProject(File project, int initialDirection, int conflictDirection, Runnable onSuccess) {
         if (synchronizing) {
-            toast("Ja existe uma sincronizacao em andamento.");
             return;
         }
         if (editor != null && editor.isOpen() && isInside(editor.getFile(), project)
             && !editor.saveNow()) return;
 
         synchronizing = true;
-        toast("Sincronizando projeto...");
         new Thread(() -> {
             SafSyncEngine.Result result = SafSyncEngine.synchronize(activity, project, initialDirection, conflictDirection);
             activity.runOnUiThread(() -> {
@@ -1526,8 +1565,13 @@ public final class Workspace {
                     showNotice("Sincronizacao nao concluida", result.message);
                     return;
                 }
+                clearPendingExternalFiles(project);
+                if (editor != null && editor.isOpen()
+                    && isInside(editor.getFile(), project)) {
+                    editor.setSyncPending(pendingExternalFiles.contains(
+                        editor.getFile().getAbsolutePath()));
+                }
                 renderTree();
-                toast(result.message);
                 if (onSuccess != null) onSuccess.run();
             });
         }, "CodeLove-SAF-Sync").start();
