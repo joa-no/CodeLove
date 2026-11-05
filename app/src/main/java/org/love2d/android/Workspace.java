@@ -11,6 +11,7 @@
 package org.love2d.android;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -88,6 +89,7 @@ public final class Workspace {
 
     private File activeProject = null; // projeto aberto agora (nulo se nenhum)
     private boolean playing = false;
+    private boolean synchronizing = false;
     private String lastStatus = "";
 
     private OverlayUi ui;
@@ -1230,6 +1232,10 @@ public final class Workspace {
         }
         // A raiz da copia externa mantem o vinculo persistido com a pasta SAF.
         // Renomear/apagar sera habilitado junto com o gerenciamento de vinculos.
+        if (externalProjectRoot) {
+            labels.add("Sincronizar agora");
+            actions.add(() -> syncExternalProject(file, SafSyncEngine.INITIAL_NONE, null));
+        }
         if (!externalProjectRoot) {
             labels.add("Renomear");
             actions.add(() -> rename(file));
@@ -1460,9 +1466,66 @@ public final class Workspace {
     }
 
     private void togglePlayback() {
-        playing = !playing;
-        sendCommand(playing ? "play" : "pause", "");
+        if (playing) {
+            playing = false;
+            sendCommand("pause", "");
+            updatePlayButton();
+            return;
+        }
+        if (activeProject == null) return;
+        if (editor != null && !editor.saveNow()) return;
+        if (SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
+            final File project = activeProject;
+            syncExternalProject(project, SafSyncEngine.INITIAL_NONE, () -> {
+                if (activeProject == null || !sameFile(activeProject, project)) return;
+                sendCommand("open", project.getAbsolutePath());
+                playing = true;
+                sendCommand("play", "");
+                updatePlayButton();
+            });
+            return;
+        }
+        playing = true;
+        sendCommand("play", "");
         updatePlayButton();
+    }
+
+    private void syncExternalProject(File project, int initialDirection, Runnable onSuccess) {
+        if (synchronizing) {
+            toast("Ja existe uma sincronizacao em andamento.");
+            return;
+        }
+        if (editor != null && editor.isOpen() && isInside(editor.getFile(), project)
+            && !editor.saveNow()) return;
+
+        synchronizing = true;
+        toast("Sincronizando projeto...");
+        new Thread(() -> {
+            SafSyncEngine.Result result = SafSyncEngine.synchronize(activity, project, initialDirection);
+            activity.runOnUiThread(() -> {
+                synchronizing = false;
+                if (currentInstance != this || disposed || activity.isFinishing()) return;
+                if (result.needsInitialChoice) {
+                    new AlertDialog.Builder(activity)
+                        .setTitle("Primeira sincronizacao")
+                        .setMessage("Ainda nao existe um historico para saber qual lado foi alterado. Escolha explicitamente qual versao deve prevalecer. A outra sera atualizada para ficar igual.")
+                        .setPositiveButton("Enviar copia local", (dialog, which) ->
+                            syncExternalProject(project, SafSyncEngine.INITIAL_LOCAL_TO_EXTERNAL, onSuccess))
+                        .setNegativeButton("Usar pasta externa", (dialog, which) ->
+                            syncExternalProject(project, SafSyncEngine.INITIAL_EXTERNAL_TO_LOCAL, onSuccess))
+                        .setNeutralButton("Cancelar", null)
+                        .show();
+                    return;
+                }
+                if (!result.success) {
+                    showNotice("Sincronizacao nao concluida", result.message);
+                    return;
+                }
+                renderTree();
+                toast(result.message);
+                if (onSuccess != null) onSuccess.run();
+            });
+        }, "CodeLove-SAF-Sync").start();
     }
 
     private void updatePlayButton() {
@@ -1485,15 +1548,19 @@ public final class Workspace {
 
     /** Volta a cena ao inicio: recarrega o projeto, pausado, no primeiro quadro. */
     private void resetScene() {
-        if (activeProject == null) {
-            return;
+        if (activeProject == null || !editor.saveNow()) return;
+        final File project = activeProject;
+        Runnable reset = () -> {
+            if (activeProject == null || !sameFile(activeProject, project)) return;
+            playing = false;
+            sendCommand("open", project.getAbsolutePath());
+            updatePlayButton();
+        };
+        if (SafProjectManager.isWorkingCopyRoot(activity, project)) {
+            syncExternalProject(project, SafSyncEngine.INITIAL_NONE, reset);
+        } else {
+            reset.run();
         }
-        if (!editor.saveNow()) {
-            return;
-        }
-        playing = false;
-        sendCommand("open", activeProject.getAbsolutePath());
-        updatePlayButton();
     }
 
     /**
