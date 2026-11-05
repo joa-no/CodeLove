@@ -269,9 +269,24 @@ final class SafSyncEngine {
         if (slash >= 0) parentPath = path.substring(0, slash);
         String parentId = rootId;
         if (!parentPath.isEmpty()) {
-            Entry parent = remoteSnapshot.get(parentPath);
-            if (parent == null || !parent.directory) throw new IOException("A pasta externa do arquivo nao existe mais.");
-            parentId = parent.documentId;
+            StringBuilder currentPath = new StringBuilder();
+            String[] parts = parentPath.split("/");
+            for (String part : parts) {
+                if (currentPath.length() > 0) currentPath.append('/');
+                currentPath.append(part);
+                String directoryPath = currentPath.toString();
+                Entry parent = remoteSnapshot.get(directoryPath);
+                if (parent != null) {
+                    if (!parent.directory) throw new IOException("Um arquivo ocupa o lugar da pasta externa " + directoryPath + ".");
+                    parentId = parent.documentId;
+                } else {
+                    Uri createdDirectory = DocumentsContract.createDocument(activity.getContentResolver(),
+                        DocumentsContract.buildDocumentUriUsingTree(treeUri, parentId),
+                        DocumentsContract.Document.MIME_TYPE_DIR, part);
+                    if (createdDirectory == null) throw new IOException("Nao consegui criar a pasta externa " + directoryPath + ".");
+                    parentId = DocumentsContract.getDocumentId(createdDirectory);
+                }
+            }
         }
 
         String documentId;
