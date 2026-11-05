@@ -45,6 +45,9 @@ import java.util.Locale;
 
 final class CodeEditor {
     interface Listener {
+        /** Chamado quando o usuario altera o texto do editor. */
+        void onEdited();
+
         /** Chamado depois que o arquivo foi gravado no disco. */
         void onSaved(File file);
 
@@ -82,7 +85,6 @@ final class CodeEditor {
 
     private File file;           // arquivo aberto (nulo se nenhum)
     private boolean dirty;       // tem alteracao ainda nao gravada no armazenamento local
-    private boolean syncPending;  // arquivo local salvo, mas ainda nao sincronizado com a pasta externa
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
     private boolean highlightLua;
@@ -189,6 +191,7 @@ final class CodeEditor {
                     return;
                 }
                 dirty = true;
+                listener.onEdited();
                 saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
@@ -312,12 +315,6 @@ final class CodeEditor {
         return dirty;
     }
 
-    /** Marca se o arquivo local ainda aguarda sincronizacao com a pasta externa. */
-    void setSyncPending(boolean pending) {
-        syncPending = pending;
-        refreshDirtyMark();
-    }
-
     /** Grava agora. Em caso de falha, preserva o texto e informa o usuario. */
     boolean saveNow() {
         input.removeCallbacks(saveTask);
@@ -404,16 +401,11 @@ final class CodeEditor {
     }
 
     private void refreshDirtyMark() {
-        boolean visible = dirty || syncPending;
-        dirtyMark.setVisibility(visible ? View.VISIBLE : View.GONE);
-        String hint = dirty
-            ? "Alterações ainda não salvas"
-            : (syncPending
-                ? "Salvo no CodeLove; aguardando sincronização com a pasta externa"
-                : "");
+        dirtyMark.setVisibility(dirty ? View.VISIBLE : View.GONE);
+        String hint = dirty ? "Alterações ainda não salvas" : "";
         dirtyMark.setContentDescription(hint);
         if (android.os.Build.VERSION.SDK_INT >= 26) {
-            dirtyMark.setTooltipText(visible ? hint : null);
+            dirtyMark.setTooltipText(dirty ? hint : null);
         }
     }
 
