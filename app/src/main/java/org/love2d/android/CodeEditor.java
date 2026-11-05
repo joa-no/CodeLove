@@ -205,15 +205,30 @@ final class CodeEditor {
                 if (changeAfter == 1 && changeStart < s.length()
                     && s.charAt(changeStart) == '\n'
                     && input.getSelectionStart() == changeStart + 1) {
-                    String indent = indentationForNewLine(s, changeStart);
+                    final int newlinePosition = changeStart;
+                    final String indent = indentationForNewLine(s, newlinePosition);
                     if (!indent.isEmpty()) {
-                        applyingAutoIndent = true;
-                        try {
-                            s.insert(changeStart + 1, indent);
-                            input.setSelection(changeStart + 1 + indent.length());
-                        } finally {
-                            applyingAutoIndent = false;
-                        }
+                        // Altera o texto somente depois que o Android terminar
+                        // a notificacao atual do TextWatcher. Isso evita uma
+                        // modificacao recursiva durante afterTextChanged().
+                        input.post(() -> {
+                            Editable current = input.getText();
+                            int expectedCursor = newlinePosition + 1;
+                            if (current.length() <= newlinePosition
+                                || current.charAt(newlinePosition) != '\n'
+                                || input.getSelectionStart() != expectedCursor
+                                || input.getSelectionEnd() != expectedCursor) {
+                                return;
+                            }
+
+                            applyingAutoIndent = true;
+                            try {
+                                current.insert(expectedCursor, indent);
+                                input.setSelection(expectedCursor + indent.length());
+                            } finally {
+                                applyingAutoIndent = false;
+                            }
+                        });
                     }
                 }
 
