@@ -1355,10 +1355,21 @@ public final class Workspace {
 
         try {
             File dest = activeSafStorage.rename(target, newName).getAbsoluteFile();
+            String oldPath = target.getAbsolutePath();
+            String newPath = dest.getAbsolutePath();
+            Set<String> next = new HashSet<String>();
+            for (String path : expanded) {
+                if (path.equals(oldPath)) next.add(newPath);
+                else if (path.startsWith(oldPath + File.separator))
+                    next.add(newPath + path.substring(oldPath.length()));
+                else next.add(path);
+            }
+            expanded.clear();
+            expanded.addAll(next);
+
             if (isActiveProject) {
                 activeProject = dest;
                 projectTitle.setText(activeSafStorage.getDisplayName());
-                expanded.add(dest.getAbsolutePath());
                 prepareRuntimeProject(false);
             }
             renderTree();
