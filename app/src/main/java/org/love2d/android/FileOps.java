@@ -179,52 +179,6 @@ final class FileOps {
         }
     }
 
-    /**
-     * Na primeira vez que o app roda, cria o projeto de exemplo. Se voce apagar o
-     * exemplo depois, ele NAO volta (a marca fica ao lado da pasta de projetos).
-     */
-    static void ensureSampleProject(File gamesDir) {
-        if (gamesDir == null || !gamesDir.isDirectory()) {
-            return;
-        }
-        File marker = new File(gamesDir.getParentFile(), "codelove_sample_created");
-        if (marker.exists()) {
-            return;
-        }
-
-        String[] existing = gamesDir.list();
-        if (existing == null || existing.length == 0) {
-            File project = new File(gamesDir, "meu_jogo");
-            writeText(new File(project, "main.lua"),
-                "-- Projeto de exemplo do CodeLove.\n"
-                + "-- Edite este arquivo para mudar o jogo.\n"
-                + "\n"
-                + "local x = 100\n"
-                + "\n"
-                + "function love.update(dt)\n"
-                + "  x = x + 60 * dt\n"
-                + "end\n"
-                + "\n"
-                + "function love.draw()\n"
-                + "  love.graphics.print(\"Ola, CodeLove!\", x, 100)\n"
-                + "end\n");
-            writeText(new File(project, "conf.lua"),
-                "function love.conf(t)\n"
-                + "  t.window.title = \"meu_jogo\"\n"
-                + "end\n");
-            writeText(new File(new File(project, "scripts"), "util.lua"),
-                "local util = {}\n"
-                + "\n"
-                + "function util.clamp(v, a, b)\n"
-                + "  return math.max(a, math.min(b, v))\n"
-                + "end\n"
-                + "\n"
-                + "return util\n");
-        }
-
-        writeText(marker, "1");
-    }
-
     static boolean writeText(File file, String text) {
         File parent = file.getParentFile();
         if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
