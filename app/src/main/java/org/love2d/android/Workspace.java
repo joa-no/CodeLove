@@ -113,7 +113,10 @@ public final class Workspace {
     private LinearLayout controlsBar;
     private IconView fullscreenIcon;
     private TextView projectTitle;
+    private TextView syncIndicator;
     private TextView statusView;
+    private IconView saveIcon;
+    private boolean lastSyncVerified = false;
     private LinearLayout projectNotice;
     private LinearLayout treeBox;
     private EditText search;
@@ -133,6 +136,9 @@ public final class Workspace {
         this.gamesDir = gamesDir;
         this.channelDir = channelDir(activity);
         this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
+        Set<String> savedPending = prefs.getStringSet("pendingExternalFiles", null);
+        if (savedPending != null) pendingExternalFiles.addAll(savedPending);
+        this.lastSyncVerified = prefs.getBoolean("lastSyncVerified", false);
         this.onLeft = prefs.getBoolean("panel_left", true);
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
@@ -405,7 +411,7 @@ public final class Workspace {
 
         placeholder = buildPlaceholder();
 
-        IconView saveIcon = new IconView(activity, IconView.SAVE, COLOR_TEXT);
+        saveIcon = new IconView(activity, IconView.SAVE, COLOR_TEXT);
         LinearLayout saveButton = new LinearLayout(activity);
         saveButton.setGravity(Gravity.CENTER);
         saveButton.setBackground(box(COLOR_FIELD, 22, false));
@@ -414,6 +420,11 @@ public final class Workspace {
         saveButton.setOnClickListener(v -> saveCurrentFile());
 
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
+            @Override
+            public void onEdited() {
+                if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
+            }
+
             @Override
             public void onSaved(File file) {
                 onFileSaved(file);
@@ -473,6 +484,7 @@ public final class Workspace {
         applyLayout();
         root.requestApplyInsets();
         restoreState();
+        updateSyncIndicator();
     }
 
     private View buildHeader() {
@@ -495,6 +507,14 @@ public final class Workspace {
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
+
+        syncIndicator = new TextView(activity);
+        syncIndicator.setGravity(Gravity.CENTER);
+        syncIndicator.setTextSize(15);
+        syncIndicator.setPadding(dp(2), 0, dp(8), 0);
+        syncIndicator.setVisibility(View.GONE);
+        header.addView(syncIndicator, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout info = new LinearLayout(activity);
         info.setGravity(Gravity.CENTER);
@@ -1332,6 +1352,7 @@ public final class Workspace {
         if (isActiveProject) {
             activeProject = dest;
             projectTitle.setText(dest.getName());
+            updateSyncIndicator();
             playing = false;
             sendCommand("open", dest.getAbsolutePath());
             updatePlayButton();
@@ -1389,7 +1410,7 @@ public final class Workspace {
 
     private void openInEditor(File file) {
         if (editor.open(file)) {
-            editor.setSyncPending(pendingExternalFiles.contains(file.getAbsolutePath()));
+            if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
             applyLayout();
             renderTree();
             saveState();
@@ -1410,9 +1431,10 @@ public final class Workspace {
         if (activeProject != null && isInside(file, activeProject)) {
             if (SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
                 pendingExternalFiles.add(file.getAbsolutePath());
-                if (editor != null && editor.isOpen() && sameFile(editor.getFile(), file)) {
-                    editor.setSyncPending(true);
-                }
+                persistPendingExternalFiles();
+                lastSyncVerified = false;
+                prefs.edit().putBoolean("lastSyncVerified", false).apply();
+                updateSyncIndicator();
             }
             playing = false;
             sendCommand("open", activeProject.getAbsolutePath());
@@ -1420,10 +1442,106 @@ public final class Workspace {
         }
     }
 
-    /** Salva somente no armazenamento de trabalho do CodeLove; nao sincroniza o SAF. */
+    /** Salva o arquivo atual e, em projetos SAF, publica esse arquivo na pasta original. */
     private void saveCurrentFile() {
-        if (editor == null || !editor.isOpen()) return;
-        editor.saveNow();
+        if (editor == null || !editor.isOpen() || !editor.saveNow()) return;
+        File file = editor.getFile();
+        if (file == null) return;
+
+        if (activeProject != null && isInside(file, activeProject)
+            && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
+            publishCurrentFile(file, SafSyncEngine.CONFLICT_NONE);
+        } else if (saveIcon != null) {
+            saveIcon.setKind(IconView.CHECK);
+        }
+    }
+
+    private void publishCurrentFile(File file, int conflictDirection) {
+        if (synchronizing) return;
+        final File project = activeProject;
+        if (project == null || !isInside(file, project)
+            || !SafProjectManager.isWorkingCopyRoot(activity, project)) return;
+
+        synchronizing = true;
+        new Thread(() -> {
+            SafSyncEngine.Result result =
+                SafSyncEngine.publishFile(activity, project, file, conflictDirection);
+            activity.runOnUiThread(() -> {
+                synchronizing = false;
+                if (currentInstance != this || disposed || activity.isFinishing()) return;
+
+                if (result.needsConflictChoice) {
+                    new AlertDialog.Builder(activity)
+                        .setTitle("Conflito no arquivo")
+                        .setMessage(result.message)
+                        .setPositiveButton("Manter versao do CodeLove", (dialog, which) ->
+                            publishCurrentFile(file, SafSyncEngine.CONFLICT_KEEP_LOCAL))
+                        .setNegativeButton("Manter versao externa", (dialog, which) ->
+                            publishCurrentFile(file, SafSyncEngine.CONFLICT_KEEP_EXTERNAL))
+                        .setNeutralButton("Cancelar", null)
+                        .show();
+                    return;
+                }
+                if (!result.success) {
+                    showNotice("Arquivo nao salvo na pasta externa", result.message);
+                    return;
+                }
+
+                pendingExternalFiles.remove(file.getAbsolutePath());
+                persistPendingExternalFiles();
+                if (saveIcon != null) saveIcon.setKind(IconView.CHECK);
+                updateSyncIndicator();
+                renderTree();
+
+                if (conflictDirection == SafSyncEngine.CONFLICT_KEEP_EXTERNAL
+                    && editor != null && editor.isOpen()
+                    && sameFile(editor.getFile(), file)) {
+                    if (file.isFile()) {
+                        editor.open(file);
+                    } else {
+                        editor.close();
+                    }
+                }
+            });
+        }, "CodeLove-SAF-Publish").start();
+    }
+
+    private void persistPendingExternalFiles() {
+        prefs.edit().putStringSet("pendingExternalFiles",
+            new HashSet<String>(pendingExternalFiles)).apply();
+    }
+
+    private void updateSyncIndicator() {
+        if (syncIndicator == null) return;
+        boolean external = activeProject != null
+            && SafProjectManager.isWorkingCopyRoot(activity, activeProject);
+        syncIndicator.setVisibility(external ? View.VISIBLE : View.GONE);
+        if (!external) return;
+
+        boolean pending = false;
+        for (String path : pendingExternalFiles) {
+            if (isInside(new File(path), activeProject)) {
+                pending = true;
+                break;
+            }
+        }
+        if (pending) {
+            syncIndicator.setText("\u25CF");
+            syncIndicator.setTextColor(0xFFF2A65A);
+            setButtonHint(syncIndicator, "Alteracoes locais aguardando envio para a pasta externa.");
+        } else if (synchronizing) {
+            syncIndicator.setText("\u21BB");
+            syncIndicator.setTextColor(COLOR_LUA);
+            setButtonHint(syncIndicator, "Sincronizando o projeto.");
+        } else if (lastSyncVerified) {
+            syncIndicator.setText("\u2713");
+            syncIndicator.setTextColor(0xFF5EEAD4);
+            setButtonHint(syncIndicator, "Ultima sincronizacao concluida. Use ↻ para verificar novas alteracoes externas.");
+        } else {
+            syncIndicator.setText("\u21C4");
+            syncIndicator.setTextColor(COLOR_MUTED);
+            setButtonHint(syncIndicator, "Use Sincronizar para verificar e atualizar os dois lados do projeto.");
+        }
     }
 
     private void clearPendingExternalFiles(File project) {
@@ -1432,6 +1550,7 @@ public final class Workspace {
             File pending = new File(iterator.next());
             if (isInside(pending, project)) iterator.remove();
         }
+        persistPendingExternalFiles();
     }
 
     // ------------------------------------------------------------------
@@ -1459,6 +1578,7 @@ public final class Workspace {
         sendCommand("open", project.getAbsolutePath());
         projectTitle.setText(projectDisplayName(project));
         placeholder.setVisibility(View.GONE);
+        updateSyncIndicator();
         updatePlayButton();
         renderTree();
         saveState();
@@ -1509,7 +1629,6 @@ public final class Workspace {
                 File currentFile = editor.getFile();
                 if (currentFile != null && currentFile.isFile()) {
                     editor.open(currentFile);
-                    editor.setSyncPending(false);
                 }
             }
         });
@@ -1563,11 +1682,9 @@ public final class Workspace {
                     return;
                 }
                 clearPendingExternalFiles(project);
-                if (editor != null && editor.isOpen()
-                    && isInside(editor.getFile(), project)) {
-                    editor.setSyncPending(pendingExternalFiles.contains(
-                        editor.getFile().getAbsolutePath()));
-                }
+                lastSyncVerified = true;
+                prefs.edit().putBoolean("lastSyncVerified", true).apply();
+                updateSyncIndicator();
                 renderTree();
                 if (onSuccess != null) onSuccess.run();
             });
@@ -1933,6 +2050,7 @@ public final class Workspace {
         static final int FULLSCREEN_EXIT = 11;
         static final int INFO = 12;
         static final int SAVE = 13;
+        static final int CHECK = 14;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -2029,6 +2147,11 @@ public final class Workspace {
                     path.lineTo(7f, 14f);
                     path.lineTo(17f, 14f);
                     path.lineTo(17f, 21f);
+                    break;
+                case CHECK:
+                    path.moveTo(4f, 12f);
+                    path.lineTo(9f, 17f);
+                    path.lineTo(20f, 6f);
                     break;
                 case CONSOLE:
                     path.moveTo(5f, 7f);
