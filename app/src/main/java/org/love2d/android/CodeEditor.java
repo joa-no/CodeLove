@@ -404,7 +404,17 @@ final class CodeEditor {
     }
 
     private void refreshDirtyMark() {
-        dirtyMark.setVisibility((dirty || syncPending) ? View.VISIBLE : View.GONE);
+        boolean visible = dirty || syncPending;
+        dirtyMark.setVisibility(visible ? View.VISIBLE : View.GONE);
+        String hint = dirty
+            ? "Alterações ainda não salvas"
+            : (syncPending
+                ? "Salvo no CodeLove; aguardando sincronização com a pasta externa"
+                : "");
+        dirtyMark.setContentDescription(hint);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            dirtyMark.setTooltipText(visible ? hint : null);
+        }
     }
 
     private void refreshGutter(CharSequence text, boolean force) {
