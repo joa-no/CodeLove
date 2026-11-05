@@ -10,6 +10,7 @@
 package org.love2d.android;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Rect;
 import android.graphics.Typeface;
@@ -82,6 +83,7 @@ final class CodeEditor {
     private final View footerSpacer;
 
     private File file;           // arquivo aberto (nulo se nenhum)
+    private String originalText; // conteudo lido na abertura, usado para detectar conflito externo
     private boolean dirty;       // tem alteracao ainda nao gravada no arquivo original
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
@@ -279,6 +281,7 @@ final class CodeEditor {
         }
 
         file = target;
+        originalText = text;
         highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
 
         loading = true;
@@ -302,6 +305,7 @@ final class CodeEditor {
             return false;
         }
         file = null;
+        originalText = null;
         loading = true;
         input.setText("");
         loading = false;
@@ -316,13 +320,42 @@ final class CodeEditor {
         return dirty;
     }
 
-    /** Grava agora. Em caso de falha, preserva o texto e informa o usuario. */
+    /** Grava agora, mas nunca sobrescreve silenciosamente uma alteracao externa. */
     boolean saveNow() {
         if (file == null || !dirty) {
             return true;
         }
 
-        String text = input.getText().toString();
+        final String text = input.getText().toString();
+        final String current;
+        try {
+            current = storage != null ? storage.readText(file, MAX_BYTES) : readText(file);
+        } catch (IOException e) {
+            Log.w(TAG, "Nao foi possivel verificar o arquivo antes de salvar: " + file, e);
+            notifySaveFailure();
+            return false;
+        }
+
+        if (current == null) {
+            notifySaveFailure();
+            return false;
+        }
+
+        if (originalText == null || !originalText.equals(current)) {
+            new AlertDialog.Builder(activity)
+                .setTitle("Arquivo alterado fora do CodeLove")
+                .setMessage("Este arquivo foi modificado em outro lugar desde que voce o abriu. Se salvar agora, essas alteracoes externas serao substituidas pelo texto deste editor.")
+                .setNegativeButton("Cancelar", (dialog, which) -> { })
+                .setPositiveButton("Sobrescrever", (dialog, which) -> writeTextNow(text))
+                .show();
+            return false;
+        }
+
+        return writeTextNow(text);
+    }
+
+    private boolean writeTextNow(String text) {
+        if (file == null) return false;
 
         if (storage != null) {
             if (!storage.writeText(file, text)) {
@@ -356,6 +389,7 @@ final class CodeEditor {
             }
         }
 
+        originalText = text;
         dirty = false;
         saveFailureNotified = false;
         refreshDirtyMark();
