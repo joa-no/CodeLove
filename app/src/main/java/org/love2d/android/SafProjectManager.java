@@ -8,9 +8,6 @@ import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 
-import java.io.File;
-import java.io.IOException;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -18,14 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Gerencia a autorizacao SAF e identifica a raiz real de um projeto LÖVE.
+ * Registra as pastas escolhidas pelo usuario e valida a raiz do projeto.
  *
- * O usuario pode selecionar:
- * - a propria pasta do jogo, com main.lua na raiz; ou
- * - uma pasta-container com exatamente uma pasta de jogo diretamente dentro.
- *
- * A URI persistida continua sendo a tree URI autorizada pelo Android.
- * projectDocumentId identifica a raiz do jogo dentro dessa tree.
+ * Este componente nao cria copia de trabalho. A URI SAF persistida e a fonte
+ * de verdade do projeto externo; o acesso aos documentos e feito por
+ * DirectSafStorage.
  */
 final class SafProjectManager {
     private static final String PREFS_NAME = "codelove_saf";
@@ -55,6 +49,18 @@ final class SafProjectManager {
         }
     }
 
+    static final class RegisteredProject {
+        final Uri treeUri;
+        final String documentId;
+        final String displayName;
+
+        RegisteredProject(Uri treeUri, String documentId, String displayName) {
+            this.treeUri = treeUri;
+            this.documentId = documentId;
+            this.displayName = displayName;
+        }
+    }
+
     private SafProjectManager() {
     }
 
@@ -70,10 +76,6 @@ final class SafProjectManager {
             ? "Projeto externo" : fallback;
     }
 
-    /**
-     * Verifica a estrutura antes de guardar a autorizacao.
-     * Aceita a raiz do jogo ou um container com uma unica pasta de jogo.
-     */
     static ProjectSelection inspectProject(Context context, Uri treeUri) {
         if (treeUri == null || !"content".equals(treeUri.getScheme())) {
             return ProjectSelection.invalid("O Android retornou uma pasta invalida.");
@@ -87,7 +89,8 @@ final class SafProjectManager {
 
             if (hasMainLua(context, treeUri, rootId)) {
                 String name = queryDisplayName(context, treeUri, rootId);
-                return ProjectSelection.valid(rootId, name == null ? "Projeto externo" : name);
+                return ProjectSelection.valid(rootId,
+                    name == null ? "Projeto externo" : name);
             }
 
             ArrayList<ProjectSelection> candidates = new ArrayList<ProjectSelection>();
@@ -170,11 +173,10 @@ final class SafProjectManager {
             if (nameColumn < 0) return false;
 
             while (cursor.moveToNext()) {
-                String name = cursor.getString(nameColumn);
-                if ("main.lua".equals(name)) {
+                if ("main.lua".equals(cursor.getString(nameColumn))) {
                     if (mimeColumn < 0) return true;
-                    String mime = cursor.getString(mimeColumn);
-                    return !DocumentsContract.Document.MIME_TYPE_DIR.equals(mime);
+                    return !DocumentsContract.Document.MIME_TYPE_DIR.equals(
+                        cursor.getString(mimeColumn));
                 }
             }
         } finally {
@@ -202,10 +204,6 @@ final class SafProjectManager {
         return null;
     }
 
-    /**
-     * Registra a tree URI e a raiz validada do projeto.
-     * Retorna null em caso de sucesso ou uma mensagem para o usuario.
-     */
     static String register(Activity activity, Uri treeUri, int grantedFlags,
                            String projectDocumentId, String displayName) {
         if (treeUri == null || !"content".equals(treeUri.getScheme())
@@ -219,15 +217,13 @@ final class SafProjectManager {
         int persistableFlags = hadPermission
             ? requiredFlags : (grantedFlags & requiredFlags);
 
-        // Uma URI ja autorizada nao precisa ser persistida novamente. Alem de
-        // evitar uma operacao redundante no DocumentsProvider, isso torna a
-        // selecao repetida da mesma pasta idempotente.
         if (!hadPermission) {
             if (persistableFlags != requiredFlags) {
                 return "Essa pasta nao concedeu permissao de leitura e escrita.";
             }
             try {
-                activity.getContentResolver().takePersistableUriPermission(treeUri, persistableFlags);
+                activity.getContentResolver().takePersistableUriPermission(
+                    treeUri, persistableFlags);
             } catch (SecurityException e) {
                 return "O Android nao permitiu guardar o acesso permanente a essa pasta.";
             }
@@ -236,18 +232,17 @@ final class SafProjectManager {
             }
         }
 
-        android.content.SharedPreferences prefs =
-            activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        JSONArray projects = new JSONArray();
-        String existingWorkingPath = null;
+        SharedPreferencesHelper helper =
+            new SharedPreferencesHelper(activity.getSharedPreferences(
+                PREFS_NAME, Context.MODE_PRIVATE));
+
         try {
-            JSONArray stored = new JSONArray(prefs.getString(KEY_PROJECTS, "[]"));
+            JSONArray stored = new JSONArray(helper.getProjects());
+            JSONArray projects = new JSONArray();
             for (int i = 0; i < stored.length(); i++) {
                 JSONObject item = stored.optJSONObject(i);
                 if (item == null) continue;
-                if (treeUri.toString().equals(item.optString("uri"))) {
-                    existingWorkingPath = item.optString("workingPath", null);
-                } else {
+                if (!treeUri.toString().equals(item.optString("uri"))) {
                     projects.put(item);
                 }
             }
@@ -257,300 +252,51 @@ final class SafProjectManager {
             entry.put("projectDocumentId", projectDocumentId);
             entry.put("name", displayName == null ? "Projeto externo" : displayName);
             entry.put("flags", persistableFlags);
-            if (existingWorkingPath != null && !existingWorkingPath.isEmpty()) {
-                entry.put("workingPath", existingWorkingPath);
-            }
             projects.put(entry);
 
-            if (!prefs.edit().putString(KEY_PROJECTS, projects.toString()).commit()) {
-                releaseNewPermission(activity, treeUri, persistableFlags, hadPermission);
+            if (!helper.saveProjects(projects.toString())) {
+                if (!hadPermission) releasePermission(activity, treeUri, persistableFlags);
                 return "O acesso foi concedido, mas nao consegui salvar o registro do projeto.";
             }
         } catch (Exception e) {
-            releaseNewPermission(activity, treeUri, persistableFlags, hadPermission);
+            if (!hadPermission) releasePermission(activity, treeUri, persistableFlags);
             return "Nao consegui registrar essa pasta no CodeLove.";
         }
 
         return null;
     }
 
-    private static void releaseNewPermission(Context context, Uri treeUri,
-                                              int flags, boolean hadPermission) {
-        if (hadPermission) return;
-        try {
-            context.getContentResolver().releasePersistableUriPermission(treeUri, flags);
-        } catch (SecurityException ignored) {
-        }
-    }
-
-
-    static final class RegisteredProject {
-        final Uri treeUri;
-        final String documentId;
-        final String displayName;
-        RegisteredProject(Uri treeUri, String documentId, String displayName) {
-            this.treeUri = treeUri;
-            this.documentId = documentId;
-            this.displayName = displayName;
-        }
-    }
-
-    static List<RegisteredProject> getProjectsNeedingImport(Context context) {
+    static List<RegisteredProject> getRegisteredProjects(Context context) {
         ArrayList<RegisteredProject> result = new ArrayList<RegisteredProject>();
         try {
-            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_PROJECTS, "[]"));
+            JSONArray projects = new JSONArray(
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getString(KEY_PROJECTS, "[]"));
+
             for (int i = 0; i < projects.length(); i++) {
                 JSONObject item = projects.optJSONObject(i);
                 if (item == null) continue;
+
                 String uri = item.optString("uri", "");
                 String documentId = item.optString("projectDocumentId", "");
                 String name = item.optString("name", "Projeto externo");
-                String workingPath = item.optString("workingPath", "");
                 if (uri.isEmpty() || documentId.isEmpty()) continue;
-                if (workingPath.isEmpty() || !new File(workingPath).isDirectory()) {
-                    result.add(new RegisteredProject(Uri.parse(uri), documentId, name));
-                }
+
+                Uri treeUri = Uri.parse(uri);
+                if (!hasPersistedReadWritePermission(context, treeUri)) continue;
+                result.add(new RegisteredProject(treeUri, documentId, name));
             }
         } catch (Exception e) {
-            android.util.Log.e("CodeLove", "Nao foi possivel ler os projetos SAF registrados", e);
+            android.util.Log.e("CodeLove",
+                "Nao foi possivel ler os projetos SAF registrados", e);
         }
         return result;
     }
 
-    /** Cria uma copia de trabalho local sem substituir uma copia ja existente. */
-    static synchronized ProjectCopy ensureWorkingCopy(Activity activity, Uri treeUri,
-                                         String projectDocumentId, String displayName,
-                                         File gamesDir) {
-        if (gamesDir == null || (!gamesDir.isDirectory() && !gamesDir.mkdirs())) {
-            return ProjectCopy.error("A pasta local de projetos do CodeLove esta indisponivel.");
-        }
-        if (!hasPersistedReadWritePermission(activity, treeUri)) {
-            return ProjectCopy.error("A autorizacao para ler a pasta externa nao esta mais disponivel.");
-        }
-        String existingPath = findWorkingPath(activity, treeUri);
-        if (existingPath != null) {
-            File existing = new File(existingPath);
-            try {
-                File canonicalExisting = existing.getCanonicalFile();
-                if (gamesDir.getCanonicalFile().equals(canonicalExisting.getParentFile())
-                    && canonicalExisting.isDirectory()
-                    && new File(canonicalExisting, "main.lua").isFile()) {
-                    SafSyncEngine.initializeBaselineIfMatching(activity, canonicalExisting);
-                    return ProjectCopy.success(canonicalExisting);
-                }
-            } catch (IOException ignored) {
-            }
-            if (existing.exists()) {
-                return ProjectCopy.error("A copia local registrada esta incompleta ou fora da pasta de projetos. Ela foi preservada para evitar perda de dados.");
-            }
-        }
-
-        File staging = null;
-        boolean published = false;
+    private static void releasePermission(Context context, Uri treeUri, int flags) {
         try {
-            File gamesRoot = gamesDir.getCanonicalFile();
-            File stagingRoot = gamesRoot.getParentFile();
-            if (stagingRoot == null || !stagingRoot.isDirectory()) {
-                return ProjectCopy.error("Nao consegui preparar o armazenamento local do projeto.");
-            }
-            for (int attempt = 0; attempt < 10; attempt++) {
-                staging = new File(stagingRoot, ".codelove-saf-" + System.nanoTime() + "-" + attempt + ".tmp");
-                if (staging.mkdir()) break;
-                staging = null;
-            }
-            if (staging == null) {
-                return ProjectCopy.error("Nao consegui criar a area temporaria para importar o projeto.");
-            }
-            int[] copiedEntries = new int[]{0};
-            copyDirectoryContents(activity, treeUri, projectDocumentId, staging, 0, copiedEntries);
-            if (!new File(staging, "main.lua").isFile()) {
-                throw new IOException("A copia importada nao contem main.lua na raiz.");
-            }
-
-            String baseName = safeProjectName(displayName);
-            File destination = null;
-            for (int suffix = 1; suffix <= 100; suffix++) {
-                String candidate = suffix == 1 ? baseName : baseName + " " + suffix;
-                File possible = new File(gamesRoot, candidate);
-                if (!possible.exists()) {
-                    destination = possible;
-                    break;
-                }
-            }
-            if (destination == null) throw new IOException("Nao encontrei um nome livre para a copia local.");
-            if (!gamesRoot.equals(destination.getCanonicalFile().getParentFile()) || !staging.renameTo(destination)) {
-                throw new IOException("Nao consegui publicar a copia local do projeto.");
-            }
-            published = true;
-            if (!saveWorkingPath(activity, treeUri, destination.getAbsolutePath())) {
-                FileOps.deleteRecursive(destination);
-                return ProjectCopy.error("A copia foi criada, mas nao consegui registrar sua localizacao. Tente adicionar o projeto novamente.");
-            }
-            SafSyncEngine.initializeBaselineIfMatching(activity, destination);
-            return ProjectCopy.success(destination);
-        } catch (Exception e) {
-            android.util.Log.e("CodeLove", "Falha ao importar projeto SAF", e);
-            return ProjectCopy.error(e.getMessage() == null
-                ? "Nao consegui copiar o projeto para o armazenamento local." : e.getMessage());
-        } finally {
-            if (!published && staging != null && staging.exists()) FileOps.deleteRecursive(staging);
-        }
-    }
-
-    static final class ProjectCopy {
-        final File directory;
-        final String error;
-        private ProjectCopy(File directory, String error) { this.directory = directory; this.error = error; }
-        static ProjectCopy success(File directory) { return new ProjectCopy(directory, null); }
-        static ProjectCopy error(String message) { return new ProjectCopy(null, message); }
-        boolean isSuccess() { return directory != null && error == null; }
-    }
-
-    static String getWorkingCopyDisplayName(Context context, File directory) {
-        if (directory == null) return null;
-        try {
-            String candidate = directory.getCanonicalPath();
-            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_PROJECTS, "[]"));
-            for (int i = 0; i < projects.length(); i++) {
-                JSONObject item = projects.optJSONObject(i);
-                if (item == null) continue;
-                String path = item.optString("workingPath", "");
-                if (!path.isEmpty() && candidate.equals(new File(path).getCanonicalPath())) {
-                    return item.optString("name", null);
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return null;
-    }
-
-    static boolean isWorkingCopyRoot(Context context, File directory) {
-        if (directory == null) return false;
-        try {
-            String candidate = directory.getCanonicalPath();
-            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_PROJECTS, "[]"));
-            for (int i = 0; i < projects.length(); i++) {
-                JSONObject item = projects.optJSONObject(i);
-                if (item == null) continue;
-                String path = item.optString("workingPath", "");
-                if (!path.isEmpty() && candidate.equals(new File(path).getCanonicalPath())) return true;
-            }
-        } catch (Exception ignored) { }
-        return false;
-    }
-
-    private static String findWorkingPath(Context context, Uri treeUri) {
-        try {
-            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_PROJECTS, "[]"));
-            for (int i = 0; i < projects.length(); i++) {
-                JSONObject item = projects.optJSONObject(i);
-                if (item != null && treeUri.toString().equals(item.optString("uri"))) {
-                    String path = item.optString("workingPath", "");
-                    return path.isEmpty() ? null : path;
-                }
-            }
-        } catch (Exception ignored) { }
-        return null;
-    }
-
-    private static boolean saveWorkingPath(Context context, Uri treeUri, String path) {
-        android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        try {
-            JSONArray projects = new JSONArray(prefs.getString(KEY_PROJECTS, "[]"));
-            for (int i = 0; i < projects.length(); i++) {
-                JSONObject item = projects.optJSONObject(i);
-                if (item != null && treeUri.toString().equals(item.optString("uri"))) {
-                    item.put("workingPath", path);
-                    return prefs.edit().putString(KEY_PROJECTS, projects.toString()).commit();
-                }
-            }
-        } catch (Exception ignored) { }
-        return false;
-    }
-
-    private static String safeProjectName(String name) {
-        String value = name == null ? "Projeto" : name.trim();
-        if (value.isEmpty()) value = "Projeto";
-        StringBuilder safe = new StringBuilder();
-        for (int i = 0; i < value.length() && safe.length() < 48; i++) {
-            char ch = value.charAt(i);
-            boolean invalid = ch < 32 || ch == '/' || ch == '\\' || ch == ':'
-                || ch == '*' || ch == '?' || ch == '"' || ch == '<' || ch == '>' || ch == '|';
-            safe.append(invalid ? '_' : ch);
-        }
-        String result = safe.toString().trim();
-        return result.isEmpty() || result.equals(".") || result.equals("..") ? "Projeto" : result;
-    }
-
-    private static void copyDirectoryContents(Context context, Uri treeUri, String documentId,
-                                              File destination, int depth, int[] copiedEntries)
-                                              throws IOException {
-        if (depth > 32) throw new IOException("O projeto possui pastas profundas demais.");
-        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId);
-        Cursor cursor = null;
-        try {
-            cursor = context.getContentResolver().query(childrenUri,
-                new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE}, null, null, null);
-            if (cursor == null) throw new IOException("O Android nao conseguiu listar uma pasta do projeto.");
-            int idColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID);
-            int nameColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME);
-            int mimeColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE);
-            if (idColumn < 0 || nameColumn < 0 || mimeColumn < 0) {
-                throw new IOException("O provedor de arquivos nao informou os dados de um item.");
-            }
-            while (cursor.moveToNext()) {
-                if (++copiedEntries[0] > 10000) throw new IOException("O projeto possui itens demais para importar de uma vez.");
-                String childId = cursor.getString(idColumn);
-                String name = cursor.getString(nameColumn);
-                String mime = cursor.getString(mimeColumn);
-                if (childId == null || childId.isEmpty() || !isSafeDocumentName(name)) {
-                    throw new IOException("O projeto contem um nome de arquivo ou pasta invalido.");
-                }
-                File target = new File(destination, name);
-                if (target.exists()) {
-                    throw new IOException("O provedor retornou nomes duplicados dentro de uma pasta.");
-                }
-                if (!destination.getCanonicalFile().equals(target.getCanonicalFile().getParentFile())) {
-                    throw new IOException("Um item do projeto tentou sair da pasta de destino.");
-                }
-                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
-                    if (!target.mkdir()) throw new IOException("Nao consegui criar a pasta " + name + ".");
-                    copyDirectoryContents(context, treeUri, childId, target, depth + 1, copiedEntries);
-                } else {
-                    copyDocumentFile(context, treeUri, childId, target);
-                }
-            }
-        } catch (SecurityException e) {
-            throw new IOException("O Android negou acesso a um item do projeto.", e);
-        } finally {
-            if (cursor != null) cursor.close();
-        }
-    }
-
-    private static boolean isSafeDocumentName(String name) {
-        return name != null && !name.trim().isEmpty() && !name.equals(".") && !name.equals("..")
-            && name.indexOf('/') < 0 && name.indexOf('\\') < 0;
-    }
-
-    private static void copyDocumentFile(Context context, Uri treeUri, String documentId, File target)
-            throws IOException {
-        Uri documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId);
-        try (java.io.InputStream input = context.getContentResolver().openInputStream(documentUri);
-             java.io.FileOutputStream output = new java.io.FileOutputStream(target)) {
-            if (input == null) throw new IOException("Nao consegui abrir um arquivo do projeto.");
-            byte[] buffer = new byte[32768];
-            int count;
-            while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
-            output.flush();
-            output.getFD().sync();
-        } catch (SecurityException e) {
-            throw new IOException("O Android negou acesso a um arquivo do projeto.", e);
+            context.getContentResolver().releasePersistableUriPermission(treeUri, flags);
+        } catch (SecurityException ignored) {
         }
     }
 
@@ -564,5 +310,21 @@ final class SafProjectManager {
             }
         }
         return false;
+    }
+
+    private static final class SharedPreferencesHelper {
+        private final android.content.SharedPreferences prefs;
+
+        SharedPreferencesHelper(android.content.SharedPreferences prefs) {
+            this.prefs = prefs;
+        }
+
+        String getProjects() {
+            return prefs.getString(KEY_PROJECTS, "[]");
+        }
+
+        boolean saveProjects(String value) {
+            return prefs.edit().putString(KEY_PROJECTS, value).commit();
+        }
     }
 }
