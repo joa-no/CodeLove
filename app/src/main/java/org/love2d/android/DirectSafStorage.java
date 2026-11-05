@@ -253,15 +253,16 @@ final class DirectSafStorage implements CodeEditor.Storage {
         Boolean targetWasDirectory = dirByPath.get(oldPath);
         ArrayList<String> paths = new ArrayList<String>(uriByPath.keySet());
         for (String path : paths) {
-            if (path.equals(oldPath) || path.startsWith(oldPath + File.separator)) {
-                String suffix = path.substring(oldPath.length());
-                Uri oldUri = uriByPath.remove(path);
-                String oldId = idByPath.remove(path);
-                Boolean oldDir = dirByPath.remove(path);
-                String mapped = newPath + suffix;
-                if (oldUri != null) uriByPath.put(mapped, oldUri);
-                if (oldId != null) idByPath.put(mapped, oldId);
-                if (oldDir != null) dirByPath.put(mapped, oldDir);
+            if (path.equals(oldPath)) {
+                uriByPath.remove(path);
+                idByPath.remove(path);
+                dirByPath.remove(path);
+            } else if (path.startsWith(oldPath + File.separator)) {
+                // IDs/URIs de filhos podem mudar quando o provedor renomeia uma pasta.
+                // Eles serao reconstruidos por list() quando a arvore abrir novamente.
+                uriByPath.remove(path);
+                idByPath.remove(path);
+                dirByPath.remove(path);
             }
         }
 
@@ -281,12 +282,17 @@ final class DirectSafStorage implements CodeEditor.Storage {
         if (!destinationRoot.mkdirs()) {
             throw new IOException("Nao consegui preparar a pasta temporaria de execucao.");
         }
-        int[] count = new int[]{0};
-        copyTree(syntheticRoot, destinationRoot, 0, count);
-        if (!new File(destinationRoot, "main.lua").isFile()) {
-            throw new IOException("O projeto nao contem main.lua na raiz.");
+        try {
+            int[] count = new int[]{0};
+            copyTree(syntheticRoot, destinationRoot, 0, count);
+            if (!new File(destinationRoot, "main.lua").isFile()) {
+                throw new IOException("O projeto nao contem main.lua na raiz.");
+            }
+            return destinationRoot;
+        } catch (IOException e) {
+            deleteLocal(destinationRoot);
+            throw e;
         }
-        return destinationRoot;
     }
 
     private void copyTree(File source, File destination, int depth, int[] count) throws IOException {
