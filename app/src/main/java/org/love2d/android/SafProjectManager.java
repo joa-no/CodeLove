@@ -368,7 +368,7 @@ final class SafProjectManager {
                 throw new IOException("A copia importada nao contem main.lua na raiz.");
             }
 
-            String baseName = safeProjectName(displayName) + " (externo)";
+            String baseName = safeProjectName(displayName);
             File destination = null;
             for (int suffix = 1; suffix <= 100; suffix++) {
                 String candidate = suffix == 1 ? baseName : baseName + " " + suffix;
@@ -405,6 +405,25 @@ final class SafProjectManager {
         static ProjectCopy success(File directory) { return new ProjectCopy(directory, null); }
         static ProjectCopy error(String message) { return new ProjectCopy(null, message); }
         boolean isSuccess() { return directory != null && error == null; }
+    }
+
+    static String getWorkingCopyDisplayName(Context context, File directory) {
+        if (directory == null) return null;
+        try {
+            String candidate = directory.getCanonicalPath();
+            JSONArray projects = new JSONArray(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_PROJECTS, "[]"));
+            for (int i = 0; i < projects.length(); i++) {
+                JSONObject item = projects.optJSONObject(i);
+                if (item == null) continue;
+                String path = item.optString("workingPath", "");
+                if (!path.isEmpty() && candidate.equals(new File(path).getCanonicalPath())) {
+                    return item.optString("name", null);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     static boolean isWorkingCopyRoot(Context context, File directory) {
