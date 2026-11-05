@@ -309,7 +309,7 @@ final class SafSyncEngine {
                 boolean needsWrite=existing==null||!sameState(existing,wanted);
                 if(needsWrite){
                     Uri target=DocumentsContract.buildDocumentUriUsingTree(tree,id);
-                    try(InputStream in=openSource(a,new File(findWorkingPath(a,tree)),p,sources.get(p),remote);
+                    try(InputStream in=openSource(a,findWorkingPath(a,tree),p,sources.get(p),remote);
                         OutputStream out=a.getContentResolver().openOutputStream(target,"wt")){
                         if(out==null)throw new IOException("Nao consegui gravar o arquivo externo "+p+".");
                         copy(in,out);out.flush();
