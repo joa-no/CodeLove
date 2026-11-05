@@ -1424,7 +1424,7 @@ public final class Workspace {
     }
 
     private void delete(final File target) {
-        String what = """ + target.getName() + """;
+        String what = "\"" + target.getName() + "\"";
         String message = target.isDirectory()
             ? "Excluir a pasta " + what + " e tudo que esta dentro dela? Isso nao pode ser desfeito."
             : "Excluir o arquivo " + what + "? Isso nao pode ser desfeito.";
