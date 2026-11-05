@@ -113,7 +113,6 @@ public final class Workspace {
     private LinearLayout controlsBar;
     private IconView fullscreenIcon;
     private TextView projectTitle;
-    private TextView syncIndicator;
     private TextView statusView;
     private IconView saveIcon;
     private LinearLayout projectNotice;
@@ -480,7 +479,6 @@ public final class Workspace {
         applyLayout();
         root.requestApplyInsets();
         restoreState();
-        updateSyncIndicator();
     }
 
     private View buildHeader() {
@@ -503,14 +501,6 @@ public final class Workspace {
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
-
-        syncIndicator = new TextView(activity);
-        syncIndicator.setGravity(Gravity.CENTER);
-        syncIndicator.setTextSize(15);
-        syncIndicator.setPadding(dp(2), 0, dp(8), 0);
-        syncIndicator.setVisibility(View.GONE);
-        header.addView(syncIndicator, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout info = new LinearLayout(activity);
         info.setGravity(Gravity.CENTER);
@@ -1511,13 +1501,6 @@ public final class Workspace {
     private void saveCurrentFile() {
         if (editor == null || !editor.isOpen() || !editor.saveNow()) return;
         if (saveIcon != null) saveIcon.setKind(IconView.CHECK);
-    }
-
-    private void updateSyncIndicator() {
-        if (syncIndicator != null) {
-            syncIndicator.setVisibility(View.GONE);
-            syncIndicator.setText("");
-        }
     }
 
     private String projectDisplayName(File project) {
