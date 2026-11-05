@@ -1447,6 +1447,7 @@ public final class Workspace {
         lastFolder = null;
 
         if (isActiveProject) {
+            deleteRuntimeProject();
             activeProject = null;
             activeSafStorage = null;
             playing = false;
