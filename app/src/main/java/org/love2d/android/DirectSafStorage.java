@@ -250,6 +250,7 @@ final class DirectSafStorage {
 
         String oldPath = target.getAbsolutePath();
         String newPath = dest.getAbsolutePath();
+        Boolean targetWasDirectory = dirByPath.get(oldPath);
         ArrayList<String> paths = new ArrayList<String>(uriByPath.keySet());
         for (String path : paths) {
             if (path.equals(oldPath) || path.startsWith(oldPath + File.separator)) {
@@ -267,7 +268,7 @@ final class DirectSafStorage {
         // O documento pode receber uma URI equivalente diferente apos rename.
         uriByPath.put(newPath, renamed);
         idByPath.put(newPath, DocumentsContract.getDocumentId(renamed));
-        dirByPath.put(newPath, isDirectory(target));
+        dirByPath.put(newPath, targetWasDirectory != null && targetWasDirectory);
         return dest;
     }
 
