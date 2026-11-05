@@ -336,6 +336,7 @@ final class SafProjectManager {
                 if (gamesDir.getCanonicalFile().equals(canonicalExisting.getParentFile())
                     && canonicalExisting.isDirectory()
                     && new File(canonicalExisting, "main.lua").isFile()) {
+                    SafSyncEngine.initializeBaselineIfMatching(activity, canonicalExisting);
                     return ProjectCopy.success(canonicalExisting);
                 }
             } catch (IOException ignored) {
@@ -386,6 +387,7 @@ final class SafProjectManager {
                 FileOps.deleteRecursive(destination);
                 return ProjectCopy.error("A copia foi criada, mas nao consegui registrar sua localizacao. Tente adicionar o projeto novamente.");
             }
+            SafSyncEngine.initializeBaselineIfMatching(activity, destination);
             return ProjectCopy.success(destination);
         } catch (Exception e) {
             android.util.Log.e("CodeLove", "Falha ao importar projeto SAF", e);
