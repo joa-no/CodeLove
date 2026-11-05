@@ -321,12 +321,17 @@ public final class Workspace {
         LinearLayout footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.addView(footerIconButton(IconView.PLUS, v -> showAddMenu(v)), footerButtonParams(true));
-        footer.addView(footerGlyphButton("\u21BB", v -> refreshCurrentProject()), footerButtonParams(false));
-        footer.addView(footerGlyphButton("\u21C4", v -> {
+        View refreshButton = footerGlyphButton("\u21BB", v -> refreshCurrentProject());
+        setButtonHint(refreshButton,
+            "Sincronizar com a pasta externa. Salva o editor e atualiza os dois lados.");
+        footer.addView(refreshButton, footerButtonParams(false));
+        View movePanelButton = footerGlyphButton("\u21C4", v -> {
             onLeft = !onLeft;
             applyLayout();
             saveState();
-        }), footerButtonParams(false));
+        });
+        setButtonHint(movePanelButton, "Mover painel para o outro lado");
+        footer.addView(movePanelButton, footerButtonParams(false));
         panel.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
 
@@ -405,6 +410,7 @@ public final class Workspace {
         saveButton.setGravity(Gravity.CENTER);
         saveButton.setBackground(box(COLOR_FIELD, 22, false));
         saveButton.addView(saveIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        setButtonHint(saveButton, "Salvar alterações no CodeLove");
         saveButton.setOnClickListener(v -> saveCurrentFile());
 
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
@@ -520,6 +526,14 @@ public final class Workspace {
         button.setBackground(box(COLOR_FIELD, 12, false));
         button.setOnClickListener(listener);
         return button;
+    }
+
+    /** Dica visual por toque longo e descricao para leitores de tela. */
+    private void setButtonHint(View button, String hint) {
+        button.setContentDescription(hint);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            button.setTooltipText(hint);
+        }
     }
 
     private LinearLayout.LayoutParams footerButtonParams(boolean first) {
@@ -1406,21 +1420,10 @@ public final class Workspace {
         }
     }
 
-    /** Salva o arquivo aberto e, para projetos SAF, sincroniza a pasta externa. */
+    /** Salva somente no armazenamento de trabalho do CodeLove; nao sincroniza o SAF. */
     private void saveCurrentFile() {
-        if (editor == null || !editor.isOpen() || !editor.saveNow()) return;
-        if (activeProject != null
-            && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
-            final File project = activeProject;
-            syncExternalProject(project, SafSyncEngine.INITIAL_NONE, () -> {
-                clearPendingExternalFiles(project);
-                if (editor != null && editor.isOpen()
-                    && isInside(editor.getFile(), project)) {
-                    editor.setSyncPending(pendingExternalFiles.contains(
-                        editor.getFile().getAbsolutePath()));
-                }
-            });
-        }
+        if (editor == null || !editor.isOpen()) return;
+        editor.saveNow();
     }
 
     private void clearPendingExternalFiles(File project) {
