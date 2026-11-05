@@ -26,6 +26,7 @@ import android.text.TextWatcher;
 import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -87,6 +88,10 @@ final class CodeEditor {
     private boolean dirty;       // tem alteracao ainda nao gravada no arquivo original
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
+    private boolean applyingAutoIndent;
+    private int changeStart;
+    private int changeBefore;
+    private int changeAfter;
     private boolean highlightLua;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
@@ -179,6 +184,9 @@ final class CodeEditor {
         input.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                changeStart = start;
+                changeBefore = count;
+                changeAfter = after;
             }
 
             @Override
@@ -187,9 +195,35 @@ final class CodeEditor {
 
             @Override
             public void afterTextChanged(Editable s) {
-                if (loading) {
+                if (loading || applyingAutoIndent) {
                     return;
                 }
+
+                // Ao inserir uma quebra de linha (inclusive pelo teclado virtual),
+                // replica a indentacao inicial da linha anterior. Colagens multiplas
+                // nao sao modificadas.
+                if (changeAfter == 1 && changeStart < s.length()
+                    && s.charAt(changeStart) == '\n'
+                    && input.getSelectionStart() == changeStart + 1) {
+                    int lineStart = changeStart - 1;
+                    while (lineStart >= 0 && s.charAt(lineStart) != '\n') {
+                        lineStart--;
+                    }
+                    lineStart++;
+                    int indentEnd = lineStart;
+                    while (indentEnd < changeStart
+                        && (s.charAt(indentEnd) == ' ' || s.charAt(indentEnd) == '\t')) {
+                        indentEnd++;
+                    }
+                    if (indentEnd > lineStart) {
+                        String indent = s.subSequence(lineStart, indentEnd).toString();
+                        applyingAutoIndent = true;
+                        s.insert(changeStart + 1, indent);
+                        applyingAutoIndent = false;
+                        input.setSelection(changeStart + 1 + indent.length());
+                    }
+                }
+
                 dirty = true;
                 listener.onEdited();
                 saveFailureNotified = false;
@@ -199,6 +233,20 @@ final class CodeEditor {
                 refreshGutter(s, false);
             }
         });
+        input.setOnKeyListener((v, keyCode, event) -> {
+            if (keyCode == KeyEvent.KEYCODE_TAB && event.getAction() == KeyEvent.ACTION_DOWN) {
+                int start = input.getSelectionStart();
+                int end = input.getSelectionEnd();
+                if (start != end || start < 0) {
+                    return false;
+                }
+                input.getText().insert(start, "    ");
+                input.setSelection(start + 4);
+                return true;
+            }
+            return false;
+        });
+
         HorizontalScrollView horizontal = new CaretGuardHorizontalScrollView(activity);
         horizontal.setFillViewport(true);
         horizontal.addView(input, new ViewGroup.LayoutParams(
