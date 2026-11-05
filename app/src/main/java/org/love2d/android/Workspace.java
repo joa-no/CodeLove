@@ -322,10 +322,6 @@ public final class Workspace {
         LinearLayout footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.addView(footerIconButton(IconView.PLUS, v -> showAddMenu(v)), footerButtonParams(true));
-        View refreshButton = footerGlyphButton("\u21BB", v -> refreshCurrentProject());
-        setButtonHint(refreshButton,
-            "Sincronizar com a pasta externa. Salva o editor e atualiza os dois lados.");
-        footer.addView(refreshButton, footerButtonParams(false));
         View movePanelButton = footerGlyphButton("\u21C4", v -> {
             onLeft = !onLeft;
             applyLayout();
@@ -1559,7 +1555,6 @@ public final class Workspace {
 
         projectTitle.setText(projectDisplayName(project));
         placeholder.setVisibility(View.GONE);
-        updateSyncIndicator();
         updatePlayButton();
         renderTree();
         saveState();
@@ -1598,14 +1593,6 @@ public final class Workspace {
         playing = true;
         sendCommand("play", "");
         updatePlayButton();
-    }
-
-    private void refreshCurrentProject() {
-        renderTree();
-        if (activeSafStorage != null && editor != null && editor.isOpen()
-            && isInside(editor.getFile(), activeProject)) {
-            editor.open(editor.getFile());
-        }
     }
 
     private void resetScene() {
