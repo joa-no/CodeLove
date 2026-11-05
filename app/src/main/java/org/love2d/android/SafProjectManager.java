@@ -82,76 +82,23 @@ final class SafProjectManager {
         }
 
         try {
+            // A pasta escolhida pelo usuario e sempre a raiz do workspace.
+            // Nunca substituimos silenciosamente essa escolha por uma subpasta
+            // que contenha main.lua: isso esconderia niveis da arvore SAF.
             String rootId = DocumentsContract.getTreeDocumentId(treeUri);
             if (rootId == null || rootId.isEmpty()) {
                 return ProjectSelection.invalid("Nao consegui identificar a pasta selecionada.");
             }
 
-            if (hasMainLua(context, treeUri, rootId)) {
-                String name = queryDisplayName(context, treeUri, rootId);
-                return ProjectSelection.valid(rootId,
-                    name == null ? "Projeto externo" : name);
-            }
-
-            ArrayList<ProjectSelection> candidates = new ArrayList<ProjectSelection>();
-            Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, rootId);
-            Cursor cursor = null;
-            try {
-                cursor = context.getContentResolver().query(childrenUri,
-                    new String[]{
-                        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                        DocumentsContract.Document.COLUMN_MIME_TYPE
-                    }, null, null, null);
-
-                if (cursor == null) {
-                    return ProjectSelection.invalid(
-                        "O Android nao conseguiu ler o conteudo da pasta selecionada.");
-                }
-
-                int idColumn = cursor.getColumnIndex(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID);
-                int nameColumn = cursor.getColumnIndex(
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME);
-                int mimeColumn = cursor.getColumnIndex(
-                    DocumentsContract.Document.COLUMN_MIME_TYPE);
-                if (idColumn < 0 || mimeColumn < 0) {
-                    return ProjectSelection.invalid(
-                        "O provedor de arquivos nao informou os dados necessarios da pasta.");
-                }
-
-                while (cursor.moveToNext()) {
-                    String mime = cursor.getString(mimeColumn);
-                    if (!DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) continue;
-
-                    String childId = cursor.getString(idColumn);
-                    if (childId == null || childId.isEmpty()) continue;
-                    if (hasMainLua(context, treeUri, childId)) {
-                        String name = nameColumn >= 0 ? cursor.getString(nameColumn) : null;
-                        if (name == null || name.trim().isEmpty()) {
-                            name = queryDisplayName(context, treeUri, childId);
-                        }
-                        candidates.add(ProjectSelection.valid(childId,
-                            name == null ? "Projeto externo" : name));
-                    }
-                }
-            } finally {
-                if (cursor != null) cursor.close();
-            }
-
-            if (candidates.size() == 1) return candidates.get(0);
-            if (candidates.size() > 1) {
-                return ProjectSelection.invalid(
-                    "Essa pasta contem mais de um projeto LÖVE. Selecione diretamente a pasta do jogo que deseja adicionar.");
-            }
-            return ProjectSelection.invalid(
-                "Nao encontrei main.lua. Selecione a pasta do jogo, com main.lua diretamente dentro dela, ou uma pasta que contenha apenas uma pasta de jogo.");
+            String name = queryDisplayName(context, treeUri, rootId);
+            return ProjectSelection.valid(rootId,
+                name == null ? "Projeto externo" : name);
         } catch (SecurityException e) {
             return ProjectSelection.invalid(
-                "O Android nao permitiu ler essa pasta. Verifique a autorizacao e tente novamente.");
+                "O Android nao permitiu acessar a pasta selecionada. Selecione-a novamente.");
         } catch (Exception e) {
             return ProjectSelection.invalid(
-                "Nao consegui verificar a estrutura dessa pasta. Tente selecionar a pasta do jogo diretamente.");
+                "Nao consegui identificar a pasta selecionada. Tente novamente.");
         }
     }
 
