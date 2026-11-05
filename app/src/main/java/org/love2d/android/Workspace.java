@@ -177,7 +177,12 @@ public final class Workspace {
         placeholder.setVisibility(View.GONE);
         if (editor != null) editor.setStorage(storage);
         renderTree();
-        prepareRuntimeProject(false);
+        final DirectSafStorage selectedStorage = storage;
+        new Thread(() -> {
+            if (selectedStorage == activeSafStorage && !disposed) {
+                prepareRuntimeProject(false);
+            }
+        }, "CodeLove-SAF-RuntimeRestore").start();
     }
 
     /** Sincroniza o polling da interface com o ciclo de vida da Activity SDL. */
@@ -1636,8 +1641,11 @@ public final class Workspace {
         }
         DirectSafStorage storage = activeSafStorage;
         File project = activeProject;
-        File destination = new File(activity.getCacheDir(),
-            "codelove-runtime" + File.separator + storage.getDisplayName());
+        File storageRoot = storage.getRoot();
+        File storageKey = storageRoot == null ? null : storageRoot.getParentFile();
+        String runtimeKey = storageKey == null ? "project" : storageKey.getName();
+        File destination = new File(new File(activity.getCacheDir(), "codelove-runtime"),
+            runtimeKey);
         try {
             storage.createRuntimeSnapshot(destination);
             if (runtimeProject != null && !sameFile(runtimeProject, destination)) {
