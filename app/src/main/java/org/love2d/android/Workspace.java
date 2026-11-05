@@ -321,7 +321,7 @@ public final class Workspace {
         LinearLayout footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.addView(footerIconButton(IconView.PLUS, v -> showAddMenu(v)), footerButtonParams(true));
-        footer.addView(footerGlyphButton("\u21BB", v -> renderTree()), footerButtonParams(false));
+        footer.addView(footerGlyphButton("\u21BB", v -> refreshCurrentProject()), footerButtonParams(false));
         footer.addView(footerGlyphButton("\u21C4", v -> {
             onLeft = !onLeft;
             applyLayout();
@@ -1120,10 +1120,6 @@ public final class Workspace {
         List<Runnable> actions = new ArrayList<Runnable>();
         labels.add("Adicionar projeto existente");
         actions.add(() -> addExistingProject());
-        if (activeProject != null && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
-            labels.add("Sincronizar projeto atual");
-            actions.add(() -> syncExternalProject(activeProject, SafSyncEngine.INITIAL_NONE, null));
-        }
         final File folder = targetFolder();
         if (folder != null) {
             labels.add("Novo arquivo em " + folder.getName());
@@ -1219,10 +1215,6 @@ public final class Workspace {
         }
         // A raiz da copia externa mantem o vinculo persistido com a pasta SAF.
         // Renomear/apagar sera habilitado junto com o gerenciamento de vinculos.
-        if (externalProjectRoot) {
-            labels.add("Sincronizar agora");
-            actions.add(() -> syncExternalProject(file, SafSyncEngine.INITIAL_NONE, null));
-        }
         if (!externalProjectRoot) {
             labels.add("Renomear");
             actions.add(() -> rename(file));
@@ -1492,6 +1484,32 @@ public final class Workspace {
         playing = true;
         sendCommand("play", "");
         updatePlayButton();
+    }
+
+    /**
+     * Atualiza o projeto atual a partir da pasta SAF autorizada.
+     * Para projetos locais, apenas redesenha a arvore de arquivos.
+     */
+    private void refreshCurrentProject() {
+        if (activeProject == null
+            || !SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
+            renderTree();
+            return;
+        }
+
+        final File project = activeProject;
+        syncExternalProject(project, SafSyncEngine.INITIAL_NONE, () -> {
+            // A sincronizacao pode ter substituido o arquivo aberto no disco.
+            // Rele-lo evita manter no editor o conteudo antigo em memoria.
+            if (editor != null && editor.isOpen()
+                && isInside(editor.getFile(), project)) {
+                File currentFile = editor.getFile();
+                if (currentFile != null && currentFile.isFile()) {
+                    editor.open(currentFile);
+                    editor.setSyncPending(false);
+                }
+            }
+        });
     }
 
     private void syncExternalProject(File project, int initialDirection, Runnable onSuccess) {
