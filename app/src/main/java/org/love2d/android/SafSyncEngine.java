@@ -164,6 +164,184 @@ final class SafSyncEngine {
         }
     }
 
+
+    /**
+     * Publica somente um arquivo da copia local na pasta SAF.
+     * O baseline protege contra sobrescrita de alteracoes feitas fora do CodeLove.
+     */
+    static Result publishFile(Activity activity, File workingRoot, File file, int conflictDirection) {
+        try {
+            String rootPath = workingRoot.getCanonicalPath();
+            String filePath = file.getCanonicalPath();
+            if (!filePath.startsWith(rootPath + File.separator) || !file.isFile()) {
+                return Result.error("O arquivo selecionado nao pertence ao projeto ou nao esta disponivel.");
+            }
+            String path = filePath.substring(rootPath.length() + 1).replace(File.separatorChar, '/');
+            if (path.isEmpty()) return Result.error("O caminho do arquivo e invalido.");
+
+            JSONObject registration = findRegistration(activity, workingRoot);
+            if (registration == null) return Result.error("Nao encontrei o vinculo SAF desta copia local.");
+            Uri treeUri = Uri.parse(registration.getString("uri"));
+            String rootId = registration.getString("projectDocumentId");
+            if (!SafProjectManager.hasPersistedReadWritePermission(activity, treeUri)) {
+                return Result.error("A autorizacao da pasta externa foi revogada. Adicione novamente a pasta para conceder acesso.");
+            }
+
+            Map<String, Entry> localSnapshot = scanLocal(workingRoot);
+            Map<String, Entry> remoteSnapshot = scanRemote(activity, treeUri, rootId);
+            JSONObject baselineJson = registration.optJSONObject(KEY_BASELINE);
+            if (baselineJson == null) {
+                if (!sameSnapshot(localSnapshot, remoteSnapshot)) {
+                    return Result.error("Ainda nao existe um historico confiavel para este projeto. Use Sincronizar primeiro e escolha qual versao manter.");
+                }
+                if (!saveBaseline(activity, treeUri, localSnapshot)) {
+                    return Result.error("Nao consegui preparar o historico de sincronizacao do projeto.");
+                }
+                registration = findRegistration(activity, workingRoot);
+                baselineJson = registration == null ? null : registration.optJSONObject(KEY_BASELINE);
+            }
+            if (baselineJson == null) return Result.error("Nao consegui ler o historico de sincronizacao do projeto.");
+
+            Map<String, Entry> baseline = decodeBaseline(baselineJson);
+            Entry before = baseline.get(path);
+            Entry local = localSnapshot.get(path);
+            Entry remote = remoteSnapshot.get(path);
+            if (local != null && local.directory) {
+                return Result.error("O item selecionado e uma pasta, nao um arquivo.");
+            }
+
+            boolean localChanged = !sameState(before, local);
+            boolean remoteChanged = !sameState(before, remote);
+            boolean different = !sameState(local, remote);
+
+            if (conflictDirection == CONFLICT_NONE) {
+                if (remoteChanged && different) {
+                    return Result.conflicts("O arquivo externo foi alterado desde a ultima sincronizacao. Para evitar perda de dados, escolha qual versao deseja manter.");
+                }
+                if (!localChanged && !remoteChanged) {
+                    return Result.ok("O arquivo ja esta sincronizado.");
+                }
+                if (remoteChanged && !localChanged) {
+                    return Result.conflicts("A versao externa mudou e a copia do CodeLove nao tem alteracoes novas. Sincronize o projeto para importar a versao externa.");
+                }
+            }
+
+            if (conflictDirection == CONFLICT_KEEP_EXTERNAL) {
+                if (remote == null) {
+                    if (file.exists() && !file.delete()) {
+                        return Result.error("A versao externa foi excluida, mas nao consegui atualizar a copia local.");
+                    }
+                } else {
+                    if (remote.directory) return Result.error("O caminho externo agora e uma pasta. Resolva essa alteracao pela sincronizacao do projeto.");
+                    copyRemoteToLocal(activity, treeUri, remote, file);
+                }
+            } else if (local != null) {
+                writeLocalToRemote(activity, treeUri, rootId, path, file, remoteSnapshot, remote);
+            } else {
+                return Result.error("A copia local do arquivo nao esta mais disponivel.");
+            }
+
+            Map<String, Entry> verifiedLocal = scanLocal(workingRoot);
+            Map<String, Entry> verifiedRemote = scanRemote(activity, treeUri, rootId);
+            Entry finalLocal = verifiedLocal.get(path);
+            Entry finalRemote = verifiedRemote.get(path);
+            if (!sameState(finalLocal, finalRemote)) {
+                return Result.error("O arquivo foi atualizado parcialmente, mas as duas versoes ainda estao diferentes. Use Sincronizar para verificar o projeto.");
+            }
+            if (!saveBaselineEntry(activity, treeUri, path, finalLocal)) {
+                return Result.error("O arquivo foi atualizado, mas nao consegui registrar a sincronizacao. Use Sincronizar para verificar o projeto.");
+            }
+            return Result.ok("Arquivo salvo na pasta externa.");
+        } catch (SecurityException e) {
+            return Result.error("O Android negou acesso ao arquivo externo. Verifique a autorizacao e tente novamente.");
+        } catch (Exception e) {
+            android.util.Log.e("CodeLove", "Falha ao publicar arquivo SAF", e);
+            return Result.error("Nao foi possivel salvar o arquivo na pasta externa: "
+                + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+        }
+    }
+
+    private static void writeLocalToRemote(Activity activity, Uri treeUri, String rootId,
+                                           String path, File localFile,
+                                           Map<String, Entry> remoteSnapshot, Entry remote) throws Exception {
+        String parentPath = "";
+        int slash = path.lastIndexOf('/');
+        if (slash >= 0) parentPath = path.substring(0, slash);
+        String parentId = rootId;
+        if (!parentPath.isEmpty()) {
+            Entry parent = remoteSnapshot.get(parentPath);
+            if (parent == null || !parent.directory) throw new IOException("A pasta externa do arquivo nao existe mais.");
+            parentId = parent.documentId;
+        }
+
+        String documentId;
+        if (remote != null) {
+            if (remote.directory) throw new IOException("O caminho externo agora e uma pasta. Resolva essa alteracao pela sincronizacao do projeto.");
+            documentId = remote.documentId;
+        } else {
+            Uri created = DocumentsContract.createDocument(activity.getContentResolver(),
+                DocumentsContract.buildDocumentUriUsingTree(treeUri, parentId),
+                "text/plain", localFile.getName());
+            if (created == null) throw new IOException("Nao consegui criar o arquivo na pasta externa.");
+            documentId = DocumentsContract.getDocumentId(created);
+        }
+
+        Uri target = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId);
+        try (InputStream in = new FileInputStream(localFile);
+             OutputStream out = activity.getContentResolver().openOutputStream(target, "wt")) {
+            if (out == null) throw new IOException("Nao consegui gravar o arquivo na pasta externa.");
+            copy(in, out);
+            out.flush();
+        }
+    }
+
+    private static void copyRemoteToLocal(Activity activity, Uri treeUri, Entry remote, File target) throws Exception {
+        File parent = target.getParentFile();
+        if (parent == null || !parent.isDirectory()) throw new IOException("A pasta local do arquivo nao esta disponivel.");
+        File temp = new File(parent, target.getName() + ".codelove-publish.tmp");
+        Uri source = DocumentsContract.buildDocumentUriUsingTree(treeUri, remote.documentId);
+        try (InputStream in = activity.getContentResolver().openInputStream(source);
+             FileOutputStream out = new FileOutputStream(temp)) {
+            if (in == null) throw new IOException("Nao consegui ler a versao externa do arquivo.");
+            copy(in, out);
+            out.flush();
+            out.getFD().sync();
+        } catch (Exception e) {
+            temp.delete();
+            throw e;
+        }
+        if (target.exists() && !target.delete()) {
+            temp.delete();
+            throw new IOException("Nao consegui substituir a copia local do arquivo.");
+        }
+        if (!temp.renameTo(target)) {
+            temp.delete();
+            throw new IOException("Nao consegui publicar a versao externa na copia local.");
+        }
+    }
+
+    private static boolean saveBaselineEntry(Context context, Uri treeUri, String path, Entry entry) throws Exception {
+        android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        JSONArray items = new JSONArray(prefs.getString(KEY_PROJECTS, "[]"));
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null || !treeUri.toString().equals(item.optString("uri"))) continue;
+            JSONObject baseline = item.optJSONObject(KEY_BASELINE);
+            if (baseline == null) baseline = new JSONObject();
+            if (entry == null) {
+                baseline.remove(path);
+            } else {
+                JSONObject value = new JSONObject();
+                value.put("dir", entry.directory);
+                if (!entry.directory) value.put("hash", entry.hash);
+                baseline.put(path, value);
+            }
+            item.put(KEY_BASELINE, baseline);
+            return prefs.edit().putString(KEY_PROJECTS, items.toString()).commit();
+        }
+        return false;
+    }
+
     /**
      * Cria o baseline inicial somente quando a importacao local e a pasta SAF
      * ainda possuem exatamente o mesmo conteudo. Nunca escolhe um lado quando
