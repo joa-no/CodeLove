@@ -175,7 +175,7 @@ public final class Workspace {
         expanded.add(activeProject.getAbsolutePath());
         projectTitle.setText(storage.getDisplayName());
         placeholder.setVisibility(View.GONE);
-        if (editor != null) editor.setStorage(storage::readText);
+        if (editor != null) editor.setStorage(storage);
         renderTree();
         prepareRuntimeProject(false);
     }
@@ -1471,7 +1471,7 @@ public final class Workspace {
 
     private void openInEditor(File file) {
         editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
-            ? activeSafStorage::readText : null);
+            ? activeSafStorage : null);
         if (editor.open(file)) {
             if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
             applyLayout();
@@ -1541,7 +1541,7 @@ public final class Workspace {
         expanded.add(project.getAbsolutePath());
         playing = false;
 
-        editor.setStorage(storage != null ? storage::readText : null);
+        editor.setStorage(storage);
         if (storage != null) {
             final DirectSafStorage selectedStorage = storage;
             new Thread(() -> {
@@ -1619,6 +1619,72 @@ public final class Workspace {
         sendCommand("open", activeProject.getAbsolutePath());
         playing = false;
         updatePlayButton();
+    }
+
+    private boolean prepareRuntimeProject(boolean announceFailure) {
+        if (activeSafStorage == null || activeProject == null) {
+            return activeProject != null;
+        }
+        DirectSafStorage storage = activeSafStorage;
+        File project = activeProject;
+        File destination = new File(activity.getCacheDir(),
+            "codelove-runtime" + File.separator + storage.getDisplayName());
+        try {
+            storage.createRuntimeSnapshot(destination);
+            if (runtimeProject != null && !sameFile(runtimeProject, destination)) {
+                storage.deleteLocalSnapshot(runtimeProject);
+            }
+            runtimeProject = destination;
+            sendCommand("open", runtimeProject.getAbsolutePath());
+            return true;
+        } catch (IOException e) {
+            Log.w(TAG, "Falha ao preparar o projeto para execucao", e);
+            if (announceFailure) {
+                activity.runOnUiThread(() -> toast(
+                    e.getMessage() == null
+                        ? "Nao foi possivel preparar o projeto para executar."
+                        : e.getMessage()));
+            }
+            return false;
+        }
+    }
+
+    private void deleteRuntimeProject() {
+        if (runtimeProject != null) {
+            DirectSafStorage storage = activeSafStorage;
+            if (storage != null) {
+                storage.deleteLocalSnapshot(runtimeProject);
+            } else {
+                FileOps.deleteRecursive(runtimeProject);
+            }
+            runtimeProject = null;
+        }
+        File fallback = new File(activity.getCacheDir(), "codelove-runtime");
+        if (fallback.isDirectory()) {
+            File[] children = fallback.listFiles();
+            if (children != null) {
+                for (File child : children) FileOps.deleteRecursive(child);
+            }
+        }
+    }
+
+    private void updatePlayButton() {
+        int kind = playing ? IconView.PAUSE : IconView.PLAY;
+        if (playIcon != null) playIcon.setKind(kind);
+        if (footerPlayIcon != null) footerPlayIcon.setKind(kind);
+        updateControlsVisibility();
+    }
+
+    private void updateControlsVisibility() {
+        boolean editorVisible = editor != null && editor.isOpen() && !fullscreen;
+        boolean showBar = activeProject != null && !editorVisible;
+        if (controlsBar != null) {
+            controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
+        }
+        if (consolePanel != null) {
+            consolePanel.setVisibility(
+                (consoleOpen && editorVisible) ? View.VISIBLE : View.GONE);
+        }
     }
 
     /**
