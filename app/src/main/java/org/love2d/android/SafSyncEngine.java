@@ -33,17 +33,22 @@ final class SafSyncEngine {
     static final int INITIAL_NONE = 0;
     static final int INITIAL_LOCAL_TO_EXTERNAL = 1;
     static final int INITIAL_EXTERNAL_TO_LOCAL = 2;
+    static final int CONFLICT_NONE = 0;
+    static final int CONFLICT_KEEP_LOCAL = 1;
+    static final int CONFLICT_KEEP_EXTERNAL = 2;
 
     static final class Result {
         final boolean success;
         final boolean needsInitialChoice;
+        final boolean needsConflictChoice;
         final String message;
-        private Result(boolean ok, boolean choice, String text) {
-            success = ok; needsInitialChoice = choice; message = text;
+        private Result(boolean ok, boolean initial, boolean conflict, String text) {
+            success = ok; needsInitialChoice = initial; needsConflictChoice = conflict; message = text;
         }
-        static Result ok(String text) { return new Result(true, false, text); }
-        static Result choice() { return new Result(false, true, ""); }
-        static Result error(String text) { return new Result(false, false, text); }
+        static Result ok(String text) { return new Result(true, false, false, text); }
+        static Result choice() { return new Result(false, true, false, ""); }
+        static Result conflicts(String text) { return new Result(false, false, true, text); }
+        static Result error(String text) { return new Result(false, false, false, text); }
     }
 
     private static final String PREFS = "codelove_saf";
@@ -66,6 +71,10 @@ final class SafSyncEngine {
     private SafSyncEngine() {}
 
     static Result synchronize(Activity activity, File workingRoot, int initialDirection) {
+        return synchronize(activity, workingRoot, initialDirection, CONFLICT_NONE);
+    }
+
+    static Result synchronize(Activity activity, File workingRoot, int initialDirection, int conflictDirection) {
         try {
             JSONObject registration = findRegistration(activity, workingRoot);
             if (registration == null) return Result.error("Nao encontrei o vinculo SAF desta copia local.");
@@ -98,12 +107,21 @@ final class SafSyncEngine {
                 Map<String, Entry> baseline = decodeBaseline(baselineJson);
                 Set<String> paths = new HashSet<String>();
                 paths.addAll(baseline.keySet()); paths.addAll(local.keySet()); paths.addAll(remote.keySet());
+                ArrayList<String> conflicts = new ArrayList<String>();
                 for (String path : paths) {
                     Entry b=baseline.get(path), l=local.get(path), r=remote.get(path);
                     boolean lc=!sameState(b,l), rc=!sameState(b,r);
                     if (lc && rc && !sameState(l,r)) {
-                        return Result.error("Conflito de sincronizacao em: " + path
-                            + "\n\nO arquivo foi alterado nos dois lados desde a ultima sincronizacao. Nenhuma alteracao foi aplicada. Compare as duas versoes e resolva o conflito antes de sincronizar novamente.");
+                        if (conflictDirection == CONFLICT_NONE) {
+                            conflicts.add(path);
+                            continue;
+                        }
+                        Entry chosenConflict = conflictDirection == CONFLICT_KEEP_LOCAL ? l : r;
+                        if (chosenConflict != null) {
+                            desired.put(path, chosenConflict);
+                            sources.put(path, conflictDirection == CONFLICT_KEEP_LOCAL ? "local" : "remote");
+                        }
+                        continue;
                     }
                     Entry chosen;
                     String source;
@@ -116,6 +134,12 @@ final class SafSyncEngine {
                         else if (l != null && sameState(chosen,l)) sources.put(path,"local");
                         else sources.put(path,"remote");
                     }
+                }
+                if (!conflicts.isEmpty()) {
+                    StringBuilder message = new StringBuilder("Foram encontrados conflitos nos seguintes caminhos:\\n\\n");
+                    for (String path : conflicts) message.append("• ").append(path).append('\\n');
+                    message.append("\\nEscolha qual versao manter somente nesses caminhos. As demais alteracoes sem conflito serao mescladas normalmente.");
+                    return Result.conflicts(message.toString());
                 }
             }
 
