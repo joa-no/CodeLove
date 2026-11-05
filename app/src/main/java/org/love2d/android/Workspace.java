@@ -1491,6 +1491,10 @@ public final class Workspace {
     }
 
     private void syncExternalProject(File project, int initialDirection, Runnable onSuccess) {
+        syncExternalProject(project, initialDirection, SafSyncEngine.CONFLICT_NONE, onSuccess);
+    }
+
+    private void syncExternalProject(File project, int initialDirection, int conflictDirection, Runnable onSuccess) {
         if (synchronizing) {
             toast("Ja existe uma sincronizacao em andamento.");
             return;
@@ -1501,7 +1505,7 @@ public final class Workspace {
         synchronizing = true;
         toast("Sincronizando projeto...");
         new Thread(() -> {
-            SafSyncEngine.Result result = SafSyncEngine.synchronize(activity, project, initialDirection);
+            SafSyncEngine.Result result = SafSyncEngine.synchronize(activity, project, initialDirection, conflictDirection);
             activity.runOnUiThread(() -> {
                 synchronizing = false;
                 if (currentInstance != this || disposed || activity.isFinishing()) return;
@@ -1513,6 +1517,20 @@ public final class Workspace {
                             syncExternalProject(project, SafSyncEngine.INITIAL_LOCAL_TO_EXTERNAL, onSuccess))
                         .setNegativeButton("Usar pasta externa", (dialog, which) ->
                             syncExternalProject(project, SafSyncEngine.INITIAL_EXTERNAL_TO_LOCAL, onSuccess))
+                        .setNeutralButton("Cancelar", null)
+                        .show();
+                    return;
+                }
+                if (result.needsConflictChoice) {
+                    new AlertDialog.Builder(activity)
+                        .setTitle("Conflitos de sincronizacao")
+                        .setMessage(result.message)
+                        .setPositiveButton("Manter copia local", (dialog, which) ->
+                            syncExternalProject(project, SafSyncEngine.INITIAL_NONE,
+                                SafSyncEngine.CONFLICT_KEEP_LOCAL, onSuccess))
+                        .setNegativeButton("Manter pasta externa", (dialog, which) ->
+                            syncExternalProject(project, SafSyncEngine.INITIAL_NONE,
+                                SafSyncEngine.CONFLICT_KEEP_EXTERNAL, onSuccess))
                         .setNeutralButton("Cancelar", null)
                         .show();
                     return;
