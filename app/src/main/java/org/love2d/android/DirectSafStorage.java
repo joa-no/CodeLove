@@ -87,28 +87,28 @@ final class DirectSafStorage implements CodeEditor.Storage {
         return displayName;
     }
 
-    boolean contains(File file) {
+    synchronized boolean contains(File file) {
         if (file == null) return false;
         String root = syntheticRoot.getAbsolutePath();
         String path = file.getAbsolutePath();
         return path.equals(root) || path.startsWith(root + File.separator);
     }
 
-    boolean isKnown(File file) {
+    synchronized boolean isKnown(File file) {
         return file != null && uriByPath.containsKey(file.getAbsolutePath());
     }
 
-    boolean isDirectory(File file) {
+    synchronized boolean isDirectory(File file) {
         Boolean value = file == null ? null : dirByPath.get(file.getAbsolutePath());
         return value != null && value;
     }
 
-    boolean isFile(File file) {
+    synchronized boolean isFile(File file) {
         Boolean value = file == null ? null : dirByPath.get(file.getAbsolutePath());
         return value != null && !value;
     }
 
-    String readText(File file, long maxBytes) throws IOException {
+    synchronized String readText(File file, long maxBytes) throws IOException {
         Uri uri = requireUri(file);
         Cursor cursor = resolver.query(uri,
             new String[]{DocumentsContract.Document.COLUMN_SIZE}, null, null, null);
@@ -137,7 +137,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         }
     }
 
-    boolean writeText(File file, String text) {
+    synchronized boolean writeText(File file, String text) {
         try {
             Uri uri = requireUri(file);
             OutputStream out = resolver.openOutputStream(uri, "wt");
@@ -155,7 +155,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         }
     }
 
-    List<Entry> list(File directory) throws IOException {
+    synchronized List<Entry> list(File directory) throws IOException {
         Uri dirUri = requireUri(directory);
         String dirId = requireDocumentId(directory);
         Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, dirId);
@@ -201,7 +201,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         return result;
     }
 
-    Entry createFile(File parent, String name) throws IOException {
+    synchronized Entry createFile(File parent, String name) throws IOException {
         validateName(name);
         Uri parentUri = requireUri(parent);
         Uri created = DocumentsContract.createDocument(resolver, parentUri,
@@ -213,7 +213,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         return new Entry(file, created, id, false, name, mimeFor(name));
     }
 
-    Entry createDirectory(File parent, String name) throws IOException {
+    synchronized Entry createDirectory(File parent, String name) throws IOException {
         validateName(name);
         Uri parentUri = requireUri(parent);
         Uri created = DocumentsContract.createDocument(resolver, parentUri,
@@ -226,7 +226,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
             DocumentsContract.Document.MIME_TYPE_DIR);
     }
 
-    boolean delete(File file) {
+    synchronized boolean delete(File file) {
         try {
             Uri uri = requireUri(file);
             boolean ok = DocumentsContract.deleteDocument(resolver, uri);
@@ -240,7 +240,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         }
     }
 
-    File rename(File target, String newName) throws IOException {
+    synchronized File rename(File target, String newName) throws IOException {
         validateName(newName);
         Uri uri = requireUri(target);
         Uri renamed = DocumentsContract.renameDocument(resolver, uri, newName);
@@ -277,7 +277,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
      * Cria uma copia temporaria SOMENTE para o runtime do LOVE.
      * A copia nao e usada pelo editor nem e fonte de dados do projeto.
      */
-    File createRuntimeSnapshot(File destinationRoot) throws IOException {
+    synchronized File createRuntimeSnapshot(File destinationRoot) throws IOException {
         if (destinationRoot.exists()) deleteLocal(destinationRoot);
         if (!destinationRoot.mkdirs()) {
             throw new IOException("Nao consegui preparar a pasta temporaria de execucao.");
@@ -322,30 +322,30 @@ final class DirectSafStorage implements CodeEditor.Storage {
         }
     }
 
-    void deleteLocalSnapshot(File directory) {
+    synchronized void deleteLocalSnapshot(File directory) {
         deleteLocal(directory);
     }
 
-    private Uri requireUri(File file) throws IOException {
+    synchronized private Uri requireUri(File file) throws IOException {
         if (file == null) throw new IOException("Documento invalido.");
         Uri uri = uriByPath.get(file.getAbsolutePath());
         if (uri == null) throw new IOException("Documento SAF nao esta mais disponivel.");
         return uri;
     }
 
-    private String requireDocumentId(File file) throws IOException {
+    synchronized private String requireDocumentId(File file) throws IOException {
         String id = idByPath.get(file.getAbsolutePath());
         if (id == null) throw new IOException("Documento SAF nao esta mais disponivel.");
         return id;
     }
 
-    private void remember(File file, Uri uri, String id, boolean directory) {
+    synchronized private void remember(File file, Uri uri, String id, boolean directory) {
         uriByPath.put(file.getAbsolutePath(), uri);
         idByPath.put(file.getAbsolutePath(), id);
         dirByPath.put(file.getAbsolutePath(), directory);
     }
 
-    private void forgetRecursive(File file) {
+    synchronized private void forgetRecursive(File file) {
         String path = file.getAbsolutePath();
         ArrayList<String> paths = new ArrayList<String>(uriByPath.keySet());
         for (String item : paths) {
