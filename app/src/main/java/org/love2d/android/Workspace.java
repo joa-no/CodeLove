@@ -151,7 +151,6 @@ public final class Workspace {
             if (!games.isDirectory()) {
                 games.mkdirs();
             }
-            ensureSampleProject(games);
         }
         Workspace workspace = new Workspace(activity, (RelativeLayout) layout, surface, games);
         currentInstance = workspace;
@@ -406,13 +405,11 @@ public final class Workspace {
 
         placeholder = buildPlaceholder();
 
-        TextView saveButton = new TextView(activity);
-        saveButton.setText("Salvar");
+        IconView saveIcon = new IconView(activity, IconView.SAVE, COLOR_TEXT);
+        LinearLayout saveButton = new LinearLayout(activity);
         saveButton.setGravity(Gravity.CENTER);
-        saveButton.setTextColor(0xFF1B1F2B);
-        saveButton.setTextSize(13);
-        saveButton.setTypeface(Typeface.DEFAULT_BOLD);
-        saveButton.setBackground(box(COLOR_FOLDER, 12, false));
+        saveButton.setBackground(box(COLOR_FIELD, 22, false));
+        saveButton.addView(saveIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         saveButton.setOnClickListener(v -> saveCurrentFile());
 
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
@@ -428,7 +425,7 @@ public final class Workspace {
                 saveState();
             }
         });
-        editor.addFooterControl(saveButton, 68, 0);
+        editor.addFooterControl(saveButton, CONTROL_BUTTON_DP, 0);
         editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editor.addFooterControl(footerResetButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editor.addFooterControl(consoleButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
@@ -1473,6 +1470,10 @@ public final class Workspace {
 
     /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
     private String projectDisplayName(File project) {
+        if (SafProjectManager.isWorkingCopyRoot(activity, project)) {
+            String originalName = SafProjectManager.getWorkingCopyDisplayName(activity, project);
+            if (originalName != null && !originalName.trim().isEmpty()) return originalName;
+        }
         return project.getName();
     }
 
@@ -1935,6 +1936,7 @@ public final class Workspace {
         static final int FULLSCREEN = 10;
         static final int FULLSCREEN_EXIT = 11;
         static final int INFO = 12;
+        static final int SAVE = 13;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -2014,6 +2016,23 @@ public final class Workspace {
                     path.moveTo(9f, 20f);
                     path.lineTo(9f, 15f);
                     path.lineTo(4f, 15f);
+                    break;
+                case SAVE:
+                    path.moveTo(5f, 3f);
+                    path.lineTo(17f, 3f);
+                    path.lineTo(21f, 7f);
+                    path.lineTo(21f, 21f);
+                    path.lineTo(3f, 21f);
+                    path.lineTo(3f, 3f);
+                    path.close();
+                    path.moveTo(7f, 3f);
+                    path.lineTo(7f, 10f);
+                    path.lineTo(17f, 10f);
+                    path.lineTo(17f, 3f);
+                    path.moveTo(7f, 21f);
+                    path.lineTo(7f, 14f);
+                    path.lineTo(17f, 14f);
+                    path.lineTo(17f, 21f);
                     break;
                 case CONSOLE:
                     path.moveTo(5f, 7f);
