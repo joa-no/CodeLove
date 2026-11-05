@@ -137,7 +137,7 @@ final class SafSyncEngine {
                 }
                 if (!conflicts.isEmpty()) {
                     StringBuilder message = new StringBuilder("Foram encontrados conflitos nos seguintes caminhos:\\n\\n");
-                    for (String path : conflicts) message.append("• ").append(path).append('\\n');
+                    for (String path : conflicts) message.append("• ").append(path).append('\n');
                     message.append("\\nEscolha qual versao manter somente nesses caminhos. As demais alteracoes sem conflito serao mescladas normalmente.");
                     return Result.conflicts(message.toString());
                 }
