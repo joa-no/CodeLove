@@ -1154,7 +1154,11 @@ public final class Workspace {
         if (activeProject == null) {
             return null;
         }
-        if (lastFolder != null && lastFolder.isDirectory() && isInside(lastFolder, activeProject)) {
+        boolean lastFolderIsDirectory = lastFolder != null
+            && (activeSafStorage != null && activeSafStorage.contains(lastFolder)
+                ? activeSafStorage.isDirectory(lastFolder)
+                : lastFolder.isDirectory());
+        if (lastFolderIsDirectory && isInside(lastFolder, activeProject)) {
             return lastFolder;
         }
         return activeProject;
@@ -1421,7 +1425,11 @@ public final class Workspace {
 
     private void delete(final File target) {
         String what = "\"" + target.getName() + "\"";
-        String message = target.isDirectory()
+        boolean targetIsDirectory = activeSafStorage != null
+            && activeSafStorage.contains(target)
+            ? activeSafStorage.isDirectory(target)
+            : target.isDirectory();
+        String message = targetIsDirectory
             ? "Excluir a pasta " + what + " e tudo que esta dentro dela? Isso nao pode ser desfeito."
             : "Excluir o arquivo " + what + "? Isso nao pode ser desfeito.";
         ui.confirm(message, "Excluir", () -> doDelete(target));
