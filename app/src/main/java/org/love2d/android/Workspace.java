@@ -87,10 +87,10 @@ public final class Workspace {
     private final int margin;
     private final Set<String> expanded = new HashSet<String>();
 
-    private File activeProject = null; // projeto aberto agora (nulo se nenhum)
+    private File activeProject = null; // identificador virtual do projeto aberto
+    private DirectSafStorage activeSafStorage = null; // fonte direta SAF, quando aplicavel
+    private File runtimeProject = null; // snapshot temporario usado somente pelo LOVE
     private boolean playing = false;
-    private boolean synchronizing = false;
-    private final Set<String> pendingExternalFiles = new HashSet<String>();
     private String lastStatus = "";
 
     private OverlayUi ui;
@@ -116,7 +116,7 @@ public final class Workspace {
     private TextView syncIndicator;
     private TextView statusView;
     private IconView saveIcon;
-    private final Set<String> verifiedProjects = new HashSet<String>();
+    private final Set<String> __removedVerifiedProjects = new HashSet<String>();
     private LinearLayout projectNotice;
     private LinearLayout treeBox;
     private EditText search;
@@ -136,10 +136,6 @@ public final class Workspace {
         this.gamesDir = gamesDir;
         this.channelDir = channelDir(activity);
         this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
-        Set<String> savedPending = prefs.getStringSet("pendingExternalFiles", null);
-        if (savedPending != null) pendingExternalFiles.addAll(savedPending);
-        Set<String> savedVerified = prefs.getStringSet("verifiedProjects", null);
-        if (savedVerified != null) verifiedProjects.addAll(savedVerified);
         this.onLeft = prefs.getBoolean("panel_left", true);
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
@@ -166,25 +162,24 @@ public final class Workspace {
     }
 
     private void importPreviouslyRegisteredProjects() {
-        List<SafProjectManager.RegisteredProject> pending =
-            SafProjectManager.getProjectsNeedingImport(activity);
-        if (pending.isEmpty()) return;
+        List<SafProjectManager.RegisteredProject> projects =
+            SafProjectManager.getRegisteredProjects(activity);
+        if (projects.isEmpty()) return;
 
-        new Thread(() -> {
-            for (SafProjectManager.RegisteredProject project : pending) {
-                SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
-                    activity, project.treeUri, project.documentId, project.displayName, gamesDir);
-                activity.runOnUiThread(() -> {
-                    if (currentInstance != this || disposed || activity.isFinishing()) return;
-                    if (copy.isSuccess()) {
-                        expanded.add(copy.directory.getAbsolutePath());
-                        renderTree();
-                    } else {
-                        showProjectNotice(copy.error);
-                    }
-                });
-            }
-        }, "CodeLove-SAF-Restore").start();
+        // O projeto registrado e aberto diretamente pelo SAF. Nenhum arquivo e
+        // copiado para gamesDir. Se houver varios, o ultimo selecionado pelo
+        // usuario pode ser aberto novamente pelo seletor sem duplicacao local.
+        SafProjectManager.RegisteredProject project = projects.get(0);
+        DirectSafStorage storage = new DirectSafStorage(
+            activity, project.treeUri, project.documentId, project.displayName);
+        activeSafStorage = storage;
+        activeProject = storage.getRoot();
+        expanded.add(activeProject.getAbsolutePath());
+        projectTitle.setText(storage.getDisplayName());
+        placeholder.setVisibility(View.GONE);
+        if (editor != null) editor.setStorage(storage::readText);
+        renderTree();
+        prepareRuntimeProject(false);
     }
 
     /** Sincroniza o polling da interface com o ciclo de vida da Activity SDL. */
@@ -210,6 +205,7 @@ public final class Workspace {
             workspace.hostResumed = false;
             workspace.disposed = true;
             workspace.stopStatusPolling();
+            workspace.deleteRuntimeProject();
             currentInstance = null;
         }
     }
@@ -837,7 +833,10 @@ public final class Workspace {
     private void renderTree() {
         treeBox.removeAllViews();
 
-        File treeRoot = (gamesDir != null && gamesDir.isDirectory()) ? gamesDir : activeProject;
+        File treeRoot = activeSafStorage != null
+            ? activeProject
+            : ((gamesDir != null && gamesDir.isDirectory()) ? gamesDir : activeProject);
+
         if (treeRoot == null) {
             TextView note = new TextView(activity);
             note.setText("Pasta de projetos indisponivel.");
@@ -854,7 +853,7 @@ public final class Workspace {
 
         if (rows.isEmpty()) {
             TextView note = new TextView(activity);
-            note.setText(query.isEmpty() ? "Nenhum projeto ainda." : "Nada encontrado.");
+            note.setText(query.isEmpty() ? "Nenhum arquivo ainda." : "Nada encontrado.");
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -868,23 +867,54 @@ public final class Workspace {
         }
     }
 
-    /** Monta a lista de linhas visiveis. Devolve true se achou algo nesta pasta. */
+    /** Monta a lista de linhas visiveis, usando SAF direto quando o projeto externo esta aberto. */
     private boolean collect(File dir, int depth, String query, ArrayList<Row> out) {
-        if (depth > MAX_DEPTH) {
-            return false;
+        if (depth > MAX_DEPTH) return false;
+
+        if (activeSafStorage != null && activeSafStorage.contains(dir)) {
+            try {
+                List<DirectSafStorage.Entry> kids = activeSafStorage.list(dir);
+                boolean any = false;
+                for (DirectSafStorage.Entry entry : kids) {
+                    File f = entry.file;
+                    boolean isDir = entry.directory;
+                    boolean nameMatch = query.isEmpty()
+                        || entry.name.toLowerCase(Locale.ROOT).contains(query);
+
+                    if (isDir) {
+                        if (query.isEmpty()) {
+                            boolean isOpen = expanded.contains(f.getAbsolutePath());
+                            out.add(new Row(f, depth, true, isOpen));
+                            if (isOpen) collect(f, depth + 1, query, out);
+                            any = true;
+                        } else {
+                            int mark = out.size();
+                            out.add(new Row(f, depth, true, true));
+                            boolean childMatch = collect(f, depth + 1, query, out);
+                            if (childMatch || nameMatch) any = true;
+                            else while (out.size() > mark) out.remove(out.size() - 1);
+                        }
+                    } else if (nameMatch) {
+                        out.add(new Row(f, depth, false, false));
+                        any = true;
+                    }
+                }
+                return any;
+            } catch (IOException e) {
+                showProjectNotice("Nao consegui listar essa pasta. O acesso do Android pode ter sido alterado ou removido.");
+                return false;
+            }
         }
+
+        if (dir == null || !dir.isDirectory()) return false;
         File[] kids = dir.listFiles();
-        if (kids == null) {
-            return false;
-        }
+        if (kids == null) return false;
+
         Arrays.sort(kids, new Comparator<File>() {
-            @Override
-            public int compare(File a, File b) {
+            @Override public int compare(File a, File b) {
                 boolean da = a.isDirectory();
                 boolean db = b.isDirectory();
-                if (da != db) {
-                    return da ? -1 : 1;
-                }
+                if (da != db) return da ? -1 : 1;
                 return a.getName().compareToIgnoreCase(b.getName());
             }
         });
@@ -899,21 +929,14 @@ public final class Workspace {
                 if (query.isEmpty()) {
                     boolean isOpen = expanded.contains(f.getAbsolutePath());
                     out.add(new Row(f, depth, true, isOpen));
-                    if (isOpen) {
-                        collect(f, depth + 1, query, out);
-                    }
+                    if (isOpen) collect(f, depth + 1, query, out);
                     any = true;
                 } else {
                     int mark = out.size();
                     out.add(new Row(f, depth, true, true));
                     boolean childMatch = collect(f, depth + 1, query, out);
-                    if (childMatch || nameMatch) {
-                        any = true;
-                    } else {
-                        while (out.size() > mark) {
-                            out.remove(out.size() - 1);
-                        }
-                    }
+                    if (childMatch || nameMatch) any = true;
+                    else while (out.size() > mark) out.remove(out.size() - 1);
                 }
             } else if (nameMatch) {
                 out.add(new Row(f, depth, false, false));
@@ -976,9 +999,10 @@ public final class Workspace {
 
     /** Pasta de projeto (filho direto da pasta de jogos) que contem este arquivo. */
     private File projectOf(File file) {
-        if (gamesDir == null) {
-            return null;
+        if (activeSafStorage != null && activeSafStorage.contains(file)) {
+            return activeProject;
         }
+        if (gamesDir == null) return null;
         File current = file;
         while (current != null) {
             File parent = current.getParentFile();
@@ -989,6 +1013,7 @@ public final class Workspace {
         }
         return null;
     }
+
 
     private void onRowClicked(Row row) {
         if (row.dir) {
@@ -1181,9 +1206,8 @@ public final class Workspace {
 
     static void handleActivityResult(Activity activity, int requestCode,
                                      int resultCode, Intent data) {
-        if (requestCode != REQUEST_ADD_PROJECT_TREE) {
-            return;
-        }
+        if (requestCode != REQUEST_ADD_PROJECT_TREE) return;
+
         Workspace workspace = currentInstance;
         if (workspace == null || workspace.activity != activity
             || resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
@@ -1194,6 +1218,7 @@ public final class Workspace {
             Uri treeUri = data.getData();
             int grantedFlags = data.getFlags()
                 & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
             SafProjectManager.ProjectSelection selection =
                 SafProjectManager.inspectProject(activity, treeUri);
             if (!selection.isValid()) {
@@ -1205,51 +1230,35 @@ public final class Workspace {
                 selection.documentId, selection.displayName);
             if (error != null) {
                 workspace.showProjectNotice(error);
-            } else {
-                final Workspace targetWorkspace = workspace;
-                final Uri selectedTreeUri = treeUri;
-                final SafProjectManager.ProjectSelection selectedProject = selection;
-                new Thread(() -> {
-                    SafProjectManager.ProjectCopy copy = SafProjectManager.ensureWorkingCopy(
-                        activity, selectedTreeUri, selectedProject.documentId,
-                        selectedProject.displayName, targetWorkspace.gamesDir);
-                    activity.runOnUiThread(() -> {
-                        if (currentInstance != targetWorkspace || targetWorkspace.disposed
-                            || activity.isFinishing()) {
-                            return;
-                        }
-                        if (!copy.isSuccess()) {
-                            targetWorkspace.showProjectNotice(copy.error);
-                        } else {
-                            targetWorkspace.expanded.add(copy.directory.getAbsolutePath());
-                            targetWorkspace.renderTree();
-                            targetWorkspace.toast("Pasta selecionada com sucesso.");
-                        }
-                    });
-                }, "CodeLove-SAF-Import").start();
+                return;
             }
+
+            DirectSafStorage storage = new DirectSafStorage(
+                activity, treeUri, selection.documentId, selection.displayName);
+            workspace.selectDirectProject(storage);
+            workspace.toast("Pasta selecionada com sucesso.");
         } catch (RuntimeException e) {
             Log.e(TAG, "Falha inesperada ao processar a pasta selecionada pelo SAF", e);
             workspace.showProjectNotice(
-                "O Android encontrou um erro inesperado ao processar essa pasta. "
-                + "Tente novamente. Se o problema continuar, informe o suporte do CodeLove.");
+                "O Android encontrou um erro inesperado ao processar essa pasta. Tente novamente.");
         }
     }
+
 
     private void showRowMenu(Row row, View anchor) {
         final File file = row.file;
         List<String> labels = new ArrayList<String>();
         List<Runnable> actions = new ArrayList<Runnable>();
         boolean externalProjectRoot = row.dir
-            && SafProjectManager.isWorkingCopyRoot(activity, file);
+            && activeSafStorage != null
+            && sameFile(file, activeProject);
         if (row.dir) {
             labels.add("Novo arquivo aqui");
             actions.add(() -> newFile(file));
             labels.add("Nova pasta aqui");
             actions.add(() -> newFolder(file));
         }
-        // A raiz da copia externa mantem o vinculo persistido com a pasta SAF.
-        // Renomear/apagar sera habilitado junto com o gerenciamento de vinculos.
+        // A raiz do projeto aberto nao pode ser renomeada/apagada pelo menu.
         if (!externalProjectRoot) {
             labels.add("Renomear");
             actions.add(() -> rename(file));
@@ -1261,9 +1270,26 @@ public final class Workspace {
 
     private void newFile(final File folder) {
         ui.askText("Novo arquivo em " + folder.getName(), "", "Criar",
-            text -> FileOps.checkName(folder, FileOps.withDefaultExtension(text)),
             text -> {
-                File file = FileOps.createFile(folder, FileOps.withDefaultExtension(text));
+                String name = FileOps.withDefaultExtension(text);
+                if (activeSafStorage != null && activeSafStorage.contains(folder)) {
+                    return isSafeName(name) ? null : "Nome de arquivo invalido.";
+                }
+                return FileOps.checkName(folder, name);
+            },
+            text -> {
+                String name = FileOps.withDefaultExtension(text);
+                File file;
+                if (activeSafStorage != null && activeSafStorage.contains(folder)) {
+                    try {
+                        file = activeSafStorage.createFile(folder, name).file;
+                    } catch (IOException e) {
+                        toast(e.getMessage() == null ? "Nao consegui criar o arquivo." : e.getMessage());
+                        return;
+                    }
+                } else {
+                    file = FileOps.createFile(folder, name);
+                }
                 if (file == null) {
                     toast("Nao consegui criar o arquivo.");
                     return;
@@ -1278,9 +1304,24 @@ public final class Workspace {
 
     private void newFolder(final File parent) {
         ui.askText("Nova pasta em " + parent.getName(), "", "Criar",
-            text -> FileOps.checkName(parent, text),
             text -> {
-                File folder = FileOps.createFolder(parent, text);
+                if (activeSafStorage != null && activeSafStorage.contains(parent)) {
+                    return isSafeName(text) ? null : "Nome de pasta invalido.";
+                }
+                return FileOps.checkName(parent, text);
+            },
+            text -> {
+                File folder;
+                if (activeSafStorage != null && activeSafStorage.contains(parent)) {
+                    try {
+                        folder = activeSafStorage.createDirectory(parent, text).file;
+                    } catch (IOException e) {
+                        toast(e.getMessage() == null ? "Nao consegui criar a pasta." : e.getMessage());
+                        return;
+                    }
+                } else {
+                    folder = FileOps.createFolder(parent, text);
+                }
                 if (folder == null) {
                     toast("Nao consegui criar a pasta.");
                     return;
@@ -1293,7 +1334,6 @@ public final class Workspace {
             });
     }
 
-    /** Se o item novo e de outro projeto, passa a trabalhar nesse projeto. */
     private void enterProjectOf(File file) {
         File project = projectOf(file);
         if (project != null && (activeProject == null || !sameFile(project, activeProject))) {
@@ -1304,47 +1344,63 @@ public final class Workspace {
     private void rename(final File target) {
         final File parent = target.getParentFile();
         ui.askText("Renomear", target.getName(), "Renomear",
-            text -> text.equals(target.getName()) ? null : FileOps.checkName(parent, text),
+            text -> text.equals(target.getName()) ? null
+                : ((activeSafStorage != null && activeSafStorage.contains(target))
+                    ? (isSafeName(text) ? null : "Nome invalido.")
+                    : FileOps.checkName(parent, text)),
             text -> {
-                if (!text.equals(target.getName())) {
+                if (text.equals(target.getName())) return;
+                if (activeSafStorage != null && activeSafStorage.contains(target)) {
+                    doDirectRename(target, text);
+                } else {
                     doRename(target, new File(parent, text));
                 }
             });
     }
 
+    private void doDirectRename(File target, String newName) {
+        boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
+        File editedFile = editor.isOpen() ? editor.getFile() : null;
+        if (editedFile != null && isInside(editedFile, target) && !editor.close()) return;
+        if (isActiveProject) sendCommand("close", "");
+
+        try {
+            File dest = activeSafStorage.rename(target, newName).getAbsoluteFile();
+            if (isActiveProject) {
+                activeProject = dest;
+                projectTitle.setText(activeSafStorage.getDisplayName());
+                expanded.add(dest.getAbsolutePath());
+                prepareRuntimeProject(false);
+            }
+            renderTree();
+            if (editedFile != null && sameFile(editedFile, target)) openInEditor(dest);
+            saveState();
+        } catch (IOException e) {
+            toast(e.getMessage() == null ? "Nao consegui renomear." : e.getMessage());
+        }
+    }
+
     private void doRename(File target, File dest) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
         File editedFile = editor.isOpen() ? editor.getFile() : null;
-
-        // grava e fecha o editor se o arquivo aberto esta no que vai mudar de nome
-        if (editedFile != null && isInside(editedFile, target) && !editor.close()) {
-            return;
-        }
-        if (isActiveProject) {
-            sendCommand("close", "");
-        }
+        if (editedFile != null && isInside(editedFile, target) && !editor.close()) return;
+        if (isActiveProject) sendCommand("close", "");
 
         if (!target.renameTo(dest)) {
             toast("Nao consegui renomear.");
-            if (isActiveProject) {
-                sendCommand("open", target.getAbsolutePath());
-            }
+            if (isActiveProject) sendCommand("open", target.getAbsolutePath());
             renderTree();
             return;
         }
 
-        // acompanha o novo caminho nas pastas abertas
         String oldPath = target.getAbsolutePath();
         String newPath = dest.getAbsolutePath();
-        java.util.Set<String> next = new HashSet<String>();
+        Set<String> next = new HashSet<String>();
         for (String path : expanded) {
-            if (path.equals(oldPath)) {
-                next.add(newPath);
-            } else if (path.startsWith(oldPath + File.separator)) {
+            if (path.equals(oldPath)) next.add(newPath);
+            else if (path.startsWith(oldPath + File.separator))
                 next.add(newPath + path.substring(oldPath.length()));
-            } else {
-                next.add(path);
-            }
+            else next.add(path);
         }
         expanded.clear();
         expanded.addAll(next);
@@ -1353,7 +1409,6 @@ public final class Workspace {
         if (isActiveProject) {
             activeProject = dest;
             projectTitle.setText(dest.getName());
-            updateSyncIndicator();
             playing = false;
             sendCommand("open", dest.getAbsolutePath());
             updatePlayButton();
@@ -1364,14 +1419,12 @@ public final class Workspace {
         }
 
         renderTree();
-        if (editedFile != null && sameFile(editedFile, target)) {
-            openInEditor(dest); // era este arquivo que estava aberto
-        }
+        if (editedFile != null && sameFile(editedFile, target)) openInEditor(dest);
         saveState();
     }
 
     private void delete(final File target) {
-        String what = "\"" + target.getName() + "\"";
+        String what = """ + target.getName() + """;
         String message = target.isDirectory()
             ? "Excluir a pasta " + what + " e tudo que esta dentro dela? Isso nao pode ser desfeito."
             : "Excluir o arquivo " + what + "? Isso nao pode ser desfeito.";
@@ -1380,36 +1433,49 @@ public final class Workspace {
 
     private void doDelete(File target) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
+        if (editor.isOpen() && isInside(editor.getFile(), target) && !editor.close()) return;
+        if (isActiveProject) sendCommand("close", "");
 
-        if (editor.isOpen() && isInside(editor.getFile(), target) && !editor.close()) {
+        boolean ok;
+        if (activeSafStorage != null && activeSafStorage.contains(target)) {
+            ok = activeSafStorage.delete(target);
+        } else {
+            ok = FileOps.deleteRecursive(target);
+        }
+        if (!ok) {
+            toast("Nao consegui apagar tudo.");
             return;
         }
-        if (isActiveProject) {
-            sendCommand("close", "");
-        }
 
-        if (!FileOps.deleteRecursive(target)) {
-            toast("Nao consegui apagar tudo.");
-        }
         expanded.remove(target.getAbsolutePath());
         lastFolder = null;
 
         if (isActiveProject) {
             activeProject = null;
+            activeSafStorage = null;
             playing = false;
             projectTitle.setText("CodeLove");
             placeholder.setVisibility(View.VISIBLE);
             updatePlayButton();
+            editor.setStorage(null);
         } else if (activeProject != null && isInside(target, activeProject)) {
             playing = false;
-            sendCommand("open", activeProject.getAbsolutePath());
+            prepareRuntimeProject(false);
             updatePlayButton();
         }
         renderTree();
         saveState();
     }
 
+    private boolean isSafeName(String name) {
+        return name != null && !name.trim().isEmpty()
+            && !name.equals(".") && !name.equals("..")
+            && name.indexOf('/') < 0 && name.indexOf('\\') < 0;
+    }
+
     private void openInEditor(File file) {
+        editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
+            ? activeSafStorage::readText : null);
         if (editor.open(file)) {
             if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
             applyLayout();
@@ -1427,159 +1493,69 @@ public final class Workspace {
         return f.equals(d) || f.startsWith(d + File.separator);
     }
 
-    /** Depois de salvar: recarrega o projeto no executor, e o 1o quadro mostra o codigo novo. */
     private void onFileSaved(File file) {
         if (activeProject != null && isInside(file, activeProject)) {
-            if (SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
-                pendingExternalFiles.add(file.getAbsolutePath());
-                persistPendingExternalFiles();
-                verifiedProjects.remove(activeProject.getAbsolutePath());
-                prefs.edit().putStringSet("verifiedProjects",
-                    new HashSet<String>(verifiedProjects)).apply();
-                updateSyncIndicator();
-            }
             playing = false;
-            sendCommand("open", activeProject.getAbsolutePath());
+            if (activeSafStorage != null) {
+                prepareRuntimeProject(false);
+            } else {
+                sendCommand("open", activeProject.getAbsolutePath());
+            }
             updatePlayButton();
         }
     }
 
-    /** Salva o arquivo atual e, em projetos SAF, publica esse arquivo na pasta original. */
     private void saveCurrentFile() {
         if (editor == null || !editor.isOpen() || !editor.saveNow()) return;
-        File file = editor.getFile();
-        if (file == null) return;
-
-        if (activeProject != null && isInside(file, activeProject)
-            && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
-            publishCurrentFile(file, SafSyncEngine.CONFLICT_NONE);
-        } else if (saveIcon != null) {
-            saveIcon.setKind(IconView.CHECK);
-        }
-    }
-
-    private void publishCurrentFile(File file, int conflictDirection) {
-        if (synchronizing) return;
-        final File project = activeProject;
-        if (project == null || !isInside(file, project)
-            || !SafProjectManager.isWorkingCopyRoot(activity, project)) return;
-
-        synchronizing = true;
-        updateSyncIndicator();
-        new Thread(() -> {
-            SafSyncEngine.Result result =
-                SafSyncEngine.publishFile(activity, project, file, conflictDirection);
-            activity.runOnUiThread(() -> {
-                synchronizing = false;
-                if (currentInstance != this || disposed || activity.isFinishing()) return;
-                updateSyncIndicator();
-
-                if (result.needsConflictChoice) {
-                    new AlertDialog.Builder(activity)
-                        .setTitle("Conflito no arquivo")
-                        .setMessage(result.message)
-                        .setPositiveButton("Manter versao do CodeLove", (dialog, which) ->
-                            publishCurrentFile(file, SafSyncEngine.CONFLICT_KEEP_LOCAL))
-                        .setNegativeButton("Manter versao externa", (dialog, which) ->
-                            publishCurrentFile(file, SafSyncEngine.CONFLICT_KEEP_EXTERNAL))
-                        .setNeutralButton("Cancelar", null)
-                        .show();
-                    return;
-                }
-                if (!result.success) {
-                    showNotice("Arquivo nao salvo na pasta externa", result.message);
-                    return;
-                }
-
-                pendingExternalFiles.remove(file.getAbsolutePath());
-                persistPendingExternalFiles();
-                if (saveIcon != null) saveIcon.setKind(IconView.CHECK);
-                updateSyncIndicator();
-                renderTree();
-
-                if (conflictDirection == SafSyncEngine.CONFLICT_KEEP_EXTERNAL
-                    && editor != null && editor.isOpen()
-                    && sameFile(editor.getFile(), file)) {
-                    if (file.isFile()) {
-                        editor.open(file);
-                    } else {
-                        editor.close();
-                    }
-                }
-            });
-        }, "CodeLove-SAF-Publish").start();
-    }
-
-    private void persistPendingExternalFiles() {
-        prefs.edit().putStringSet("pendingExternalFiles",
-            new HashSet<String>(pendingExternalFiles)).apply();
+        if (saveIcon != null) saveIcon.setKind(IconView.CHECK);
     }
 
     private void updateSyncIndicator() {
-        if (syncIndicator == null) return;
-        boolean external = activeProject != null
-            && SafProjectManager.isWorkingCopyRoot(activity, activeProject);
-        syncIndicator.setVisibility(external ? View.VISIBLE : View.GONE);
-        if (!external) return;
-
-        boolean pending = false;
-        for (String path : pendingExternalFiles) {
-            if (isInside(new File(path), activeProject)) {
-                pending = true;
-                break;
-            }
-        }
-        if (pending) {
-            syncIndicator.setText("\u25CF");
-            syncIndicator.setTextColor(0xFFF2A65A);
-            setButtonHint(syncIndicator, "Alteracoes locais aguardando envio para a pasta externa.");
-        } else if (synchronizing) {
-            syncIndicator.setText("\u21BB");
-            syncIndicator.setTextColor(COLOR_LUA);
-            setButtonHint(syncIndicator, "Sincronizando o projeto.");
-        } else if (verifiedProjects.contains(activeProject.getAbsolutePath())) {
-            syncIndicator.setText("\u2713");
-            syncIndicator.setTextColor(0xFF5EEAD4);
-            setButtonHint(syncIndicator, "Ultima sincronizacao concluida. Use ↻ para verificar novas alteracoes externas.");
-        } else {
-            syncIndicator.setText("\u21C4");
-            syncIndicator.setTextColor(COLOR_MUTED);
-            setButtonHint(syncIndicator, "Use Sincronizar para verificar e atualizar os dois lados do projeto.");
+        if (syncIndicator != null) {
+            syncIndicator.setVisibility(View.GONE);
+            syncIndicator.setText("");
         }
     }
 
-    private void clearPendingExternalFiles(File project) {
-        java.util.Iterator<String> iterator = pendingExternalFiles.iterator();
-        while (iterator.hasNext()) {
-            File pending = new File(iterator.next());
-            if (isInside(pending, project)) iterator.remove();
-        }
-        persistPendingExternalFiles();
-    }
-
-    // ------------------------------------------------------------------
-    // Projeto aberto, play/pause e canal com o executor (Lua)
-    // ------------------------------------------------------------------
-
-    /** Abre o projeto no executor SEM sair desta tela. O jogo comeca pausado. */
     private String projectDisplayName(File project) {
-        if (SafProjectManager.isWorkingCopyRoot(activity, project)) {
-            String originalName = SafProjectManager.getWorkingCopyDisplayName(activity, project);
-            if (originalName != null && !originalName.trim().isEmpty()) return originalName;
+        if (activeSafStorage != null && activeSafStorage.contains(project)) {
+            return activeSafStorage.getDisplayName();
         }
-        return project.getName();
+        return project == null ? "CodeLove" : project.getName();
+    }
+
+    private void selectDirectProject(DirectSafStorage storage) {
+        selectProjectInternal(storage.getRoot(), storage);
     }
 
     private void selectProject(File project) {
+        selectProjectInternal(project, null);
+    }
+
+    private void selectProjectInternal(File project, DirectSafStorage storage) {
         if (editor != null && editor.isOpen() && !isInside(editor.getFile(), project)
             && !editor.close()) {
             return;
         }
+
+        if (activeSafStorage != null && activeSafStorage != storage) {
+            sendCommand("close", "");
+        }
+
+        activeSafStorage = storage;
         activeProject = project;
         lastFolder = null;
         expanded.add(project.getAbsolutePath());
         playing = false;
-        sendCommand("open", project.getAbsolutePath());
+
+        editor.setStorage(storage != null ? storage::readText : null);
+        if (storage != null) {
+            prepareRuntimeProject(false);
+        } else {
+            deleteRuntimeProject();
+            sendCommand("open", project.getAbsolutePath());
+        }
+
         projectTitle.setText(projectDisplayName(project));
         placeholder.setVisibility(View.GONE);
         updateSyncIndicator();
@@ -1597,105 +1573,67 @@ public final class Workspace {
         }
         if (activeProject == null) return;
         if (editor != null && !editor.saveNow()) return;
-        if (SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
-            final File project = activeProject;
-            syncExternalProject(project, SafSyncEngine.INITIAL_NONE, () -> {
-                if (activeProject == null || !sameFile(activeProject, project)) return;
-                sendCommand("open", project.getAbsolutePath());
-                playing = true;
-                sendCommand("play", "");
-                updatePlayButton();
-            });
-            return;
+
+        if (activeSafStorage != null) {
+            if (!prepareRuntimeProject(true)) return;
+        } else {
+            sendCommand("open", activeProject.getAbsolutePath());
         }
+
         playing = true;
         sendCommand("play", "");
         updatePlayButton();
     }
 
-    /**
-     * Atualiza o projeto atual a partir da pasta SAF autorizada.
-     * Para projetos locais, apenas redesenha a arvore de arquivos.
-     */
     private void refreshCurrentProject() {
-        if (activeProject == null
-            || !SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
-            renderTree();
-            return;
+        renderTree();
+        if (activeSafStorage != null && editor != null && editor.isOpen()
+            && isInside(editor.getFile(), activeProject)) {
+            editor.open(editor.getFile());
         }
+    }
 
-        final File project = activeProject;
-        syncExternalProject(project, SafSyncEngine.INITIAL_NONE, () -> {
-            // A sincronizacao pode ter substituido o arquivo aberto no disco.
-            // Rele-lo evita manter no editor o conteudo antigo em memoria.
-            if (editor != null && editor.isOpen()
-                && isInside(editor.getFile(), project)) {
-                File currentFile = editor.getFile();
-                if (currentFile != null && currentFile.isFile()) {
-                    editor.open(currentFile);
-                }
+    private void resetScene() {
+        if (activeProject == null || !editor.saveNow()) return;
+
+        if (activeSafStorage != null) {
+            if (!prepareRuntimeProject(true)) return;
+        } else {
+            sendCommand("open", activeProject.getAbsolutePath());
+        }
+        playing = false;
+        updatePlayButton();
+    }
+
+    private boolean prepareRuntimeProject(boolean showErrors) {
+        if (activeSafStorage == null || activeProject == null) return true;
+
+        File base = new File(activity.getCacheDir(), "codelove-runtime");
+        File snapshot = new File(base, Integer.toHexString(activeProject.getAbsolutePath().hashCode()));
+        try {
+            if (!base.isDirectory() && !base.mkdirs()) {
+                throw new IOException("Nao consegui preparar a area temporaria de execucao.");
             }
-        });
-    }
-
-    private void syncExternalProject(File project, int initialDirection, Runnable onSuccess) {
-        syncExternalProject(project, initialDirection, SafSyncEngine.CONFLICT_NONE, onSuccess);
-    }
-
-    private void syncExternalProject(File project, int initialDirection, int conflictDirection, Runnable onSuccess) {
-        if (synchronizing) {
-            return;
+            activeSafStorage.createRuntimeSnapshot(snapshot);
+            deleteRuntimeProject();
+            runtimeProject = snapshot;
+            sendCommand("open", runtimeProject.getAbsolutePath());
+            return true;
+        } catch (IOException e) {
+            Log.e(TAG, "Falha ao preparar snapshot de execucao", e);
+            if (showErrors) {
+                showNotice("Nao foi possivel executar o projeto",
+                    e.getMessage() == null ? "Falha ao preparar os arquivos para o LÖVE." : e.getMessage());
+            }
+            return false;
         }
-        if (editor != null && editor.isOpen() && isInside(editor.getFile(), project)
-            && !editor.saveNow()) return;
+    }
 
-        synchronizing = true;
-        updateSyncIndicator();
-        new Thread(() -> {
-            SafSyncEngine.Result result = SafSyncEngine.synchronize(activity, project, initialDirection, conflictDirection);
-            activity.runOnUiThread(() -> {
-                synchronizing = false;
-                if (currentInstance != this || disposed || activity.isFinishing()) return;
-                updateSyncIndicator();
-                if (result.needsInitialChoice) {
-                    new AlertDialog.Builder(activity)
-                        .setTitle("Versoes ainda nao vinculadas")
-                        .setMessage("O CodeLove encontrou conteudos diferentes, mas ainda nao tem um historico confiavel para identificar as alteracoes. Escolha qual versao deve ser mantida. A outra sera atualizada para corresponder a ela.")
-                        .setPositiveButton("Manter versao do CodeLove", (dialog, which) ->
-                            syncExternalProject(project, SafSyncEngine.INITIAL_LOCAL_TO_EXTERNAL, onSuccess))
-                        .setNegativeButton("Manter versao externa", (dialog, which) ->
-                            syncExternalProject(project, SafSyncEngine.INITIAL_EXTERNAL_TO_LOCAL, onSuccess))
-                        .setNeutralButton("Cancelar", null)
-                        .show();
-                    return;
-                }
-                if (result.needsConflictChoice) {
-                    new AlertDialog.Builder(activity)
-                        .setTitle("Conflitos de sincronizacao")
-                        .setMessage(result.message)
-                        .setPositiveButton("Manter versao do CodeLove", (dialog, which) ->
-                            syncExternalProject(project, SafSyncEngine.INITIAL_NONE,
-                                SafSyncEngine.CONFLICT_KEEP_LOCAL, onSuccess))
-                        .setNegativeButton("Manter versao externa", (dialog, which) ->
-                            syncExternalProject(project, SafSyncEngine.INITIAL_NONE,
-                                SafSyncEngine.CONFLICT_KEEP_EXTERNAL, onSuccess))
-                        .setNeutralButton("Cancelar", null)
-                        .show();
-                    return;
-                }
-                if (!result.success) {
-                    showNotice("Sincronizacao nao concluida", result.message);
-                    return;
-                }
-                clearPendingExternalFiles(project);
-                verifiedProjects.add(project.getAbsolutePath());
-                prefs.edit().putStringSet("verifiedProjects",
-                    new HashSet<String>(verifiedProjects)).apply();
-                updateSyncIndicator();
-                renderTree();
-                if (onSuccess != null) onSuccess.run();
-            });
-        }, "CodeLove-SAF-Sync").start();
+    private void deleteRuntimeProject() {
+        if (runtimeProject != null) {
+            FileOps.deleteRecursive(runtimeProject);
+            runtimeProject = null;
+        }
     }
 
     private void updatePlayButton() {
