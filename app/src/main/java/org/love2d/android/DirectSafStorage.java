@@ -156,7 +156,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
     }
 
     synchronized List<Entry> list(File directory) throws IOException {
-        Uri dirUri = requireUri(directory);
+        requireUri(directory);
         String dirId = requireDocumentId(directory);
         Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, dirId);
         Cursor cursor = resolver.query(childrenUri,
@@ -185,12 +185,16 @@ final class DirectSafStorage implements CodeEditor.Storage {
                 boolean dir = DocumentsContract.Document.MIME_TYPE_DIR.equals(mime);
                 File child = new File(directory, name);
                 Uri childUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
-                remember(child, childUri, id, dir);
                 result.add(new Entry(child, childUri, id, dir, name, mime));
             }
         } finally {
             cursor.close();
         }
+
+        // Reconcilia o cache de identificadores com o estado atual do provider.
+        // Novos itens entram; removidos ou substituidos perdem os mapeamentos
+        // antigos, inclusive os descendentes de pastas que mudaram de identidade.
+        reconcileChildren(directory, result);
 
         Collections.sort(result, new Comparator<Entry>() {
             @Override public int compare(Entry a, Entry b) {
@@ -343,6 +347,32 @@ final class DirectSafStorage implements CodeEditor.Storage {
         uriByPath.put(file.getAbsolutePath(), uri);
         idByPath.put(file.getAbsolutePath(), id);
         dirByPath.put(file.getAbsolutePath(), directory);
+    }
+
+    synchronized private void reconcileChildren(File directory, List<Entry> current) {
+        String parentPath = directory.getAbsolutePath();
+        Map<String, Entry> currentByPath = new HashMap<String, Entry>();
+        for (Entry entry : current) {
+            currentByPath.put(entry.file.getAbsolutePath(), entry);
+        }
+
+        ArrayList<String> knownPaths = new ArrayList<String>(uriByPath.keySet());
+        for (String path : knownPaths) {
+            File known = new File(path);
+            if (!parentPath.equals(known.getParent())) continue;
+
+            Entry entry = currentByPath.get(path);
+            String previousId = idByPath.get(path);
+            Boolean previousDirectory = dirByPath.get(path);
+            if (entry == null || !entry.documentId.equals(previousId)
+                || previousDirectory == null || previousDirectory != entry.directory) {
+                forgetRecursive(known);
+            }
+        }
+
+        for (Entry entry : current) {
+            remember(entry.file, entry.uri, entry.documentId, entry.directory);
+        }
     }
 
     synchronized private void forgetRecursive(File file) {
