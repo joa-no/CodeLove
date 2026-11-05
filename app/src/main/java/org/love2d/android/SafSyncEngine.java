@@ -164,6 +164,28 @@ final class SafSyncEngine {
         }
     }
 
+    /**
+     * Cria o baseline inicial somente quando a importacao local e a pasta SAF
+     * ainda possuem exatamente o mesmo conteudo. Nunca escolhe um lado quando
+     * existem diferencas que poderiam representar edicoes do usuario.
+     */
+    static void initializeBaselineIfMatching(Activity activity, File workingRoot) {
+        try {
+            JSONObject registration = findRegistration(activity, workingRoot);
+            if (registration == null || registration.optJSONObject(KEY_BASELINE) != null) return;
+            Uri treeUri = Uri.parse(registration.getString("uri"));
+            if (!SafProjectManager.hasPersistedReadWritePermission(activity, treeUri)) return;
+            String rootId = registration.getString("projectDocumentId");
+            Map<String, Entry> local = scanLocal(workingRoot);
+            Map<String, Entry> remote = scanRemote(activity, treeUri, rootId);
+            if (sameSnapshot(local, remote) && !saveBaseline(activity, treeUri, local)) {
+                android.util.Log.w("CodeLove", "Nao foi possivel salvar o baseline inicial da sincronizacao SAF.");
+            }
+        } catch (Exception e) {
+            android.util.Log.w("CodeLove", "Nao foi possivel inicializar o baseline SAF; a sincronizacao fara uma verificacao segura.", e);
+        }
+    }
+
     private static JSONObject findRegistration(Context context, File root) throws Exception {
         String canonical=root.getCanonicalPath();
         JSONArray items=new JSONArray(context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).getString(KEY_PROJECTS,"[]"));
