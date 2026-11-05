@@ -44,7 +44,6 @@ public class MainActivity extends Activity {
             if (!games.isDirectory()) {
                 games.mkdirs();
             }
-            Workspace.ensureSampleProject(games);
         }
 
         startActivity(new Intent(this, GameActivity.class));
