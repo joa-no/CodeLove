@@ -108,7 +108,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         return value != null && !value;
     }
 
-    synchronized String readText(File file, long maxBytes) throws IOException {
+    public synchronized String readText(File file, long maxBytes) throws IOException {
         Uri uri = requireUri(file);
         Cursor cursor = resolver.query(uri,
             new String[]{DocumentsContract.Document.COLUMN_SIZE}, null, null, null);
@@ -137,7 +137,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         }
     }
 
-    synchronized boolean writeText(File file, String text) {
+    public synchronized boolean writeText(File file, String text) {
         try {
             Uri uri = requireUri(file);
             OutputStream out = resolver.openOutputStream(uri, "wt");
