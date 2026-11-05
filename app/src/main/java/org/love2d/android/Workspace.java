@@ -116,7 +116,6 @@ public final class Workspace {
     private TextView syncIndicator;
     private TextView statusView;
     private IconView saveIcon;
-    private final Set<String> __removedVerifiedProjects = new HashSet<String>();
     private LinearLayout projectNotice;
     private LinearLayout treeBox;
     private EditText search;
@@ -1603,72 +1602,6 @@ public final class Workspace {
         }
         playing = false;
         updatePlayButton();
-    }
-
-    private boolean prepareRuntimeProject(boolean showErrors) {
-        if (activeSafStorage == null || activeProject == null) return true;
-
-        File base = new File(activity.getCacheDir(), "codelove-runtime");
-        File snapshot = new File(base, Integer.toHexString(activeProject.getAbsolutePath().hashCode()));
-        try {
-            if (!base.isDirectory() && !base.mkdirs()) {
-                throw new IOException("Nao consegui preparar a area temporaria de execucao.");
-            }
-            activeSafStorage.createRuntimeSnapshot(snapshot);
-            deleteRuntimeProject();
-            runtimeProject = snapshot;
-            sendCommand("open", runtimeProject.getAbsolutePath());
-            return true;
-        } catch (IOException e) {
-            Log.e(TAG, "Falha ao preparar snapshot de execucao", e);
-            if (showErrors) {
-                showNotice("Nao foi possivel executar o projeto",
-                    e.getMessage() == null ? "Falha ao preparar os arquivos para o LÖVE." : e.getMessage());
-            }
-            return false;
-        }
-    }
-
-    private void deleteRuntimeProject() {
-        if (runtimeProject != null) {
-            FileOps.deleteRecursive(runtimeProject);
-            runtimeProject = null;
-        }
-    }
-
-    private void updatePlayButton() {
-        int kind = playing ? IconView.PAUSE : IconView.PLAY;
-        playIcon.setKind(kind);
-        footerPlayIcon.setKind(kind);
-        updateControlsVisibility();
-    }
-
-    /**
-     * Com o editor aberto, os controles ficam no rodape dele. A barra flutuante
-     * permanece para quando o editor esta fechado ou em tela cheia.
-     */
-    private void updateControlsVisibility() {
-        boolean editorVisible = editor != null && editor.isOpen() && !fullscreen;
-        boolean showBar = activeProject != null && !editorVisible;
-        controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
-        consolePanel.setVisibility((consoleOpen && editorVisible) ? View.VISIBLE : View.GONE);
-    }
-
-    /** Volta a cena ao inicio: recarrega o projeto, pausado, no primeiro quadro. */
-    private void resetScene() {
-        if (activeProject == null || !editor.saveNow()) return;
-        final File project = activeProject;
-        Runnable reset = () -> {
-            if (activeProject == null || !sameFile(activeProject, project)) return;
-            playing = false;
-            sendCommand("open", project.getAbsolutePath());
-            updatePlayButton();
-        };
-        if (SafProjectManager.isWorkingCopyRoot(activity, project)) {
-            syncExternalProject(project, SafSyncEngine.INITIAL_NONE, reset);
-        } else {
-            reset.run();
-        }
     }
 
     /**
