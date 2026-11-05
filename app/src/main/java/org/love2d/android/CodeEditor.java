@@ -199,28 +199,21 @@ final class CodeEditor {
                     return;
                 }
 
-                // Ao inserir uma quebra de linha (inclusive pelo teclado virtual),
-                // replica a indentacao inicial da linha anterior. Colagens multiplas
-                // nao sao modificadas.
+                // Ao inserir uma quebra de linha, preserva a indentacao atual
+                // e avanca um nivel quando a linha anterior abre um bloco Lua.
+                // Colagens de varias linhas continuam intactas.
                 if (changeAfter == 1 && changeStart < s.length()
                     && s.charAt(changeStart) == '\n'
                     && input.getSelectionStart() == changeStart + 1) {
-                    int lineStart = changeStart - 1;
-                    while (lineStart >= 0 && s.charAt(lineStart) != '\n') {
-                        lineStart--;
-                    }
-                    lineStart++;
-                    int indentEnd = lineStart;
-                    while (indentEnd < changeStart
-                        && (s.charAt(indentEnd) == ' ' || s.charAt(indentEnd) == '\t')) {
-                        indentEnd++;
-                    }
-                    if (indentEnd > lineStart) {
-                        String indent = s.subSequence(lineStart, indentEnd).toString();
+                    String indent = indentationForNewLine(s, changeStart);
+                    if (!indent.isEmpty()) {
                         applyingAutoIndent = true;
-                        s.insert(changeStart + 1, indent);
-                        applyingAutoIndent = false;
-                        input.setSelection(changeStart + 1 + indent.length());
+                        try {
+                            s.insert(changeStart + 1, indent);
+                            input.setSelection(changeStart + 1 + indent.length());
+                        } finally {
+                            applyingAutoIndent = false;
+                        }
                     }
                 }
 
@@ -492,6 +485,33 @@ final class CodeEditor {
         public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
             return followCaret() && super.requestChildRectangleOnScreen(child, rectangle, immediate);
         }
+    }
+
+    /**
+     * Calcula a indentacao da nova linha. Mantem os espacos/tabs existentes
+     * e adiciona um nivel para os principais iniciadores de bloco do Lua.
+     */
+    private static String indentationForNewLine(CharSequence text, int newlinePosition) {
+        int lineStart = newlinePosition - 1;
+        while (lineStart >= 0 && text.charAt(lineStart) != '\n') {
+            lineStart--;
+        }
+        lineStart++;
+
+        int indentEnd = lineStart;
+        while (indentEnd < newlinePosition
+            && (text.charAt(indentEnd) == ' ' || text.charAt(indentEnd) == '\t')) {
+            indentEnd++;
+        }
+
+        String indent = text.subSequence(lineStart, indentEnd).toString();
+        String previousLine = text.subSequence(indentEnd, newlinePosition).toString().trim();
+        String code = previousLine.replaceAll("--.*$", "").trim();
+
+        boolean opensBlock = code.matches("(?s).*\\b(then|do|else|repeat)\\s*$")
+            || code.matches("(?s).*\\bfunction\\s*(?:[\\w_.:]*\\s*)?\\([^)]*\\)\\s*$");
+
+        return opensBlock ? indent + "    " : indent;
     }
 
     private void refreshDirtyMark() {
