@@ -92,7 +92,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        CrashDiagnostics.log(this, "GameActivity.onCreate started");
         Log.d(TAG, "started");
         isFused = hasEmbeddedGame();
         args = new String[0];
@@ -124,7 +123,6 @@ public class GameActivity extends SDLActivity {
 
         // CodeLove: monta o painel lateral ao lado da area do jogo.
         Workspace.attach(this, mLayout, mSurface);
-        CrashDiagnostics.log(this, "Workspace attached");
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
@@ -141,8 +139,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        CrashDiagnostics.log(this, "GameActivity.onActivityResult requestCode=" + requestCode
-            + " resultCode=" + resultCode + " dataPresent=" + (data != null));
         super.onActivityResult(requestCode, resultCode, data);
         Workspace.handleActivityResult(this, requestCode, resultCode, data);
     }
@@ -155,7 +151,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onDestroy() {
-        CrashDiagnostics.log(this, "GameActivity.onDestroy");
         Workspace.onHostDestroy(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
@@ -167,7 +162,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onPause() {
-        CrashDiagnostics.log(this, "GameActivity.onPause");
         Workspace.onHostPause(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
@@ -179,7 +173,6 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        CrashDiagnostics.log(this, "GameActivity.onResume");
         Workspace.onHostResume(this);
     }
 
