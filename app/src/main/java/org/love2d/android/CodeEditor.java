@@ -1,8 +1,8 @@
 /*
  * CodeLove - editor de codigo.
  *
- * Abre um arquivo de texto, mostra com numeros de linha e cores (Lua), salva
- * sozinho pouco depois de voce parar de digitar e avisa quando salvou.
+ * Abre arquivos de texto, mostra numeros de linha e cores (Lua), e grava
+ * alteracoes somente quando o usuario aciona o botao Salvar.
  *
  * Baseado no LOVE para Android (licenca zlib). Versao alterada.
  */
@@ -62,7 +62,6 @@ final class CodeEditor {
     }
 
     private static final String TAG = "CodeLove";
-    private static final int SAVE_DELAY_MS = 900;
     private static final long MAX_BYTES = 512L * 1024L;
 
     private static final int COLOR_KEYWORD = 0xFFC4A5FF;
@@ -82,15 +81,8 @@ final class CodeEditor {
     private final LinearLayout footer;
     private final View footerSpacer;
 
-    private final Runnable saveTask = new Runnable() {
-        @Override
-        public void run() {
-            saveNow();
-        }
-    };
-
     private File file;           // arquivo aberto (nulo se nenhum)
-    private boolean dirty;       // tem alteracao ainda nao gravada no armazenamento local
+    private boolean dirty;       // tem alteracao ainda nao gravada no arquivo original
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
     private boolean highlightLua;
@@ -203,17 +195,8 @@ final class CodeEditor {
                 refreshDirtyMark();
                 applyHighlight(s);
                 refreshGutter(s, false);
-                input.removeCallbacks(saveTask);
-                input.postDelayed(saveTask, SAVE_DELAY_MS);
             }
         });
-        // Sair do editor (tocar em outra coisa) tambem salva na hora.
-        input.setOnFocusChangeListener((v, hasFocus) -> {
-            if (!hasFocus) {
-                saveNow();
-            }
-        });
-
         HorizontalScrollView horizontal = new CaretGuardHorizontalScrollView(activity);
         horizontal.setFillViewport(true);
         horizontal.addView(input, new ViewGroup.LayoutParams(
@@ -279,7 +262,8 @@ final class CodeEditor {
 
     /** Abre outro arquivo somente depois de preservar as alteracoes atuais. */
     boolean open(File target) {
-        if (!saveNow()) {
+        if (dirty) {
+            notifyUnsavedChanges();
             return false;
         }
 
@@ -313,7 +297,8 @@ final class CodeEditor {
 
     /** Fecha somente se todas as alteracoes puderem ser gravadas. */
     boolean close() {
-        if (!saveNow()) {
+        if (dirty) {
+            notifyUnsavedChanges();
             return false;
         }
         file = null;
@@ -333,7 +318,6 @@ final class CodeEditor {
 
     /** Grava agora. Em caso de falha, preserva o texto e informa o usuario. */
     boolean saveNow() {
-        input.removeCallbacks(saveTask);
         if (file == null || !dirty) {
             return true;
         }
@@ -377,6 +361,12 @@ final class CodeEditor {
         refreshDirtyMark();
         listener.onSaved(file);
         return true;
+    }
+
+    private void notifyUnsavedChanges() {
+        Toast.makeText(activity,
+            "Salve o arquivo pelo botao Salvar antes de troca-lo ou fecha-lo.",
+            Toast.LENGTH_LONG).show();
     }
 
     private void notifySaveFailure() {
