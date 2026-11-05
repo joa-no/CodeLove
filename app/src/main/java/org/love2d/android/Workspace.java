@@ -1129,6 +1129,10 @@ public final class Workspace {
         actions.add(() -> newProject());
         labels.add("Adicionar projeto existente");
         actions.add(() -> addExistingProject());
+        if (activeProject != null && SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
+            labels.add("Sincronizar projeto atual");
+            actions.add(() -> syncExternalProject(activeProject, SafSyncEngine.INITIAL_NONE, null));
+        }
         final File folder = targetFolder();
         if (folder != null) {
             labels.add("Novo arquivo em " + folder.getName());
