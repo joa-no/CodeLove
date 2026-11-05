@@ -116,7 +116,7 @@ public final class Workspace {
     private TextView syncIndicator;
     private TextView statusView;
     private IconView saveIcon;
-    private boolean lastSyncVerified = false;
+    private final Set<String> verifiedProjects = new HashSet<String>();
     private LinearLayout projectNotice;
     private LinearLayout treeBox;
     private EditText search;
@@ -138,7 +138,8 @@ public final class Workspace {
         this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
         Set<String> savedPending = prefs.getStringSet("pendingExternalFiles", null);
         if (savedPending != null) pendingExternalFiles.addAll(savedPending);
-        this.lastSyncVerified = prefs.getBoolean("lastSyncVerified", false);
+        Set<String> savedVerified = prefs.getStringSet("verifiedProjects", null);
+        if (savedVerified != null) verifiedProjects.addAll(savedVerified);
         this.onLeft = prefs.getBoolean("panel_left", true);
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
@@ -1432,8 +1433,9 @@ public final class Workspace {
             if (SafProjectManager.isWorkingCopyRoot(activity, activeProject)) {
                 pendingExternalFiles.add(file.getAbsolutePath());
                 persistPendingExternalFiles();
-                lastSyncVerified = false;
-                prefs.edit().putBoolean("lastSyncVerified", false).apply();
+                verifiedProjects.remove(activeProject.getAbsolutePath());
+                prefs.edit().putStringSet("verifiedProjects",
+                    new HashSet<String>(verifiedProjects)).apply();
                 updateSyncIndicator();
             }
             playing = false;
@@ -1463,12 +1465,14 @@ public final class Workspace {
             || !SafProjectManager.isWorkingCopyRoot(activity, project)) return;
 
         synchronizing = true;
+        updateSyncIndicator();
         new Thread(() -> {
             SafSyncEngine.Result result =
                 SafSyncEngine.publishFile(activity, project, file, conflictDirection);
             activity.runOnUiThread(() -> {
                 synchronizing = false;
                 if (currentInstance != this || disposed || activity.isFinishing()) return;
+                updateSyncIndicator();
 
                 if (result.needsConflictChoice) {
                     new AlertDialog.Builder(activity)
@@ -1533,7 +1537,7 @@ public final class Workspace {
             syncIndicator.setText("\u21BB");
             syncIndicator.setTextColor(COLOR_LUA);
             setButtonHint(syncIndicator, "Sincronizando o projeto.");
-        } else if (lastSyncVerified) {
+        } else if (verifiedProjects.contains(activeProject.getAbsolutePath())) {
             syncIndicator.setText("\u2713");
             syncIndicator.setTextColor(0xFF5EEAD4);
             setButtonHint(syncIndicator, "Ultima sincronizacao concluida. Use ↻ para verificar novas alteracoes externas.");
@@ -1646,11 +1650,13 @@ public final class Workspace {
             && !editor.saveNow()) return;
 
         synchronizing = true;
+        updateSyncIndicator();
         new Thread(() -> {
             SafSyncEngine.Result result = SafSyncEngine.synchronize(activity, project, initialDirection, conflictDirection);
             activity.runOnUiThread(() -> {
                 synchronizing = false;
                 if (currentInstance != this || disposed || activity.isFinishing()) return;
+                updateSyncIndicator();
                 if (result.needsInitialChoice) {
                     new AlertDialog.Builder(activity)
                         .setTitle("Versoes ainda nao vinculadas")
@@ -1682,8 +1688,9 @@ public final class Workspace {
                     return;
                 }
                 clearPendingExternalFiles(project);
-                lastSyncVerified = true;
-                prefs.edit().putBoolean("lastSyncVerified", true).apply();
+                verifiedProjects.add(project.getAbsolutePath());
+                prefs.edit().putStringSet("verifiedProjects",
+                    new HashSet<String>(verifiedProjects)).apply();
                 updateSyncIndicator();
                 renderTree();
                 if (onSuccess != null) onSuccess.run();
