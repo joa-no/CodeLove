@@ -81,7 +81,8 @@ final class CodeEditor {
     };
 
     private File file;           // arquivo aberto (nulo se nenhum)
-    private boolean dirty;       // tem alteracao ainda nao gravada
+    private boolean dirty;       // tem alteracao ainda nao gravada no armazenamento local
+    private boolean syncPending;  // arquivo local salvo, mas ainda nao sincronizado com a pasta externa
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
     private boolean highlightLua;
@@ -102,6 +103,14 @@ final class CodeEditor {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
+        dirtyMark = new TextView(activity);
+        dirtyMark.setText("\u25CF");
+        dirtyMark.setTextColor(Workspace.COLOR_FOLDER);
+        dirtyMark.setTextSize(12);
+        dirtyMark.setPadding(0, 0, dp(6), 0);
+        dirtyMark.setVisibility(View.GONE);
+        header.addView(dirtyMark);
+
         title = new TextView(activity);
         title.setTextColor(Workspace.COLOR_TEXT);
         title.setTextSize(15);
@@ -109,14 +118,6 @@ final class CodeEditor {
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        dirtyMark = new TextView(activity);
-        dirtyMark.setText("\u25CF");
-        dirtyMark.setTextColor(Workspace.COLOR_FOLDER);
-        dirtyMark.setTextSize(12);
-        dirtyMark.setPadding(dp(6), 0, dp(6), 0);
-        dirtyMark.setVisibility(View.GONE);
-        header.addView(dirtyMark);
 
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
         footer = new LinearLayout(activity);
@@ -311,6 +312,12 @@ final class CodeEditor {
         return dirty;
     }
 
+    /** Marca se o arquivo local ainda aguarda sincronizacao com a pasta externa. */
+    void setSyncPending(boolean pending) {
+        syncPending = pending;
+        refreshDirtyMark();
+    }
+
     /** Grava agora. Em caso de falha, preserva o texto e informa o usuario. */
     boolean saveNow() {
         input.removeCallbacks(saveTask);
@@ -397,7 +404,7 @@ final class CodeEditor {
     }
 
     private void refreshDirtyMark() {
-        dirtyMark.setVisibility(dirty ? View.VISIBLE : View.GONE);
+        dirtyMark.setVisibility((dirty || syncPending) ? View.VISIBLE : View.GONE);
     }
 
     private void refreshGutter(CharSequence text, boolean force) {
