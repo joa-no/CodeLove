@@ -848,6 +848,11 @@ final class CodeEditor {
     }
 
     /** Encontra o fechamento correspondente de um bloco Lua. */
+    private static boolean isFoldOpener(String line) {
+        String code = line.replaceFirst("--.*$", "").trim();
+        return code.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|function\\b.*|do\\b.*|repeat\\b.*)");
+    }
+
     private static int findFoldEndLine(String source, int startLine) {
         String[] lines = source.split("\\n", -1);
         if (startLine < 0 || startLine >= lines.length) return -1;
@@ -943,7 +948,7 @@ final class CodeEditor {
         StringBuilder numbers = new StringBuilder();
         for (int i = 0; i < lines; i++) {
             if (i > 0) numbers.append("\n");
-            boolean foldable = i < sourceLines.length && findFoldEndLine(source, i) > i;
+            boolean foldable = i < sourceLines.length && isFoldOpener(sourceLines[i]);
             numbers.append(i + 1).append(foldable ? "  ▾" : "");
         }
         gutter.setText(numbers.toString());
