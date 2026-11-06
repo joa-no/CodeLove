@@ -12,6 +12,8 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -24,6 +26,7 @@ import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.ReplacementSpan;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -232,17 +235,23 @@ final class CodeEditor {
                     }
                 }
 
+                scheduleClosingKeywordOutdent(s);
+
                 dirty = true;
                 listener.onEdited();
                 saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
                 applyHighlight(s);
+                applyWhitespaceMarkers(s);
                 refreshGutter(s, false);
             }
         });
         input.setOnKeyListener((v, keyCode, event) -> {
-            if (keyCode == KeyEvent.KEYCODE_TAB && event.getAction() == KeyEvent.ACTION_DOWN) {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) {
+                return false;
+            }
+            if (keyCode == KeyEvent.KEYCODE_TAB) {
                 int start = input.getSelectionStart();
                 int end = input.getSelectionEnd();
                 if (start != end || start < 0) {
@@ -251,6 +260,9 @@ final class CodeEditor {
                 input.getText().insert(start, "    ");
                 input.setSelection(start + 4);
                 return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DEL) {
+                return deleteIndentLevel();
             }
             return false;
         });
@@ -349,6 +361,7 @@ final class CodeEditor {
         refreshDirtyMark();
         title.setText(target.getName());
         applyHighlight(input.getText());
+        applyWhitespaceMarkers(input.getText());
         refreshGutter(input.getText(), true);
         scroll.scrollTo(0, 0);
         return true;
@@ -527,6 +540,149 @@ final class CodeEditor {
             || code.matches("(?s).*\\bfunction\\s*(?:[\\w_.:]*\\s*)?\\([^)]*\\)\\s*$");
 
         return opensBlock ? indent + "    " : indent;
+    }
+
+    /**
+     * Recuo automatico para palavras que fecham ou mudam um bloco Lua.
+     * A alteracao e postada para nao modificar o Editable dentro do TextWatcher.
+     */
+    private void scheduleClosingKeywordOutdent(CharSequence text) {
+        int cursor = input.getSelectionStart();
+        if (cursor <= 0 || cursor > text.length() || changeAfter <= 0
+            || changeStart + changeAfter != cursor) {
+            return;
+        }
+
+        int lineStart = cursor - 1;
+        while (lineStart >= 0 && text.charAt(lineStart) != '\\n') {
+            lineStart--;
+        }
+        lineStart++;
+
+        String linePrefix = text.subSequence(lineStart, cursor).toString();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile("^(\\\\s*)(end|else|elseif|until)$")
+            .matcher(linePrefix);
+        if (!matcher.matches()) {
+            return;
+        }
+
+        String indent = matcher.group(1);
+        String reducedIndent = removeOneIndentLevel(indent);
+        if (reducedIndent.equals(indent)) {
+            return;
+        }
+
+        final int expectedCursor = cursor;
+        final int expectedLineStart = lineStart;
+        input.post(() -> {
+            Editable current = input.getText();
+            if (input.getSelectionStart() != expectedCursor
+                || input.getSelectionEnd() != expectedCursor
+                || current.length() < expectedCursor
+                || !current.subSequence(expectedLineStart, expectedCursor).toString().equals(linePrefix)) {
+                return;
+            }
+            applyingAutoIndent = true;
+            try {
+                current.replace(expectedLineStart, expectedLineStart + indent.length(), reducedIndent);
+                input.setSelection(expectedCursor - (indent.length() - reducedIndent.length()));
+            } finally {
+                applyingAutoIndent = false;
+            }
+        });
+    }
+
+    private static String removeOneIndentLevel(String indent) {
+        if (indent.endsWith("\\t")) {
+            return indent.substring(0, indent.length() - 1);
+        }
+        if (indent.endsWith("    ")) {
+            return indent.substring(0, indent.length() - 4);
+        }
+        int spaces = 0;
+        for (int i = indent.length() - 1; i >= 0 && indent.charAt(i) == ' '; i--) {
+            spaces++;
+        }
+        return spaces == 0 ? indent : indent.substring(0, indent.length() - Math.min(4, spaces));
+    }
+
+    /** Backspace remove um nivel de indentacao de uma vez no inicio da linha. */
+    private boolean deleteIndentLevel() {
+        int start = input.getSelectionStart();
+        int end = input.getSelectionEnd();
+        if (start != end || start <= 0) {
+            return false;
+        }
+        Editable text = input.getText();
+        int lineStart = start - 1;
+        while (lineStart >= 0 && text.charAt(lineStart) != '\\n') {
+            lineStart--;
+        }
+        lineStart++;
+        for (int i = lineStart; i < start; i++) {
+            if (text.charAt(i) != ' ' && text.charAt(i) != '\\t') {
+                return false;
+            }
+        }
+        String indent = text.subSequence(lineStart, start).toString();
+        String reduced = removeOneIndentLevel(indent);
+        if (reduced.equals(indent)) {
+            return false;
+        }
+        text.delete(lineStart + reduced.length(), start);
+        input.setSelection(lineStart + reduced.length());
+        return true;
+    }
+
+    /** Mostra marcadores discretos somente na indentacao inicial de cada linha. */
+    private void applyWhitespaceMarkers(Editable text) {
+        WhitespaceMarkerSpan[] old = text.getSpans(0, text.length(), WhitespaceMarkerSpan.class);
+        for (WhitespaceMarkerSpan span : old) {
+            text.removeSpan(span);
+        }
+        int lineStart = 0;
+        while (lineStart < text.length()) {
+            int end = lineStart;
+            while (end < text.length() && text.charAt(end) != '\\n') {
+                end++;
+            }
+            for (int i = lineStart; i < end; i++) {
+                char c = text.charAt(i);
+                if (c != ' ' && c != '\\t') {
+                    break;
+                }
+                text.setSpan(new WhitespaceMarkerSpan(c == '\\t'), i, i + 1,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            lineStart = end + 1;
+        }
+    }
+
+    private final class WhitespaceMarkerSpan extends ReplacementSpan {
+        private final boolean tab;
+
+        WhitespaceMarkerSpan(boolean tab) {
+            this.tab = tab;
+        }
+
+        @Override
+        public int getSize(Paint paint, CharSequence text, int start, int end,
+                           Paint.FontMetricsInt fm) {
+            return Math.max(1, Math.round(paint.measureText(" ") * (tab ? 4f : 1f)));
+        }
+
+        @Override
+        public void draw(Canvas canvas, CharSequence text, int start, int end,
+                         float x, int top, int y, int bottom, Paint paint) {
+            int oldColor = paint.getColor();
+            paint.setColor(Workspace.COLOR_MUTED);
+            String marker = tab ? "→" : "·";
+            float width = paint.measureText(" ") * (tab ? 4f : 1f);
+            float markerWidth = paint.measureText(marker);
+            canvas.drawText(marker, x + Math.max(0f, (width - markerWidth) / 2f), y, paint);
+            paint.setColor(oldColor);
+        }
     }
 
     private void refreshDirtyMark() {
