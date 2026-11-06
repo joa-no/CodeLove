@@ -33,6 +33,7 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -80,6 +81,9 @@ final class CodeEditor {
     private final TextView gutter;
     private final EditText input;
     private final TextView foldPreview;
+    private PopupWindow autocompletePopup;
+    private TextView autocompleteText;
+    private String autocompleteCandidate;
     private final ScrollView scroll;
     private final LinearLayout footer;
     private final View footerSpacer;
@@ -264,11 +268,19 @@ final class CodeEditor {
                 refreshDirtyMark();
                 applyHighlight(s);
                 refreshGutter(s, false);
+                updateAutocompleteSuggestion(s);
             }
+        });
+        input.setOnEditorActionListener((textView, actionId, event) -> {
+            if (acceptAutocompleteSuggestion()) return true;
+            return false;
         });
         input.setOnKeyListener((v, keyCode, event) -> {
             if (event.getAction() != KeyEvent.ACTION_DOWN) {
                 return false;
+            }
+            if (keyCode == KeyEvent.KEYCODE_ENTER && acceptAutocompleteSuggestion()) {
+                return true;
             }
             if (keyCode == KeyEvent.KEYCODE_TAB) {
                 int start = input.getSelectionStart();
@@ -836,6 +848,115 @@ final class CodeEditor {
         text.delete(lineStart + reduced.length(), start);
         input.setSelection(lineStart + reduced.length());
         return true;
+    }
+
+    /**
+     * Sugestao pequena de palavras Lua. Nao altera o texto ate o usuario aceitar.
+     */
+    private void updateAutocompleteSuggestion(CharSequence text) {
+        int cursor = input.getSelectionStart();
+        if (cursor <= 0 || cursor > text.length() || !highlightLua
+            || input.getVisibility() != View.VISIBLE) {
+            dismissAutocompleteSuggestion();
+            return;
+        }
+
+        int start = cursor;
+        while (start > 0) {
+            char ch = text.charAt(start - 1);
+            if (!Character.isLetterOrDigit(ch) && ch != '_') break;
+            start--;
+        }
+        if (start == cursor) {
+            dismissAutocompleteSuggestion();
+            return;
+        }
+
+        String prefix = text.subSequence(start, cursor).toString();
+        String[] words = {
+            "function", "local", "return", "elseif", "else", "end", "then",
+            "for", "while", "repeat", "until", "do", "print", "pairs",
+            "ipairs", "require"
+        };
+        String match = null;
+        for (String word : words) {
+            if (word.startsWith(prefix) && !word.equals(prefix)) {
+                match = word;
+                break;
+            }
+        }
+        if (match == null) {
+            dismissAutocompleteSuggestion();
+            return;
+        }
+
+        autocompleteCandidate = match;
+        if (autocompleteText == null) {
+            autocompleteText = new TextView(activity);
+            autocompleteText.setTextColor(Workspace.COLOR_TEXT);
+            autocompleteText.setTextSize(12);
+            autocompleteText.setTypeface(Typeface.MONOSPACE);
+            autocompleteText.setPadding(dp(10), dp(6), dp(10), dp(6));
+            autocompleteText.setBackground(box(Workspace.COLOR_FIELD, 8, true));
+            autocompleteText.setElevation(dp(6));
+            autocompleteText.setOnClickListener(v -> acceptAutocompleteSuggestion());
+            autocompletePopup = new PopupWindow(
+                autocompleteText,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                false);
+            autocompletePopup.setBackgroundDrawable(box(Workspace.COLOR_FIELD, 8, false));
+            autocompletePopup.setOutsideTouchable(true);
+        }
+        autocompleteText.setText(match);
+        if (!input.isAttachedToWindow() || input.getLayout() == null) return;
+
+        android.text.Layout layout = input.getLayout();
+        int line = layout.getLineForOffset(cursor);
+        float horizontal = layout.getPrimaryHorizontal(cursor);
+        int[] location = new int[2];
+        input.getLocationOnScreen(location);
+        int x = Math.max(0, location[0] + Math.round(horizontal) - input.getScrollX());
+        int y = Math.max(0, location[1] + layout.getLineBottom(line)
+            + input.getPaddingTop() - input.getScrollY());
+        if (autocompletePopup.isShowing()) {
+            autocompletePopup.update(x, y, -1, -1);
+        } else {
+            autocompletePopup.showAtLocation(input, Gravity.TOP | Gravity.LEFT, x, y);
+        }
+    }
+
+    private boolean acceptAutocompleteSuggestion() {
+        if (autocompleteCandidate == null || autocompleteCandidate.isEmpty()) return false;
+        int cursor = input.getSelectionStart();
+        if (cursor < 0 || cursor > input.length()) {
+            dismissAutocompleteSuggestion();
+            return false;
+        }
+        int start = cursor;
+        while (start > 0) {
+            char ch = input.getText().charAt(start - 1);
+            if (!Character.isLetterOrDigit(ch) && ch != '_') break;
+            start--;
+        }
+        String prefix = input.getText().subSequence(start, cursor).toString();
+        String candidate = autocompleteCandidate;
+        if (prefix.isEmpty() || !candidate.startsWith(prefix)) {
+            dismissAutocompleteSuggestion();
+            return false;
+        }
+
+        dismissAutocompleteSuggestion();
+        input.getText().replace(start, cursor, candidate);
+        input.setSelection(start + candidate.length());
+        return true;
+    }
+
+    private void dismissAutocompleteSuggestion() {
+        autocompleteCandidate = null;
+        if (autocompletePopup != null && autocompletePopup.isShowing()) {
+            autocompletePopup.dismiss();
+        }
     }
 
     /** Alterna o recolhimento de um bloco Lua iniciado na linha clicada. */
