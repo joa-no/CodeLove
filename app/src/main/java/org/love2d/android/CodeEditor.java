@@ -146,16 +146,6 @@ final class CodeEditor {
 
         // Reserva o espaco entre os controles do projeto e o botao de fechar.
         footerSpacer = new View(activity);
-        TextView snippets = new TextView(activity);
-        snippets.setText("{} Snip");
-        snippets.setGravity(Gravity.CENTER);
-        snippets.setTextColor(Workspace.COLOR_TEXT);
-        snippets.setTextSize(12);
-        snippets.setTypeface(Typeface.DEFAULT_BOLD);
-        snippets.setBackground(box(Workspace.COLOR_FIELD, 12, false));
-        snippets.setOnClickListener(v -> showSnippetPicker());
-        footer.addView(snippets, new LinearLayout.LayoutParams(dp(66), dp(44)));
-
         footer.addView(footerSpacer, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
@@ -1204,48 +1194,6 @@ final class CodeEditor {
         if (parameterHintPopup != null && parameterHintPopup.isShowing()) {
             parameterHintPopup.dismiss();
         }
-    }
-
-    /**
-     * Insere um modelo pronto no ponto do cursor. O marcador | define onde
-     * a digitacao continua; ele nunca e inserido no arquivo.
-     */
-    private void showSnippetPicker() {
-        String[] names = {
-            "love.load — inicialização",
-            "love.update(dt) — atualização",
-            "love.draw — desenho",
-            "love.keypressed — teclado",
-            "Retângulo",
-            "Círculo",
-            "Movimento com teclado"
-        };
-        String[] snippets = {
-            "function love.load()\\n    |\\nend",
-            "function love.update(dt)\\n    |\\nend",
-            "function love.draw()\\n    |\\nend",
-            "function love.keypressed(key, scancode, isrepeat)\\n    |\\nend",
-            "love.graphics.rectangle(\"fill\", |x, y, width, height)",
-            "love.graphics.circle(\"fill\", |x, y, radius)",
-            "function love.update(dt)\\n    if love.keyboard.isDown(\"right\") then\\n        player.x = player.x + player.speed * dt\\n    end\\n    |\\nend"
-        };
-        new AlertDialog.Builder(activity)
-            .setTitle("Inserir snippet")
-            .setItems(names, (dialog, which) -> insertSnippet(snippets[which]))
-            .setNegativeButton("Cancelar", null)
-            .show();
-    }
-
-    private void insertSnippet(String snippet) {
-        int start = input.getSelectionStart();
-        int end = input.getSelectionEnd();
-        if (start < 0 || end < start) return;
-        int marker = snippet.indexOf('|');
-        if (marker < 0) marker = snippet.length();
-        String code = snippet.replace("|", "");
-        input.getText().replace(start, end, code);
-        input.setSelection(Math.min(start + marker, input.length()));
-        input.requestFocus();
     }
 
     private boolean acceptAutocompleteSuggestion() {
