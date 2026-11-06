@@ -168,14 +168,6 @@ final class CodeEditor {
         gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
-        gutter.setOnTouchListener((v, event) -> {
-            if (event.getAction() != android.view.MotionEvent.ACTION_UP) return true;
-            int lineHeight = Math.max(1, gutter.getLineHeight());
-            int line = Math.max(0, (int) ((event.getY() + scroll.getScrollY()) / lineHeight));
-            toggleFoldAtLine(line);
-            return true;
-        });
-
         input = new EditText(activity);
         input.setTypeface(Typeface.MONOSPACE);
         input.setTextSize(13);
@@ -311,6 +303,14 @@ final class CodeEditor {
         scroll = new CaretGuardScrollView(activity);
         scroll.addView(row, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        gutter.setOnTouchListener((v, event) -> {
+            if (event.getAction() != android.view.MotionEvent.ACTION_UP) return true;
+            int lineHeight = Math.max(1, gutter.getLineHeight());
+            int line = Math.max(0, (int) ((event.getY() + scroll.getScrollY()) / lineHeight));
+            toggleFoldAtLine(line);
+            return true;
+        });
         view.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
