@@ -112,7 +112,7 @@ android {
             def releaseStoreFile = System.getenv("CODELOVE_RELEASE_STORE_FILE")
             if (releaseStoreFile) {
                 storeFile file(releaseStoreFile)
-                storeType 'jks'
+                storeType 'pkcs12'
                 storePassword System.getenv("CODELOVE_RELEASE_STORE_PASSWORD")
                 keyAlias System.getenv("CODELOVE_RELEASE_KEY_ALIAS")
                 keyPassword System.getenv("CODELOVE_RELEASE_KEY_PASSWORD")
