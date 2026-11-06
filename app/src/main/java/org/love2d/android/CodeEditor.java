@@ -591,7 +591,7 @@ final class CodeEditor {
             try {
                 current.replace(expectedLineStart, expectedLineStart + indent.length(), reducedIndent);
                 input.setSelection(expectedCursor - (indent.length() - reducedIndent.length()));
-                applyWhitespaceMarkers(current);
+
             } finally {
                 applyingAutoIndent = false;
             }
@@ -642,7 +642,7 @@ final class CodeEditor {
             try {
                 current.delete(expectedLineStart + targetLength, expectedCursor);
                 input.setSelection(expectedLineStart + targetLength);
-                applyWhitespaceMarkers(current);
+
             } finally {
                 applyingAutoIndent = false;
             }
@@ -734,8 +734,7 @@ final class CodeEditor {
     private static boolean isEmptyPairAt(CharSequence text, int newlinePosition) {
         if (newlinePosition <= 0 || newlinePosition + 1 >= text.length()) return false;
         char opener = text.charAt(newlinePosition - 1);
-        return matchingCloser(opener) != 0
-            && text.charAt(newlinePosition + 1) == matchingCloser(opener);
+        return opener == '{' && text.charAt(newlinePosition + 1) == '}';
     }
 
     /** Enter entre um par vazio cria linha interna e preserva o fechamento alinhado. */
