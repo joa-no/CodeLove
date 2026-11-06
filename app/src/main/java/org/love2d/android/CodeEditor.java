@@ -19,6 +19,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.Editable;
+import android.text.Spanned;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.text.TextWatcher;
