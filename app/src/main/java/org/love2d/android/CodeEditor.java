@@ -893,7 +893,7 @@ final class CodeEditor {
         int start = cursor;
         while (start > 0) {
             char ch = text.charAt(start - 1);
-            if (!Character.isLetterOrDigit(ch) && ch != '_') break;
+            if (!Character.isLetterOrDigit(ch) && ch != '_' && ch != '.') break;
             start--;
         }
         if (start == cursor) {
@@ -903,9 +903,100 @@ final class CodeEditor {
 
         String prefix = text.subSequence(start, cursor).toString();
         String[] words = {
+            // Lua
             "function", "local", "return", "elseif", "else", "end", "then",
             "for", "while", "repeat", "until", "do", "print", "pairs",
-            "ipairs", "require"
+            "ipairs", "require",
+
+            // Callbacks principais do LÖVE
+            "love.load", "love.update", "love.draw", "love.quit", "love.run",
+            "love.conf", "love.keypressed", "love.keyreleased", "love.textinput",
+            "love.mousepressed", "love.mousereleased", "love.mousemoved",
+            "love.wheelmoved", "love.touchpressed", "love.touchreleased",
+            "love.touchmoved", "love.joystickpressed", "love.joystickreleased",
+            "love.gamepadpressed", "love.gamepadreleased", "love.resize",
+            "love.focus", "love.visible", "love.filedropped",
+            "love.directorydropped", "love.lowmemory", "love.threaderror",
+            "love.localechanged", "love.displayrotated", "love.audiodisconnected",
+            "love.sensorupdated", "love.joysticksensorupdated",
+
+            // Modulos principais
+            "love.graphics", "love.audio", "love.filesystem", "love.keyboard",
+            "love.mouse", "love.joystick", "love.gamepad", "love.touch",
+            "love.physics", "love.math", "love.timer", "love.window",
+            "love.event", "love.image", "love.sound", "love.font",
+            "love.data", "love.system", "love.thread", "love.video",
+            "love.sensor",
+
+            // Graphics
+            "love.graphics.clear", "love.graphics.present",
+            "love.graphics.setColor", "love.graphics.getColor",
+            "love.graphics.setBackgroundColor", "love.graphics.rectangle",
+            "love.graphics.circle", "love.graphics.ellipse",
+            "love.graphics.line", "love.graphics.points", "love.graphics.polygon",
+            "love.graphics.arc", "love.graphics.print", "love.graphics.printf",
+            "love.graphics.newImage", "love.graphics.newQuad",
+            "love.graphics.newFont", "love.graphics.newCanvas",
+            "love.graphics.newSpriteBatch", "love.graphics.newMesh",
+            "love.graphics.newShader", "love.graphics.newText",
+            "love.graphics.draw", "love.graphics.drawLayer",
+            "love.graphics.origin", "love.graphics.translate",
+            "love.graphics.rotate", "love.graphics.scale", "love.graphics.shear",
+            "love.graphics.push", "love.graphics.pop",
+            "love.graphics.setScissor", "love.graphics.getScissor",
+            "love.graphics.setStencilTest", "love.graphics.stencil",
+            "love.graphics.setLineWidth", "love.graphics.setLineStyle",
+            "love.graphics.setPointSize", "love.graphics.setBlendMode",
+            "love.graphics.setFont", "love.graphics.getFont",
+            "love.graphics.getWidth", "love.graphics.getHeight",
+            "love.graphics.getDimensions", "love.graphics.getDPIScale",
+
+            // Input
+            "love.keyboard.isDown", "love.keyboard.isScancodeDown",
+            "love.keyboard.setKeyRepeat", "love.keyboard.hasKeyRepeat",
+            "love.keyboard.setTextInput", "love.keyboard.hasScreenKeyboard",
+            "love.mouse.getPosition", "love.mouse.getX", "love.mouse.getY",
+            "love.mouse.setPosition", "love.mouse.isDown",
+            "love.mouse.setVisible", "love.mouse.isVisible",
+            "love.mouse.setGrabbed", "love.mouse.isGrabbed",
+            "love.mouse.getSystemCursor", "love.mouse.setCursor",
+            "love.touch.getTouches", "love.touch.getPosition",
+            "love.joystick.getJoysticks", "love.joystick.getJoystickCount",
+            "love.joystick.getJoysticks",
+
+            // Audio
+            "love.audio.newSource", "love.audio.play", "love.audio.pause",
+            "love.audio.stop", "love.audio.setVolume", "love.audio.getVolume",
+            "love.audio.setDistanceModel", "love.audio.getActiveSources",
+            "love.audio.getSourceCount",
+
+            // Arquivos e sistema
+            "love.filesystem.read", "love.filesystem.write",
+            "love.filesystem.append", "love.filesystem.load",
+            "love.filesystem.getInfo", "love.filesystem.getDirectoryItems",
+            "love.filesystem.createDirectory", "love.filesystem.remove",
+            "love.filesystem.getSaveDirectory", "love.filesystem.getSource",
+            "love.filesystem.getWorkingDirectory", "love.filesystem.setIdentity",
+            "love.window.setMode", "love.window.getMode",
+            "love.window.getWidth", "love.window.getHeight",
+            "love.window.setTitle", "love.window.setIcon",
+            "love.window.setFullscreen", "love.window.hasFocus",
+            "love.timer.getDelta", "love.timer.getFPS",
+            "love.timer.getTime", "love.timer.sleep", "love.timer.step",
+            "love.event.quit", "love.event.push", "love.event.poll",
+
+            // Matematica, fisica e utilitarios
+            "love.math.random", "love.math.randomNormal",
+            "love.math.newRandomGenerator", "love.math.noise",
+            "love.math.triangulate", "love.math.newTransform",
+            "love.physics.newWorld", "love.physics.newBody",
+            "love.physics.newCircleShape", "love.physics.newRectangleShape",
+            "love.physics.newPolygonShape", "love.physics.newFixture",
+            "love.data.newByteData", "love.data.newDataView",
+            "love.image.newImageData", "love.sound.newSoundData",
+            "love.thread.newThread", "love.thread.getChannel",
+            "love.system.getOS", "love.system.getProcessorCount",
+            "love.system.openURL"
         };
         String match = null;
         for (String word : words) {
@@ -975,7 +1066,7 @@ final class CodeEditor {
         int start = cursor;
         while (start > 0) {
             char ch = input.getText().charAt(start - 1);
-            if (!Character.isLetterOrDigit(ch) && ch != '_') break;
+            if (!Character.isLetterOrDigit(ch) && ch != '_' && ch != '.') break;
             start--;
         }
         String prefix = input.getText().subSequence(start, cursor).toString();
