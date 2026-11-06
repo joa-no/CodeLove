@@ -12,8 +12,6 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -22,11 +20,9 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
-import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.style.ForegroundColorSpan;
-import android.text.style.ReplacementSpan;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -211,8 +207,11 @@ final class CodeEditor {
                     && s.charAt(changeStart) == '\n'
                     && input.getSelectionStart() == changeStart + 1) {
                     final int newlinePosition = changeStart;
-                    final String indent = indentationForNewLine(s, newlinePosition);
-                    if (!indent.isEmpty()) {
+                    if (isEmptyPairAt(s, newlinePosition)) {
+                        scheduleExpandEmptyPair(s, newlinePosition);
+                    } else {
+                        final String indent = indentationForNewLine(s, newlinePosition);
+                        if (!indent.isEmpty()) {
                         // Altera o texto somente depois que o Android terminar
                         // a notificacao atual do TextWatcher. Isso evita uma
                         // modificacao recursiva durante afterTextChanged().
@@ -230,16 +229,18 @@ final class CodeEditor {
                             try {
                                 current.insert(expectedCursor, indent);
                                 input.setSelection(expectedCursor + indent.length());
-                                applyWhitespaceMarkers(current);
                             } finally {
                                 applyingAutoIndent = false;
                             }
                         });
+                        }
                     }
                 }
 
                 scheduleClosingKeywordOutdent(s);
                 scheduleIndentBackspaceCollapse(s);
+                scheduleAutoPair(s);
+                schedulePairedDeletion(s);
 
                 dirty = true;
                 listener.onEdited();
@@ -247,7 +248,6 @@ final class CodeEditor {
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
                 applyHighlight(s);
-                applyWhitespaceMarkers(s);
                 refreshGutter(s, false);
             }
         });
@@ -365,7 +365,6 @@ final class CodeEditor {
         refreshDirtyMark();
         title.setText(target.getName());
         applyHighlight(input.getText());
-        applyWhitespaceMarkers(input.getText());
         refreshGutter(input.getText(), true);
         scroll.scrollTo(0, 0);
         return true;
@@ -541,7 +540,8 @@ final class CodeEditor {
         String code = previousLine.replaceAll("--.*$", "").trim();
 
         boolean opensBlock = code.matches("(?s).*\\b(then|do|else|repeat)\\s*$")
-            || code.matches("(?s).*\\bfunction\\s*(?:[\\w_.:]*\\s*)?\\([^)]*\\)\\s*$");
+            || code.matches("(?s).*\\bfunction\\s*(?:[\\w_.:]*\\s*)?\\([^)]*\\)\\s*$")
+            || code.endsWith("{");
 
         return opensBlock ? indent + "    " : indent;
     }
@@ -649,6 +649,122 @@ final class CodeEditor {
         });
     }
 
+    private static char matchingCloser(char opener) {
+        switch (opener) {
+            case '(': return ')';
+            case '[': return ']';
+            case '{': return '}';
+            case '"': return '"';
+            case '\'': return '\'';
+            default: return 0;
+        }
+    }
+
+    /** Insere o fechamento do par e permite pular um fechamento ja existente. */
+    private void scheduleAutoPair(CharSequence text) {
+        if (changeBefore != 0 || changeAfter != 1) return;
+        int cursor = input.getSelectionStart();
+        if (cursor != changeStart + 1 || cursor > text.length()) return;
+        char typed = text.charAt(changeStart);
+        char closer = matchingCloser(typed);
+        if (closer == 0) {
+            if (typed == ')' || typed == ']' || typed == '}') {
+                if (cursor < text.length() && text.charAt(cursor) == typed) {
+                    final int position = changeStart;
+                    input.post(() -> {
+                        Editable current = input.getText();
+                        if (input.getSelectionStart() == position + 1
+                            && position + 1 < current.length()
+                            && current.charAt(position) == typed
+                            && current.charAt(position + 1) == typed) {
+                            applyingAutoIndent = true;
+                            try {
+                                current.delete(position, position + 1);
+                                input.setSelection(position + 1);
+                                applyHighlight(current);
+                            } finally {
+                                applyingAutoIndent = false;
+                            }
+                        }
+                    });
+                }
+            }
+            return;
+        }
+        if (cursor < text.length() && text.charAt(cursor) == closer) return;
+        final int position = cursor;
+        final char expectedOpener = typed;
+        input.post(() -> {
+            Editable current = input.getText();
+            if (input.getSelectionStart() != position || input.getSelectionEnd() != position
+                || position <= 0 || current.charAt(position - 1) != expectedOpener) return;
+            applyingAutoIndent = true;
+            try {
+                current.insert(position, String.valueOf(closer));
+                input.setSelection(position);
+                applyHighlight(current);
+            } finally {
+                applyingAutoIndent = false;
+            }
+        });
+    }
+
+    /** Apagar o caractere de abertura remove tambem seu fechamento correspondente. */
+    private void schedulePairedDeletion(CharSequence text) {
+        if (changeBefore != 1 || changeAfter != 0 || changeRemoved.length() != 1) return;
+        char closer = matchingCloser(changeRemoved.charAt(0));
+        if (closer == 0) return;
+        int cursor = input.getSelectionStart();
+        if (cursor != changeStart || cursor >= text.length() || text.charAt(cursor) != closer) return;
+        final int position = cursor;
+        input.post(() -> {
+            Editable current = input.getText();
+            if (input.getSelectionStart() != position || input.getSelectionEnd() != position
+                || position >= current.length() || current.charAt(position) != closer) return;
+            applyingAutoIndent = true;
+            try {
+                current.delete(position, position + 1);
+                applyHighlight(current);
+            } finally {
+                applyingAutoIndent = false;
+            }
+        });
+    }
+
+    private static boolean isEmptyPairAt(CharSequence text, int newlinePosition) {
+        if (newlinePosition <= 0 || newlinePosition + 1 >= text.length()) return false;
+        char opener = text.charAt(newlinePosition - 1);
+        return matchingCloser(opener) != 0
+            && text.charAt(newlinePosition + 1) == matchingCloser(opener);
+    }
+
+    /** Enter entre um par vazio cria linha interna e preserva o fechamento alinhado. */
+    private void scheduleExpandEmptyPair(CharSequence text, int newlinePosition) {
+        int lineStart = newlinePosition - 1;
+        while (lineStart >= 0 && text.charAt(lineStart) != '\n') lineStart--;
+        lineStart++;
+        int indentEnd = lineStart;
+        while (indentEnd < newlinePosition && (text.charAt(indentEnd) == ' ' || text.charAt(indentEnd) == '\t')) indentEnd++;
+        final String baseIndent = text.subSequence(lineStart, indentEnd).toString();
+        final String innerIndent = baseIndent + "    ";
+        final int expectedCursor = newlinePosition + 1;
+        input.post(() -> {
+            Editable current = input.getText();
+            if (input.getSelectionStart() != expectedCursor || input.getSelectionEnd() != expectedCursor
+                || current.length() <= newlinePosition + 1 || current.charAt(newlinePosition) != '\n'
+                || current.charAt(newlinePosition + 1) != matchingCloser(current.charAt(newlinePosition - 1))) return;
+            applyingAutoIndent = true;
+            try {
+                current.insert(expectedCursor, innerIndent + "\n" + baseIndent);
+                input.setSelection(expectedCursor + innerIndent.length());
+                applyHighlight(current);
+                refreshGutter(current, false);
+            } finally {
+                applyingAutoIndent = false;
+            }
+        });
+    }
+
     private static String removeOneIndentLevel(String indent) {
         if (indent.endsWith("\t")) {
             return indent.substring(0, indent.length() - 1);
@@ -689,56 +805,6 @@ final class CodeEditor {
         text.delete(lineStart + reduced.length(), start);
         input.setSelection(lineStart + reduced.length());
         return true;
-    }
-
-    /** Mostra marcadores discretos somente na indentacao inicial de cada linha. */
-    private void applyWhitespaceMarkers(Editable text) {
-        WhitespaceMarkerSpan[] old = text.getSpans(0, text.length(), WhitespaceMarkerSpan.class);
-        for (WhitespaceMarkerSpan span : old) {
-            text.removeSpan(span);
-        }
-        int lineStart = 0;
-        while (lineStart < text.length()) {
-            int end = lineStart;
-            while (end < text.length() && text.charAt(end) != '\n') {
-                end++;
-            }
-            for (int i = lineStart; i < end; i++) {
-                char c = text.charAt(i);
-                if (c != ' ' && c != '\t') {
-                    break;
-                }
-                text.setSpan(new WhitespaceMarkerSpan(c == '\t'), i, i + 1,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-            lineStart = end + 1;
-        }
-    }
-
-    private final class WhitespaceMarkerSpan extends ReplacementSpan {
-        private final boolean tab;
-
-        WhitespaceMarkerSpan(boolean tab) {
-            this.tab = tab;
-        }
-
-        @Override
-        public int getSize(Paint paint, CharSequence text, int start, int end,
-                           Paint.FontMetricsInt fm) {
-            return Math.max(1, Math.round(paint.measureText(" ") * (tab ? 4f : 1f)));
-        }
-
-        @Override
-        public void draw(Canvas canvas, CharSequence text, int start, int end,
-                         float x, int top, int y, int bottom, Paint paint) {
-            int oldColor = paint.getColor();
-            paint.setColor(Workspace.COLOR_MUTED);
-            String marker = tab ? "→" : "·";
-            float width = paint.measureText(" ") * (tab ? 4f : 1f);
-            float markerWidth = paint.measureText(marker);
-            canvas.drawText(marker, x + Math.max(0f, (width - markerWidth) / 2f), y, paint);
-            paint.setColor(oldColor);
-        }
     }
 
     private void refreshDirtyMark() {
