@@ -183,7 +183,7 @@ final class CodeEditor {
                 return new InputConnectionWrapper(target, true) {
                     @Override
                     public boolean commitText(CharSequence text, int newCursorPosition) {
-                        if (text != null && text.length() == 1 && text.charAt(0) == '\\n'
+                        if (text != null && text.length() == 1 && text.charAt(0) == '\n'
                             && acceptAutocompleteSuggestion()) {
                             return true;
                         }
