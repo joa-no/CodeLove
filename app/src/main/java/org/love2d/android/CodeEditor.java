@@ -1061,35 +1061,7 @@ final class CodeEditor {
     }
 
     private String parameterSignature(String function) {
-        switch (function) {
-            case "love.load": return "()";
-            case "love.update": return "(dt)";
-            case "love.draw": return "()";
-            case "love.keypressed": return "(key, scancode, isrepeat)";
-            case "love.mousepressed": return "(x, y, button, istouch, presses)";
-            case "love.graphics.rectangle": return "(mode, x, y, width, height, cornerWidth?, cornerHeight?)";
-            case "love.graphics.circle": return "(mode, x, y, radius, segments?)";
-            case "love.graphics.draw": return "(drawable, x, y, rotation?, scaleX?, scaleY?, originX?, originY?, shearX?, shearY?)";
-            case "love.graphics.print": return "(text, x, y, rotation?, scaleX?, scaleY?, originX?, originY?, shearX?, shearY?)";
-            case "love.graphics.printf": return "(text, x, y, wrapLimit, align?, ...)";
-            case "love.graphics.line": return "(x1, y1, x2, y2, ...)";
-            case "love.graphics.setColor": return "(red, green, blue, alpha?)";
-            case "love.graphics.setBackgroundColor": return "(red, green, blue, alpha?)";
-            case "love.graphics.newImage": return "(filename, settings?)";
-            case "love.graphics.newFont": return "(filename?, size?)";
-            case "love.audio.newSource": return "(filename, sourceType?)";
-            case "love.keyboard.isDown": return "(key, ...)";
-            case "love.filesystem.read": return "(name, size?)";
-            case "love.filesystem.write": return "(name, data)";
-            case "love.window.setMode": return "(width, height, flags?)";
-            case "love.math.random": return "(max?) ou (min, max)";
-            case "love.physics.newWorld": return "(gravityX, gravityY, allowSleep?)";
-            case "require": return "(moduleName)";
-            case "print": return "(...)";
-            case "pairs": return "(table)";
-            case "ipairs": return "(table)";
-            default: return null;
-        }
+        return LoveApiParameters.signature(function);
     }
 
     private void dismissParameterHint() {
