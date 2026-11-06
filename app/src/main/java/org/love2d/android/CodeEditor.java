@@ -852,8 +852,8 @@ final class CodeEditor {
         String[] lines = source.split("\\n", -1);
         if (startLine < 0 || startLine >= lines.length) return -1;
         String first = lines[startLine].replaceFirst("--.*$", "").trim();
-        boolean repeat = first.matches("(?i)^repeat\\\\b.*");
-        boolean opener = first.matches("(?i)^(if\\\\b.*\\\\bthen|for\\\\b.*\\\\bdo|while\\\\b.*\\\\bdo|function\\\\b.*|do\\\\b.*|repeat\\\\b.*)");
+        boolean repeat = first.matches("(?i)^repeat\\b.*");
+        boolean opener = first.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|function\\b.*|do\\b.*|repeat\\b.*)");
         if (!opener) return -1;
 
         int depth = 0;
@@ -861,11 +861,11 @@ final class CodeEditor {
             String code = lines[i].replaceFirst("--.*$", "").trim();
             if (code.isEmpty()) continue;
             if (repeat) {
-                if (i > startLine && code.matches("(?i)^until\\\\b.*")) return i;
+                if (i > startLine && code.matches("(?i)^until\\b.*")) return i;
                 continue;
             }
-            if (code.matches("(?i)^(if\\\\b.*\\\\bthen|for\\\\b.*\\\\bdo|while\\\\b.*\\\\bdo|function\\\\b.*|do\\\\b.*)")) depth++;
-            if (code.matches("(?i)^end\\\\b.*")) {
+            if (code.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|function\\b.*|do\\b.*)")) depth++;
+            if (code.matches("(?i)^end\\b.*")) {
                 depth--;
                 if (depth == 0) return i;
             }
@@ -880,8 +880,8 @@ final class CodeEditor {
         StringBuilder numbers = new StringBuilder();
         for (int i = 0; i < lines.length; i++) {
             if (i > 0) {
-                preview.append('\\n');
-                numbers.append('\\n');
+                preview.append("\n");
+                numbers.append("\n");
             }
             if (i == foldedStartLine) {
                 preview.append(lines[i]).append("  …");
@@ -895,13 +895,6 @@ final class CodeEditor {
         foldPreview.setText(preview.toString());
         input.setVisibility(View.GONE);
         foldPreview.setVisibility(View.VISIBLE);
-        String source = text.toString();
-        String[] sourceLines = source.split("\\n", -1);
-        for (int i = 0; i < lines; i++) {
-            if (i > 0) numbers.append('\\n');
-            boolean foldable = i < sourceLines.length && findFoldEndLine(source, i) > i;
-            numbers.append(i + 1).append(foldable ? "  ▾" : "");
-        }
         gutter.setText(numbers.toString());
     }
 
@@ -920,7 +913,7 @@ final class CodeEditor {
         if (line <= 0) return 0;
         int current = 0;
         for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) == '\\n') {
+            if (text.charAt(i) == '\n') {
                 current++;
                 if (current == line) return i + 1;
             }
@@ -940,20 +933,18 @@ final class CodeEditor {
     private void refreshGutter(CharSequence text, boolean force) {
         int lines = 1;
         for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) == '\n') {
-                lines++;
-            }
+            if (text.charAt(i) == '\n') lines++;
         }
-        if (!force && lines == lineCount) {
-            return;
-        }
+        if (!force && lines == lineCount) return;
         lineCount = lines;
+
+        String source = text.toString();
+        String[] sourceLines = source.split("\\n", -1);
         StringBuilder numbers = new StringBuilder();
-        for (int i = 1; i <= lines; i++) {
-            if (i > 1) {
-                numbers.append('\n');
-            }
-            numbers.append(i);
+        for (int i = 0; i < lines; i++) {
+            if (i > 0) numbers.append("\n");
+            boolean foldable = i < sourceLines.length && findFoldEndLine(source, i) > i;
+            numbers.append(i + 1).append(foldable ? "  ▾" : "");
         }
         gutter.setText(numbers.toString());
     }
