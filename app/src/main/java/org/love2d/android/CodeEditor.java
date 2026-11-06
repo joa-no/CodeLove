@@ -288,9 +288,14 @@ final class CodeEditor {
 
         HorizontalScrollView horizontal = new CaretGuardHorizontalScrollView(activity);
         horizontal.setFillViewport(true);
-        horizontal.addView(input, new ViewGroup.LayoutParams(
+
+        LinearLayout horizontalContent = new LinearLayout(activity);
+        horizontalContent.setOrientation(LinearLayout.VERTICAL);
+        horizontalContent.addView(input, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        horizontal.addView(foldPreview, new ViewGroup.LayoutParams(
+        horizontalContent.addView(foldPreview, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        horizontal.addView(horizontalContent, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout row = new LinearLayout(activity);
