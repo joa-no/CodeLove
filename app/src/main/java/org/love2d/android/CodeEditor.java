@@ -95,6 +95,7 @@ final class CodeEditor {
     private int changeStart;
     private int changeBefore;
     private int changeAfter;
+    private String changeRemoved = "";
     private boolean highlightLua;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
@@ -190,6 +191,7 @@ final class CodeEditor {
                 changeStart = start;
                 changeBefore = count;
                 changeAfter = after;
+                changeRemoved = count > 0 ? s.subSequence(start, start + count).toString() : "";
             }
 
             @Override
@@ -228,6 +230,7 @@ final class CodeEditor {
                             try {
                                 current.insert(expectedCursor, indent);
                                 input.setSelection(expectedCursor + indent.length());
+                                applyWhitespaceMarkers(current);
                             } finally {
                                 applyingAutoIndent = false;
                             }
@@ -236,6 +239,7 @@ final class CodeEditor {
                 }
 
                 scheduleClosingKeywordOutdent(s);
+                scheduleIndentBackspaceCollapse(s);
 
                 dirty = true;
                 listener.onEdited();
@@ -587,6 +591,58 @@ final class CodeEditor {
             try {
                 current.replace(expectedLineStart, expectedLineStart + indent.length(), reducedIndent);
                 input.setSelection(expectedCursor - (indent.length() - reducedIndent.length()));
+                applyWhitespaceMarkers(current);
+            } finally {
+                applyingAutoIndent = false;
+            }
+        });
+    }
+
+    /**
+     * Alguns teclados Android nao enviam KEYCODE_DEL ao OnKeyListener.
+     * Detecta a exclusao de um espaco no recuo e completa o nivel inteiro.
+     */
+    private void scheduleIndentBackspaceCollapse(CharSequence text) {
+        if (changeBefore != 1 || changeAfter != 0 || !" ".equals(changeRemoved)) {
+            return;
+        }
+        int cursor = input.getSelectionStart();
+        if (cursor != changeStart || cursor < 0) {
+            return;
+        }
+        int lineStart = cursor - 1;
+        while (lineStart >= 0 && text.charAt(lineStart) != '\\n') {
+            lineStart--;
+        }
+        lineStart++;
+        String remaining = text.subSequence(lineStart, cursor).toString();
+        for (int i = 0; i < remaining.length(); i++) {
+            if (remaining.charAt(i) != ' ' && remaining.charAt(i) != '\\t') {
+                return;
+            }
+        }
+        String originalIndent = remaining + " ";
+        String reduced = removeOneIndentLevel(originalIndent);
+        int targetLength = reduced.length();
+        if (targetLength >= remaining.length()) {
+            return;
+        }
+        final int expectedCursor = cursor;
+        final int expectedLineStart = lineStart;
+        final String expectedRemaining = remaining;
+        input.post(() -> {
+            Editable current = input.getText();
+            if (input.getSelectionStart() != expectedCursor
+                || input.getSelectionEnd() != expectedCursor
+                || current.length() < expectedCursor
+                || !current.subSequence(expectedLineStart, expectedCursor).toString().equals(expectedRemaining)) {
+                return;
+            }
+            applyingAutoIndent = true;
+            try {
+                current.delete(expectedLineStart + targetLength, expectedCursor);
+                input.setSelection(expectedLineStart + targetLength);
+                applyWhitespaceMarkers(current);
             } finally {
                 applyingAutoIndent = false;
             }
