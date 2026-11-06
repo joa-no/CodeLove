@@ -850,7 +850,7 @@ final class CodeEditor {
     /** Encontra o fechamento correspondente de um bloco Lua. */
     private static boolean isFoldOpener(String line) {
         String code = line.replaceFirst("--.*$", "").trim();
-        return code.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|function\\b.*|do\\b.*|repeat\\b.*)");
+        return code.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|(?:local\\s+)?function\\b.*|do\\b.*|repeat\\b.*)");
     }
 
     private static int findFoldEndLine(String source, int startLine) {
@@ -858,7 +858,7 @@ final class CodeEditor {
         if (startLine < 0 || startLine >= lines.length) return -1;
         String first = lines[startLine].replaceFirst("--.*$", "").trim();
         boolean repeat = first.matches("(?i)^repeat\\b.*");
-        boolean opener = first.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|function\\b.*|do\\b.*|repeat\\b.*)");
+        boolean opener = first.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|(?:local\\s+)?function\\b.*|do\\b.*|repeat\\b.*)");
         if (!opener) return -1;
 
         int depth = 0;
@@ -869,7 +869,7 @@ final class CodeEditor {
                 if (i > startLine && code.matches("(?i)^until\\b.*")) return i;
                 continue;
             }
-            if (code.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|function\\b.*|do\\b.*)")) depth++;
+            if (code.matches("(?i)^(if\\b.*\\bthen|for\\b.*\\bdo|while\\b.*\\bdo|(?:local\\s+)?function\\b.*|do\\b.*)")) depth++;
             if (code.matches("(?i)^end\\b.*")) {
                 depth--;
                 if (depth == 0) return i;
