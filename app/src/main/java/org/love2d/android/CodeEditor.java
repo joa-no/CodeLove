@@ -19,6 +19,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.SystemClock;
 import android.text.Editable;
+import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -30,6 +31,8 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputConnectionWrapper;
 import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -172,7 +175,33 @@ final class CodeEditor {
         gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
-        input = new EditText(activity);
+        input = new EditText(activity) {
+            @Override
+            public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+                InputConnection target = super.onCreateInputConnection(outAttrs);
+                if (target == null) return null;
+                return new InputConnectionWrapper(target, true) {
+                    @Override
+                    public boolean commitText(CharSequence text, int newCursorPosition) {
+                        if (text != null && text.length() == 1 && text.charAt(0) == '\\n'
+                            && acceptAutocompleteSuggestion()) {
+                            return true;
+                        }
+                        return super.commitText(text, newCursorPosition);
+                    }
+
+                    @Override
+                    public boolean sendKeyEvent(KeyEvent event) {
+                        if (event != null && event.getAction() == KeyEvent.ACTION_DOWN
+                            && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                            && acceptAutocompleteSuggestion()) {
+                            return true;
+                        }
+                        return super.sendKeyEvent(event);
+                    }
+                };
+            }
+        };
         input.setTypeface(Typeface.MONOSPACE);
         input.setTextSize(13);
         input.setTextColor(Workspace.COLOR_TEXT);
@@ -908,7 +937,17 @@ final class CodeEditor {
             autocompletePopup.setBackgroundDrawable(box(Workspace.COLOR_FIELD, 8, false));
             autocompletePopup.setOutsideTouchable(true);
         }
-        autocompleteText.setText(match);
+        SpannableString styledSuggestion = new SpannableString(match);
+        int typedLength = Math.min(prefix.length(), match.length());
+        if (typedLength > 0) {
+            styledSuggestion.setSpan(new ForegroundColorSpan(COLOR_KEYWORD),
+                0, typedLength, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        if (typedLength < match.length()) {
+            styledSuggestion.setSpan(new ForegroundColorSpan(Workspace.COLOR_MUTED),
+                typedLength, match.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        autocompleteText.setText(styledSuggestion);
         if (!input.isAttachedToWindow() || input.getLayout() == null) return;
 
         android.text.Layout layout = input.getLayout();
