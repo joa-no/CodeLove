@@ -918,11 +918,12 @@ final class CodeEditor {
             "love.focus", "love.visible", "love.filedropped",
             "love.directorydropped", "love.lowmemory", "love.threaderror",
             "love.localechanged", "love.displayrotated", "love.audiodisconnected",
-            "love.sensorupdated", "love.joysticksensorupdated",
+            "love.sensorupdated", "love.joysticksensorupdated", "love.dropbegan",
+            "love.dropmoved", "love.dropcompleted",
 
             // Modulos principais
             "love.graphics", "love.audio", "love.filesystem", "love.keyboard",
-            "love.mouse", "love.joystick", "love.gamepad", "love.touch",
+            "love.mouse", "love.joystick", "love.touch",
             "love.physics", "love.math", "love.timer", "love.window",
             "love.event", "love.image", "love.sound", "love.font",
             "love.data", "love.system", "love.thread", "love.video",
@@ -939,7 +940,7 @@ final class CodeEditor {
             "love.graphics.newFont", "love.graphics.newCanvas",
             "love.graphics.newSpriteBatch", "love.graphics.newMesh",
             "love.graphics.newShader", "love.graphics.newText",
-            "love.graphics.draw", "love.graphics.drawLayer",
+            "love.graphics.draw",
             "love.graphics.origin", "love.graphics.translate",
             "love.graphics.rotate", "love.graphics.scale", "love.graphics.shear",
             "love.graphics.push", "love.graphics.pop",
@@ -955,6 +956,7 @@ final class CodeEditor {
             "love.keyboard.isDown", "love.keyboard.isScancodeDown",
             "love.keyboard.setKeyRepeat", "love.keyboard.hasKeyRepeat",
             "love.keyboard.setTextInput", "love.keyboard.hasScreenKeyboard",
+            "love.keyboard.isModifierActive",
             "love.mouse.getPosition", "love.mouse.getX", "love.mouse.getY",
             "love.mouse.setPosition", "love.mouse.isDown",
             "love.mouse.setVisible", "love.mouse.isVisible",
@@ -977,13 +979,14 @@ final class CodeEditor {
             "love.filesystem.createDirectory", "love.filesystem.remove",
             "love.filesystem.getSaveDirectory", "love.filesystem.getSource",
             "love.filesystem.getWorkingDirectory", "love.filesystem.setIdentity",
+            "love.filesystem.openFile",
             "love.window.setMode", "love.window.getMode",
             "love.window.getWidth", "love.window.getHeight",
             "love.window.setTitle", "love.window.setIcon",
             "love.window.setFullscreen", "love.window.hasFocus",
             "love.timer.getDelta", "love.timer.getFPS",
             "love.timer.getTime", "love.timer.sleep", "love.timer.step",
-            "love.event.quit", "love.event.push", "love.event.poll",
+            "love.event.quit", "love.event.restart", "love.event.push", "love.event.poll",
 
             // Matematica, fisica e utilitarios
             "love.math.random", "love.math.randomNormal",
@@ -996,7 +999,7 @@ final class CodeEditor {
             "love.image.newImageData", "love.sound.newSoundData",
             "love.thread.newThread", "love.thread.getChannel",
             "love.system.getOS", "love.system.getProcessorCount",
-            "love.system.openURL"
+            "love.system.openURL", "love.system.getPreferredLocales"
         };
         String match = null;
         for (String word : words) {
