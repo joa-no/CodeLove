@@ -79,6 +79,7 @@ final class CodeEditor {
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
+    private final TextView foldPreview;
     private final ScrollView scroll;
     private final LinearLayout footer;
     private final View footerSpacer;
@@ -96,6 +97,8 @@ final class CodeEditor {
     private boolean highlightLua;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
+    private int foldedStartLine = -1;
+    private int foldedEndLine = -1;
 
     CodeEditor(Activity activity, Listener listener) {
         this.activity = activity;
@@ -165,6 +168,13 @@ final class CodeEditor {
         gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
+        gutter.setOnTouchListener((v, event) -> {
+            if (event.getAction() != android.view.MotionEvent.ACTION_UP) return true;
+            int lineHeight = Math.max(1, gutter.getLineHeight());
+            int line = Math.max(0, (int) ((event.getY() + scroll.getScrollY()) / lineHeight));
+            toggleFoldAtLine(line);
+            return true;
+        });
 
         input = new EditText(activity);
         input.setTypeface(Typeface.MONOSPACE);
@@ -176,6 +186,18 @@ final class CodeEditor {
         input.setIncludeFontPadding(false);
         input.setPadding(dp(4), dp(4), dp(24), dp(4));
         input.setHorizontallyScrolling(true);
+
+        foldPreview = new TextView(activity);
+        foldPreview.setTypeface(Typeface.MONOSPACE);
+        foldPreview.setTextSize(13);
+        foldPreview.setTextColor(Workspace.COLOR_TEXT);
+        foldPreview.setGravity(Gravity.TOP | Gravity.START);
+        foldPreview.setIncludeFontPadding(false);
+        foldPreview.setPadding(dp(4), dp(4), dp(24), dp(4));
+        foldPreview.setHorizontallyScrolling(true);
+        foldPreview.setVisibility(View.GONE);
+        foldPreview.setOnClickListener(v -> clearFold());
+
         input.setInputType(InputType.TYPE_CLASS_TEXT
             | InputType.TYPE_TEXT_FLAG_MULTI_LINE
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
@@ -276,6 +298,8 @@ final class CodeEditor {
         horizontal.setFillViewport(true);
         horizontal.addView(input, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        horizontal.addView(foldPreview, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -361,6 +385,7 @@ final class CodeEditor {
         input.setText(text);
         input.setSelection(0);
         loading = false;
+        clearFold();
 
         dirty = false;
         refreshDirtyMark();
@@ -382,6 +407,7 @@ final class CodeEditor {
         loading = true;
         input.setText("");
         loading = false;
+        clearFold();
         dirty = false;
         refreshDirtyMark();
         listener.onClosed();
@@ -805,6 +831,101 @@ final class CodeEditor {
         text.delete(lineStart + reduced.length(), start);
         input.setSelection(lineStart + reduced.length());
         return true;
+    }
+
+    /** Alterna o recolhimento de um bloco Lua iniciado na linha clicada. */
+    private void toggleFoldAtLine(int line) {
+        if (foldedStartLine >= 0) {
+            if (line == foldedStartLine) clearFold();
+            return;
+        }
+        String source = input.getText().toString();
+        int endLine = findFoldEndLine(source, line);
+        if (endLine <= line) return;
+        foldedStartLine = line;
+        foldedEndLine = endLine;
+        renderFoldedPreview(source);
+    }
+
+    /** Encontra o fechamento correspondente de um bloco Lua. */
+    private static int findFoldEndLine(String source, int startLine) {
+        String[] lines = source.split("\\n", -1);
+        if (startLine < 0 || startLine >= lines.length) return -1;
+        String first = lines[startLine].replaceFirst("--.*$", "").trim();
+        boolean repeat = first.matches("(?i)^repeat\\\\b.*");
+        boolean opener = first.matches("(?i)^(if\\\\b.*\\\\bthen|for\\\\b.*\\\\bdo|while\\\\b.*\\\\bdo|function\\\\b.*|do\\\\b.*|repeat\\\\b.*)");
+        if (!opener) return -1;
+
+        int depth = 0;
+        for (int i = startLine; i < lines.length; i++) {
+            String code = lines[i].replaceFirst("--.*$", "").trim();
+            if (code.isEmpty()) continue;
+            if (repeat) {
+                if (i > startLine && code.matches("(?i)^until\\\\b.*")) return i;
+                continue;
+            }
+            if (code.matches("(?i)^(if\\\\b.*\\\\bthen|for\\\\b.*\\\\bdo|while\\\\b.*\\\\bdo|function\\\\b.*|do\\\\b.*)")) depth++;
+            if (code.matches("(?i)^end\\\\b.*")) {
+                depth--;
+                if (depth == 0) return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Mostra uma visualizacao somente para leitura com o bloco substituido por uma linha. */
+    private void renderFoldedPreview(String source) {
+        String[] lines = source.split("\\n", -1);
+        StringBuilder preview = new StringBuilder();
+        StringBuilder numbers = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) {
+                preview.append('\\n');
+                numbers.append('\\n');
+            }
+            if (i == foldedStartLine) {
+                preview.append(lines[i]).append("  …");
+                numbers.append(i + 1).append("  ▸");
+                i = foldedEndLine;
+            } else {
+                preview.append(lines[i]);
+                numbers.append(i + 1);
+            }
+        }
+        foldPreview.setText(preview.toString());
+        input.setVisibility(View.GONE);
+        foldPreview.setVisibility(View.VISIBLE);
+        String source = text.toString();
+        String[] sourceLines = source.split("\\n", -1);
+        for (int i = 0; i < lines; i++) {
+            if (i > 0) numbers.append('\\n');
+            boolean foldable = i < sourceLines.length && findFoldEndLine(source, i) > i;
+            numbers.append(i + 1).append(foldable ? "  ▾" : "");
+        }
+        gutter.setText(numbers.toString());
+    }
+
+    private void clearFold() {
+        if (foldedStartLine < 0) return;
+        int line = foldedStartLine;
+        foldedStartLine = -1;
+        foldedEndLine = -1;
+        foldPreview.setVisibility(View.GONE);
+        input.setVisibility(View.VISIBLE);
+        input.setSelection(Math.min(lineStartOffset(input.getText(), line), input.length()));
+        refreshGutter(input.getText(), true);
+    }
+
+    private static int lineStartOffset(CharSequence text, int line) {
+        if (line <= 0) return 0;
+        int current = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == '\\n') {
+                current++;
+                if (current == line) return i + 1;
+            }
+        }
+        return text.length();
     }
 
     private void refreshDirtyMark() {
