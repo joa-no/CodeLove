@@ -105,12 +105,31 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+
+        // Release signing is supplied only by CI through environment variables.
+        // No private signing material is stored in the repository.
+        release {
+            def releaseStoreFile = System.getenv("CODELOVE_RELEASE_STORE_FILE")
+            if (releaseStoreFile) {
+                storeFile file(releaseStoreFile)
+                storeType 'pkcs12'
+                storePassword System.getenv("CODELOVE_RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("CODELOVE_RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("CODELOVE_RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Local release builds remain unsigned unless the release signing
+            // environment is explicitly provided.
+            if (System.getenv("CODELOVE_RELEASE_STORE_FILE")) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
