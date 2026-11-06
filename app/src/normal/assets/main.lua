@@ -148,12 +148,15 @@ local function newProjectEnvironment()
   return callbacks, env
 end
 
-local function openProject(path)
+local function openProject(path, displayName)
   closeProject()
   host.errorText = nil
   host.playing = false
 
-  local name = path:match("([^/]+)/*$") or path
+  local name = displayName
+  if type(name) ~= "string" or name == "" then
+    name = path:match("([^/]+)/*$") or path
+  end
 
   if host.lastOpenedPath ~= path then
     host.lastOpenedPath = path
@@ -212,7 +215,12 @@ end
 
 local function handleCommand(command, argument)
   if command == "open" then
-    openProject(argument)
+    local path, displayName = argument:match("^([^\t]*)\t(.*)$")
+    if path then
+      openProject(path, displayName)
+    else
+      openProject(argument)
+    end
   elseif command == "play" then
     setPlaying(true)
   elseif command == "pause" then

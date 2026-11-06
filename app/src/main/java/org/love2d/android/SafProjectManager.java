@@ -186,13 +186,6 @@ final class SafProjectManager {
         try {
             JSONArray stored = new JSONArray(helper.getProjects());
             JSONArray projects = new JSONArray();
-            for (int i = 0; i < stored.length(); i++) {
-                JSONObject item = stored.optJSONObject(i);
-                if (item == null) continue;
-                if (!treeUri.toString().equals(item.optString("uri"))) {
-                    projects.put(item);
-                }
-            }
 
             JSONObject entry = new JSONObject();
             entry.put("uri", treeUri.toString());
@@ -204,6 +197,25 @@ final class SafProjectManager {
             if (!helper.saveProjects(projects.toString())) {
                 if (!hadPermission) releasePermission(activity, treeUri, persistableFlags);
                 return "O acesso foi concedido, mas nao consegui salvar o registro do projeto.";
+            }
+
+            // O CodeLove trabalha com um projeto externo ativo por vez.
+            // Depois que a nova selecao foi persistida, descarta autorizacoes
+            // antigas para evitar restaurar uma URI obsoleta na proxima abertura.
+            for (int i = 0; i < stored.length(); i++) {
+                JSONObject previous = stored.optJSONObject(i);
+                if (previous == null) continue;
+                String previousUri = previous.optString("uri", "");
+                if (previousUri.isEmpty() || treeUri.toString().equals(previousUri)) continue;
+                try {
+                    Uri oldTreeUri = Uri.parse(previousUri);
+                    int oldFlags = previous.optInt("flags", requiredFlags) & requiredFlags;
+                    if (oldFlags == 0) oldFlags = requiredFlags;
+                    if (hasPersistedReadWritePermission(activity, oldTreeUri)) {
+                        releasePermission(activity, oldTreeUri, oldFlags);
+                    }
+                } catch (Exception ignored) {
+                }
             }
         } catch (Exception e) {
             if (!hadPermission) releasePermission(activity, treeUri, persistableFlags);
@@ -220,18 +232,18 @@ final class SafProjectManager {
                 context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .getString(KEY_PROJECTS, "[]"));
 
-            for (int i = 0; i < projects.length(); i++) {
-                JSONObject item = projects.optJSONObject(i);
-                if (item == null) continue;
-
+            // Existe somente um projeto externo ativo: a selecao mais recente.
+            JSONObject item = projects.optJSONObject(projects.length() - 1);
+            if (item != null) {
                 String uri = item.optString("uri", "");
                 String documentId = item.optString("projectDocumentId", "");
                 String name = item.optString("name", "Projeto externo");
-                if (uri.isEmpty() || documentId.isEmpty()) continue;
-
-                Uri treeUri = Uri.parse(uri);
-                if (!hasPersistedReadWritePermission(context, treeUri)) continue;
-                result.add(new RegisteredProject(treeUri, documentId, name));
+                if (!uri.isEmpty() && !documentId.isEmpty()) {
+                    Uri treeUri = Uri.parse(uri);
+                    if (hasPersistedReadWritePermission(context, treeUri)) {
+                        result.add(new RegisteredProject(treeUri, documentId, name));
+                    }
+                }
             }
         } catch (Exception e) {
             android.util.Log.e("CodeLove",

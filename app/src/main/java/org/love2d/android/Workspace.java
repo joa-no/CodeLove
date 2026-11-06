@@ -1103,19 +1103,6 @@ public final class Workspace {
         actions.setGravity(Gravity.CENTER_VERTICAL);
         actions.setPadding(0, dp(10), 0, 0);
 
-        TextView close = new TextView(activity);
-        close.setText("Fechar");
-        close.setTextColor(COLOR_MUTED);
-        close.setTextSize(13);
-        close.setGravity(Gravity.CENTER);
-        close.setBackground(box(COLOR_FIELD, 10, true));
-        close.setPadding(dp(12), 0, dp(12), 0);
-        actions.addView(close, new LinearLayout.LayoutParams(0, dp(42), 1f));
-        close.setOnClickListener(v -> dismissProjectNotice());
-
-        View gap = new View(activity);
-        actions.addView(gap, new LinearLayout.LayoutParams(dp(10), 1));
-
         TextView retry = new TextView(activity);
         retry.setText("Selecionar novamente");
         retry.setTextColor(0xFF1B1F2B);
@@ -1123,23 +1110,42 @@ public final class Workspace {
         retry.setGravity(Gravity.CENTER);
         retry.setBackground(box(0xFFA78BFA, 10, false));
         retry.setPadding(dp(12), 0, dp(12), 0);
-        actions.addView(retry, new LinearLayout.LayoutParams(0, dp(42), 1.5f));
+        actions.addView(retry, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
         retry.setOnClickListener(v -> {
             dismissProjectNotice();
             addExistingProject();
         });
         sheet.addView(actions);
 
-        int availableWidth = Math.max(dp(280), root.getWidth() - dp(32));
-        int sheetWidth = Math.min((int) (availableWidth * 0.82f), dp(540));
+        // Comeca com largura disponivel e ajusta a largura final depois que
+        // o layout raiz tiver sido medido (root.getWidth() pode ser zero no inicio).
         RelativeLayout.LayoutParams sheetLp = new RelativeLayout.LayoutParams(
-            sheetWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         sheetLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         sheetLp.addRule(RelativeLayout.CENTER_HORIZONTAL);
-        sheetLp.setMargins(0, 0, 0, Math.max(dp(12), insetBottom));
+        sheetLp.setMargins(dp(16), 0, dp(16), Math.max(dp(12), insetBottom));
         projectNotice = sheet;
         root.addView(sheet, sheetLp);
         sheet.bringToFront();
+        root.post(() -> {
+            if (projectNotice != sheet) return;
+            int rootWidth = root.getWidth();
+            if (rootWidth <= 0) {
+                rootWidth = activity.getWindow().getDecorView().getWidth();
+            }
+            if (rootWidth <= 0) {
+                rootWidth = activity.getResources().getDisplayMetrics().widthPixels;
+            }
+            int availableWidth = Math.max(dp(1), rootWidth - dp(32));
+            int sheetWidth = Math.min(Math.round(availableWidth * 0.82f), dp(540));
+            RelativeLayout.LayoutParams measuredLp =
+                (RelativeLayout.LayoutParams) sheet.getLayoutParams();
+            measuredLp.width = sheetWidth;
+            measuredLp.leftMargin = 0;
+            measuredLp.rightMargin = 0;
+            sheet.setLayoutParams(measuredLp);
+        });
     }
 
     private void dismissProjectNotice() {
@@ -1239,6 +1245,7 @@ public final class Workspace {
             DirectSafStorage storage = new DirectSafStorage(
                 activity, treeUri, selection.documentId, selection.displayName);
             workspace.selectDirectProject(storage);
+            workspace.dismissProjectNotice();
             workspace.toast("Pasta selecionada com sucesso.");
         } catch (RuntimeException e) {
             Log.e(TAG, "Falha inesperada ao processar a pasta selecionada pelo SAF", e);
@@ -1663,7 +1670,9 @@ public final class Workspace {
                 storage.deleteLocalSnapshot(runtimeProject);
             }
             runtimeProject = destination;
-            sendCommand("open", runtimeProject.getAbsolutePath());
+            String runtimeName = storage.getDisplayName()
+                .replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+            sendCommand("open", runtimeProject.getAbsolutePath() + "\t" + runtimeName);
             return true;
         } catch (IOException e) {
             Log.w(TAG, "Falha ao preparar o projeto para execucao", e);
