@@ -159,9 +159,28 @@ local function openProject(path, displayName)
   end
 
   if host.lastOpenedPath ~= path then
-    host.lastOpenedPath = path
+    -- Um caminho diferente representa outro projeto: registra uma nova abertura.
     appendLog("--- projeto " .. name .. " ---")
+  elseif host.lastOpenedName ~= name then
+    -- O snapshot temporario pode manter o mesmo caminho depois que a pasta SAF
+    -- e renomeada. Nesse caso, atualiza o cabecalho existente em vez de ignorar
+    -- o novo nome ou criar uma segunda entrada para o mesmo projeto.
+    local previousHeader = "--- projeto " .. tostring(host.lastOpenedName or "") .. " ---"
+    local updated = false
+    for i = #host.logLines, 1, -1 do
+      if host.logLines[i] == previousHeader then
+        host.logLines[i] = "--- projeto " .. name .. " ---"
+        host.logDirty = true
+        updated = true
+        break
+      end
+    end
+    if not updated then
+      appendLog("--- projeto " .. name .. " ---")
+    end
   end
+  host.lastOpenedPath = path
+  host.lastOpenedName = name
 
   local code = readFile(path .. "/main.lua")
   if not code then
