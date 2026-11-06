@@ -558,14 +558,14 @@ final class CodeEditor {
         }
 
         int lineStart = cursor - 1;
-        while (lineStart >= 0 && text.charAt(lineStart) != '\\n') {
+        while (lineStart >= 0 && text.charAt(lineStart) != '\n') {
             lineStart--;
         }
         lineStart++;
 
         String linePrefix = text.subSequence(lineStart, cursor).toString();
         java.util.regex.Matcher matcher = java.util.regex.Pattern
-            .compile("^(\\\\s*)(end|else|elseif|until)$")
+            .compile("^(\\s*)(end|else|elseif|until)$")
             .matcher(linePrefix);
         if (!matcher.matches()) {
             return;
@@ -611,13 +611,13 @@ final class CodeEditor {
             return;
         }
         int lineStart = cursor - 1;
-        while (lineStart >= 0 && text.charAt(lineStart) != '\\n') {
+        while (lineStart >= 0 && text.charAt(lineStart) != '\n') {
             lineStart--;
         }
         lineStart++;
         String remaining = text.subSequence(lineStart, cursor).toString();
         for (int i = 0; i < remaining.length(); i++) {
-            if (remaining.charAt(i) != ' ' && remaining.charAt(i) != '\\t') {
+            if (remaining.charAt(i) != ' ' && remaining.charAt(i) != '\t') {
                 return;
             }
         }
@@ -650,7 +650,7 @@ final class CodeEditor {
     }
 
     private static String removeOneIndentLevel(String indent) {
-        if (indent.endsWith("\\t")) {
+        if (indent.endsWith("\t")) {
             return indent.substring(0, indent.length() - 1);
         }
         if (indent.endsWith("    ")) {
@@ -672,12 +672,12 @@ final class CodeEditor {
         }
         Editable text = input.getText();
         int lineStart = start - 1;
-        while (lineStart >= 0 && text.charAt(lineStart) != '\\n') {
+        while (lineStart >= 0 && text.charAt(lineStart) != '\n') {
             lineStart--;
         }
         lineStart++;
         for (int i = lineStart; i < start; i++) {
-            if (text.charAt(i) != ' ' && text.charAt(i) != '\\t') {
+            if (text.charAt(i) != ' ' && text.charAt(i) != '\t') {
                 return false;
             }
         }
@@ -700,15 +700,15 @@ final class CodeEditor {
         int lineStart = 0;
         while (lineStart < text.length()) {
             int end = lineStart;
-            while (end < text.length() && text.charAt(end) != '\\n') {
+            while (end < text.length() && text.charAt(end) != '\n') {
                 end++;
             }
             for (int i = lineStart; i < end; i++) {
                 char c = text.charAt(i);
-                if (c != ' ' && c != '\\t') {
+                if (c != ' ' && c != '\t') {
                     break;
                 }
-                text.setSpan(new WhitespaceMarkerSpan(c == '\\t'), i, i + 1,
+                text.setSpan(new WhitespaceMarkerSpan(c == '\t'), i, i + 1,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
             lineStart = end + 1;
