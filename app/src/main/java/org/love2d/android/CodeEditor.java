@@ -87,6 +87,8 @@ final class CodeEditor {
     private PopupWindow autocompletePopup;
     private TextView autocompleteText;
     private String autocompleteCandidate;
+    private PopupWindow parameterHintPopup;
+    private TextView parameterHintText;
     private final ScrollView scroll;
     private final LinearLayout footer;
     private final View footerSpacer;
@@ -144,6 +146,16 @@ final class CodeEditor {
 
         // Reserva o espaco entre os controles do projeto e o botao de fechar.
         footerSpacer = new View(activity);
+        TextView snippets = new TextView(activity);
+        snippets.setText("{} Snip");
+        snippets.setGravity(Gravity.CENTER);
+        snippets.setTextColor(Workspace.COLOR_TEXT);
+        snippets.setTextSize(12);
+        snippets.setTypeface(Typeface.DEFAULT_BOLD);
+        snippets.setBackground(box(Workspace.COLOR_FIELD, 12, false));
+        snippets.setOnClickListener(v -> showSnippetPicker());
+        footer.addView(snippets, new LinearLayout.LayoutParams(dp(66), dp(44)));
+
         footer.addView(footerSpacer, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
@@ -298,6 +310,7 @@ final class CodeEditor {
                 applyHighlight(s);
                 refreshGutter(s, false);
                 updateAutocompleteSuggestion(s);
+                updateParameterHint(s);
             }
         });
         input.setOnEditorActionListener((textView, actionId, event) -> {
@@ -448,6 +461,8 @@ final class CodeEditor {
             notifyUnsavedChanges();
             return false;
         }
+        dismissAutocompleteSuggestion();
+        dismissParameterHint();
         file = null;
         originalText = null;
         loading = true;
@@ -1057,6 +1072,180 @@ final class CodeEditor {
         } else {
             autocompletePopup.showAtLocation(input, Gravity.TOP | Gravity.LEFT, x, y);
         }
+    }
+
+    /**
+     * Mostra a assinatura da funcao quando o cursor esta dentro de seus argumentos.
+     * A ajuda e contextual e nao interfere na digitacao nem no console do LÖVE.
+     */
+    private void updateParameterHint(CharSequence text) {
+        int cursor = input.getSelectionStart();
+        if (cursor < 0 || cursor > text.length() || !highlightLua
+            || input.getVisibility() != View.VISIBLE) {
+            dismissParameterHint();
+            return;
+        }
+
+        int depth = 0;
+        int open = -1;
+        for (int i = cursor - 1; i >= 0; i--) {
+            char ch = text.charAt(i);
+            if (ch == ')') {
+                depth++;
+            } else if (ch == '(') {
+                if (depth == 0) {
+                    open = i;
+                    break;
+                }
+                depth--;
+            }
+        }
+        if (open < 0) {
+            dismissParameterHint();
+            return;
+        }
+
+        int nameEnd = open;
+        while (nameEnd > 0 && Character.isWhitespace(text.charAt(nameEnd - 1))) nameEnd--;
+        int nameStart = nameEnd;
+        while (nameStart > 0) {
+            char ch = text.charAt(nameStart - 1);
+            if (!Character.isLetterOrDigit(ch) && ch != '_' && ch != '.' && ch != ':') break;
+            nameStart--;
+        }
+        if (nameStart == nameEnd) {
+            dismissParameterHint();
+            return;
+        }
+
+        String function = text.subSequence(nameStart, nameEnd).toString();
+        String signature = parameterSignature(function);
+        if (signature == null) {
+            dismissParameterHint();
+            return;
+        }
+
+        int argument = 0;
+        depth = 0;
+        for (int i = open + 1; i < cursor; i++) {
+            char ch = text.charAt(i);
+            if (ch == '(' || ch == '[' || ch == '{') depth++;
+            else if (ch == ')' || ch == ']' || ch == '}') depth = Math.max(0, depth - 1);
+            else if (ch == ',' && depth == 0) argument++;
+        }
+
+        if (parameterHintText == null) {
+            parameterHintText = new TextView(activity);
+            parameterHintText.setTextColor(Workspace.COLOR_TEXT);
+            parameterHintText.setTextSize(11);
+            parameterHintText.setTypeface(Typeface.MONOSPACE);
+            parameterHintText.setPadding(dp(10), dp(7), dp(10), dp(7));
+            parameterHintText.setBackground(box(Workspace.COLOR_FIELD, 8, true));
+            parameterHintText.setElevation(dp(6));
+            parameterHintPopup = new PopupWindow(
+                parameterHintText,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                false);
+            parameterHintPopup.setBackgroundDrawable(box(Workspace.COLOR_FIELD, 8, false));
+            parameterHintPopup.setOutsideTouchable(true);
+        }
+        parameterHintText.setText(function + signature + "\nArgumento atual: " + (argument + 1));
+        if (!input.isAttachedToWindow() || input.getLayout() == null) return;
+
+        android.text.Layout layout = input.getLayout();
+        int line = layout.getLineForOffset(cursor);
+        float horizontal = layout.getPrimaryHorizontal(cursor);
+        int[] location = new int[2];
+        input.getLocationOnScreen(location);
+        int x = Math.max(0, location[0] + Math.round(horizontal) - input.getScrollX());
+        int y = Math.max(0, location[1] + layout.getLineBottom(line)
+            + input.getPaddingTop() - input.getScrollY());
+        if (parameterHintPopup.isShowing()) {
+            parameterHintPopup.update(x, y, -1, -1);
+        } else {
+            parameterHintPopup.showAtLocation(input, Gravity.TOP | Gravity.LEFT, x, y);
+        }
+    }
+
+    private String parameterSignature(String function) {
+        switch (function) {
+            case "love.load": return "()";
+            case "love.update": return "(dt)";
+            case "love.draw": return "()";
+            case "love.keypressed": return "(key, scancode, isrepeat)";
+            case "love.mousepressed": return "(x, y, button, istouch, presses)";
+            case "love.graphics.rectangle": return "(mode, x, y, width, height, cornerWidth?, cornerHeight?)";
+            case "love.graphics.circle": return "(mode, x, y, radius, segments?)";
+            case "love.graphics.draw": return "(drawable, x, y, rotation?, scaleX?, scaleY?, originX?, originY?, shearX?, shearY?)";
+            case "love.graphics.print": return "(text, x, y, rotation?, scaleX?, scaleY?, originX?, originY?, shearX?, shearY?)";
+            case "love.graphics.printf": return "(text, x, y, wrapLimit, align?, ...)";
+            case "love.graphics.line": return "(x1, y1, x2, y2, ...)";
+            case "love.graphics.setColor": return "(red, green, blue, alpha?)";
+            case "love.graphics.setBackgroundColor": return "(red, green, blue, alpha?)";
+            case "love.graphics.newImage": return "(filename, settings?)";
+            case "love.graphics.newFont": return "(filename?, size?)";
+            case "love.audio.newSource": return "(filename, sourceType?)";
+            case "love.keyboard.isDown": return "(key, ...)";
+            case "love.filesystem.read": return "(name, size?)";
+            case "love.filesystem.write": return "(name, data)";
+            case "love.window.setMode": return "(width, height, flags?)";
+            case "love.math.random": return "(max?) ou (min, max)";
+            case "love.physics.newWorld": return "(gravityX, gravityY, allowSleep?)";
+            case "require": return "(moduleName)";
+            case "print": return "(...)";
+            case "pairs": return "(table)";
+            case "ipairs": return "(table)";
+            default: return null;
+        }
+    }
+
+    private void dismissParameterHint() {
+        if (parameterHintPopup != null && parameterHintPopup.isShowing()) {
+            parameterHintPopup.dismiss();
+        }
+    }
+
+    /**
+     * Insere um modelo pronto no ponto do cursor. O marcador | define onde
+     * a digitacao continua; ele nunca e inserido no arquivo.
+     */
+    private void showSnippetPicker() {
+        String[] names = {
+            "love.load — inicialização",
+            "love.update(dt) — atualização",
+            "love.draw — desenho",
+            "love.keypressed — teclado",
+            "Retângulo",
+            "Círculo",
+            "Movimento com teclado"
+        };
+        String[] snippets = {
+            "function love.load()\\n    |\\nend",
+            "function love.update(dt)\\n    |\\nend",
+            "function love.draw()\\n    |\\nend",
+            "function love.keypressed(key, scancode, isrepeat)\\n    |\\nend",
+            "love.graphics.rectangle(\"fill\", |x, y, width, height)",
+            "love.graphics.circle(\"fill\", |x, y, radius)",
+            "function love.update(dt)\\n    if love.keyboard.isDown(\"right\") then\\n        player.x = player.x + player.speed * dt\\n    end\\n    |\\nend"
+        };
+        new AlertDialog.Builder(activity)
+            .setTitle("Inserir snippet")
+            .setItems(names, (dialog, which) -> insertSnippet(snippets[which]))
+            .setNegativeButton("Cancelar", null)
+            .show();
+    }
+
+    private void insertSnippet(String snippet) {
+        int start = input.getSelectionStart();
+        int end = input.getSelectionEnd();
+        if (start < 0 || end < start) return;
+        int marker = snippet.indexOf('|');
+        if (marker < 0) marker = snippet.length();
+        String code = snippet.replace("|", "");
+        input.getText().replace(start, end, code);
+        input.setSelection(Math.min(start + marker, input.length()));
+        input.requestFocus();
     }
 
     private boolean acceptAutocompleteSuggestion() {
