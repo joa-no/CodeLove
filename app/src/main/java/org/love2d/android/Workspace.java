@@ -14,6 +14,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.graphics.Canvas;
@@ -54,6 +55,7 @@ import java.util.Set;
 public final class Workspace {
     private static final String TAG = "CodeLove";
     private static final int REQUEST_ADD_PROJECT_TREE = 4102;
+    private static final String PREF_WORKSPACE_ORIENTATION = "workspace_orientation";
     private static Workspace currentInstance;
 
     // Cores inspiradas no desenho de referencia (tema escuro).
@@ -145,6 +147,21 @@ public final class Workspace {
      * Liga a area de trabalho ao layout do SDL.
      * "layout" e o layout criado pelo SDL; "surface" e onde o LOVE desenha.
      */
+    /** Aplica a orientacao salva antes de montar a interface do ambiente de trabalho. */
+    public static void applySavedOrientation(Activity activity) {
+        if (activity == null) return;
+        SharedPreferences preferences =
+            activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
+        String saved = preferences.getString(PREF_WORKSPACE_ORIENTATION, "");
+        if ("portrait".equals(saved)) {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        } else if ("landscape".equals(saved)) {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        } else {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }
+
     public static void attach(Activity activity, ViewGroup layout, View surface) {
         if (activity == null || surface == null || !(layout instanceof RelativeLayout)) {
             return;
@@ -159,6 +176,7 @@ public final class Workspace {
         currentInstance = workspace;
         workspace.build();
         workspace.importPreviouslyRegisteredProjects();
+        workspace.showInitialOrientationChooser();
     }
 
     private void importPreviouslyRegisteredProjects() {
@@ -508,6 +526,17 @@ public final class Workspace {
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
 
+        LinearLayout orientation = new LinearLayout(activity);
+        orientation.setGravity(Gravity.CENTER);
+        orientation.setBackground(box(COLOR_FIELD, 10, false));
+        orientation.addView(new IconView(activity, IconView.ORIENTATION, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        setButtonHint(orientation, "Alterar orientação da tela");
+        orientation.setOnClickListener(v -> showOrientationChooser(true));
+        LinearLayout.LayoutParams orientationLp = new LinearLayout.LayoutParams(dp(32), dp(32));
+        orientationLp.setMargins(0, 0, dp(6), 0);
+        header.addView(orientation, orientationLp);
+
         LinearLayout info = new LinearLayout(activity);
         info.setGravity(Gravity.CENTER);
         info.setBackground(box(COLOR_FIELD, 10, false));
@@ -550,7 +579,115 @@ public final class Workspace {
             if (consoleOpen) updateConsole();
             applyLayout();
         }), consoleParams);
+        LinearLayout.LayoutParams orientationParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
+        orientationParams.setMargins(dp(6), 0, 0, 0);
+        bar.addView(mobileActionButton("Tela", v -> showOrientationChooser(true)),
+            orientationParams);
         return bar;
+    }
+
+    private void showInitialOrientationChooser() {
+        root.post(() -> {
+            if (!prefs.contains(PREF_WORKSPACE_ORIENTATION) && !activity.isFinishing()) {
+                showOrientationChooser(false);
+            }
+        });
+    }
+
+    private void showOrientationChooser(boolean allowDismiss) {
+        if (activity.isFinishing()) return;
+
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(4), dp(20), dp(8));
+
+        TextView explanation = new TextView(activity);
+        explanation.setText("Escolha o formato mais adequado ao tamanho da sua tela.");
+        explanation.setTextColor(COLOR_MUTED);
+        explanation.setTextSize(14);
+        explanation.setPadding(0, 0, 0, dp(14));
+        content.addView(explanation);
+
+        content.addView(buildOrientationOption(true));
+        View divider = new View(activity);
+        divider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
+        dividerParams.setMargins(0, dp(12), 0, dp(12));
+        content.addView(divider, dividerParams);
+        content.addView(buildOrientationOption(false));
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+            .setTitle("Orientação do CodeLove")
+            .setView(content)
+            .setCancelable(allowDismiss)
+            .create();
+        if (allowDismiss) {
+            dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Cancelar",
+                (d, which) -> d.dismiss());
+        }
+        dialog.setCanceledOnTouchOutside(allowDismiss);
+        content.findViewWithTag("orientation_portrait").setOnClickListener(v -> {
+            saveOrientationChoice(true);
+            dialog.dismiss();
+        });
+        content.findViewWithTag("orientation_landscape").setOnClickListener(v -> {
+            saveOrientationChoice(false);
+            dialog.dismiss();
+        });
+        dialog.show();
+        if (allowDismiss) {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(COLOR_MUTED);
+        }
+    }
+
+    private View buildOrientationOption(boolean portrait) {
+        LinearLayout option = new LinearLayout(activity);
+        option.setTag(portrait ? "orientation_portrait" : "orientation_landscape");
+        option.setOrientation(LinearLayout.HORIZONTAL);
+        option.setGravity(Gravity.CENTER_VERTICAL);
+        option.setPadding(dp(12), dp(12), dp(12), dp(12));
+        option.setBackground(box(COLOR_FIELD, 12, true));
+        option.setClickable(true);
+        option.setFocusable(true);
+
+        OrientationPreviewView preview = new OrientationPreviewView(activity, portrait);
+        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(dp(76), dp(76));
+        previewParams.setMargins(0, 0, dp(14), 0);
+        option.addView(preview, previewParams);
+
+        LinearLayout labels = new LinearLayout(activity);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        TextView title = new TextView(activity);
+        title.setText(portrait ? "Vertical" : "Horizontal");
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(16);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        labels.addView(title);
+
+        TextView description = new TextView(activity);
+        description.setText(portrait
+            ? "Esse formato é ideal para celulares. Não recomendado para telas grandes, como tablets."
+            : "Esse formato é ideal para telas maiores, como tablets. Não recomendado para telas pequenas, como celulares.");
+        description.setTextColor(COLOR_MUTED);
+        description.setTextSize(12);
+        LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        descriptionParams.setMargins(0, dp(4), 0, 0);
+        labels.addView(description, descriptionParams);
+        option.addView(labels, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return option;
+    }
+
+    private void saveOrientationChoice(boolean portrait) {
+        String value = portrait ? "portrait" : "landscape";
+        prefs.edit().putString(PREF_WORKSPACE_ORIENTATION, value).apply();
+        activity.setRequestedOrientation(portrait
+            ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            : ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        applyLayout();
     }
 
     private TextView mobileActionButton(String label, View.OnClickListener listener) {
@@ -2151,6 +2288,7 @@ public final class Workspace {
         static final int INFO = 12;
         static final int SAVE = 13;
         static final int CHECK = 14;
+        static final int ORIENTATION = 15;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -2253,6 +2391,19 @@ public final class Workspace {
                     path.lineTo(9f, 17f);
                     path.lineTo(20f, 6f);
                     break;
+                case ORIENTATION:
+                    path.addRoundRect(4f, 5f, 20f, 19f, 2f, 2f, Path.Direction.CW);
+                    path.moveTo(8f, 2.5f);
+                    path.lineTo(5f, 5.5f);
+                    path.lineTo(8f, 8.5f);
+                    path.moveTo(5f, 5.5f);
+                    path.lineTo(10f, 5.5f);
+                    path.moveTo(16f, 21.5f);
+                    path.lineTo(19f, 18.5f);
+                    path.lineTo(16f, 15.5f);
+                    path.moveTo(19f, 18.5f);
+                    path.lineTo(14f, 18.5f);
+                    break;
                 case CONSOLE:
                     path.moveTo(5f, 7f);
                     path.lineTo(11f, 12f);
@@ -2324,6 +2475,37 @@ public final class Workspace {
             canvas.scale(scale, scale);
             canvas.drawPath(path, paint);
             canvas.restore();
+        }
+    }
+
+    /** Ilustracao simples do formato de tela na escolha inicial de orientacao. */
+    private final class OrientationPreviewView extends View {
+        private final boolean portrait;
+        private final Paint previewPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        OrientationPreviewView(Context context, boolean portrait) {
+            super(context);
+            this.portrait = portrait;
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float width = getWidth();
+            float height = getHeight();
+            float screenWidth = portrait ? width * 0.43f : width * 0.78f;
+            float screenHeight = portrait ? height * 0.78f : height * 0.48f;
+            float left = (width - screenWidth) / 2f;
+            float top = (height - screenHeight) / 2f;
+            previewPaint.setColor(COLOR_MUTED);
+            previewPaint.setStyle(Paint.Style.STROKE);
+            previewPaint.setStrokeWidth(dp(2));
+            canvas.drawRoundRect(left, top, left + screenWidth, top + screenHeight,
+                dp(5), dp(5), previewPaint);
+            previewPaint.setStyle(Paint.Style.FILL);
+            previewPaint.setColor(COLOR_LUA);
+            float dot = dp(3);
+            canvas.drawCircle(width / 2f, top + screenHeight - dp(5), dot, previewPaint);
         }
     }
 

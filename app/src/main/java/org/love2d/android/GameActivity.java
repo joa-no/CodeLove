@@ -114,6 +114,9 @@ public class GameActivity extends SDLActivity {
 
         super.onCreate(savedInstanceState);
 
+        // Aplica a preferencia salva sem depender da rotacao automatica do Android.
+        Workspace.applySavedOrientation(this);
+
         if (mBrokenLibraries) {
             return;
         }
