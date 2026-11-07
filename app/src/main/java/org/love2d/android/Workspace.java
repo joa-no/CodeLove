@@ -551,28 +551,32 @@ public final class Workspace {
     }
 
     private LinearLayout buildMobileBar() {
+        // Barra superior integrada ao workspace. Ela ocupa toda a largura,
+        // sem ser um "cartao" flutuando sobre a area do jogo.
         LinearLayout bar = new LinearLayout(activity);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(dp(8), dp(4), dp(8), dp(4));
-        bar.setBackground(box(COLOR_PANEL, 14, true));
+        bar.setPadding(0, 0, 0, 0);
+        bar.setBackground(box(COLOR_PANEL, 0, true));
 
         TextView brand = new TextView(activity);
         brand.setText("CodeLove");
         brand.setTextColor(COLOR_TEXT);
         brand.setTextSize(15);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
+        brand.setPadding(dp(16), 0, dp(8), 0);
         bar.addView(brand, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1.25f));
 
-        bar.addView(mobileActionButton("Arquivos", v -> {
+        TextView files = mobileActionButton("Arquivos", v -> {
             mobileFilesOpen = !mobileFilesOpen;
             applyLayout();
-        }));
-        LinearLayout.LayoutParams consoleParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
-        consoleParams.setMargins(dp(6), 0, 0, 0);
-        bar.addView(mobileActionButton("Console", v -> {
+        });
+        bar.addView(files, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 0.9f));
+
+        TextView console = mobileActionButton("Console", v -> {
             if (editor == null || !editor.isOpen()) {
                 toast("Abra um arquivo para usar o console.");
                 return;
@@ -580,12 +584,14 @@ public final class Workspace {
             consoleOpen = !consoleOpen;
             if (consoleOpen) updateConsole();
             applyLayout();
-        }), consoleParams);
-        LinearLayout.LayoutParams orientationParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
-        orientationParams.setMargins(dp(6), 0, 0, 0);
-        bar.addView(mobileActionButton("Tela", v -> showOrientationChooser(true)),
-            orientationParams);
+        });
+        bar.addView(console, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 0.9f));
+
+        TextView screen = mobileActionButton("Tela", v -> showOrientationChooser(true));
+        bar.addView(screen, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 0.9f));
+
         return bar;
     }
 
@@ -749,8 +755,10 @@ public final class Workspace {
         button.setTextColor(COLOR_TEXT);
         button.setTextSize(12);
         button.setGravity(Gravity.CENTER);
-        button.setPadding(dp(10), 0, dp(10), 0);
-        button.setBackground(box(COLOR_FIELD, 10, false));
+        button.setPadding(dp(6), 0, dp(6), 0);
+        // Os comandos funcionam como abas da barra, sem caixas arredondadas
+        // individuais competindo visualmente com o editor.
+        button.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         button.setOnClickListener(listener);
         return button;
     }
@@ -1034,9 +1042,9 @@ public final class Workspace {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
         mobileBarLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
         mobileBarLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-        mobileBarLp.leftMargin = insetLeft + margin;
-        mobileBarLp.rightMargin = insetRight + margin;
-        mobileBarLp.topMargin = insetTop + margin;
+        mobileBarLp.leftMargin = insetLeft;
+        mobileBarLp.rightMargin = insetRight;
+        mobileBarLp.topMargin = insetTop;
         mobileBar.setLayoutParams(mobileBarLp);
         mobileBar.setVisibility(verticalMode && !fullscreen ? View.VISIBLE : View.GONE);
 
