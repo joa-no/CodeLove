@@ -2085,6 +2085,34 @@ public final class Workspace {
         renderTree();
     }
 
+    private void reloadProject() {
+        if (activeProject == null || (editor != null && !editor.saveNow())) return;
+
+        if (activeSafStorage != null) {
+            final DirectSafStorage storage = activeSafStorage;
+            final File project = activeProject;
+            new Thread(() -> {
+                if (storage != activeSafStorage || activeProject == null
+                    || !sameFile(activeProject, project) || disposed) return;
+                if (!prepareRuntimeProject(false)) return;
+                activity.runOnUiThread(() -> {
+                    if (currentInstance != this || disposed
+                        || storage != activeSafStorage
+                        || activeProject == null || !sameFile(activeProject, project)
+                        || runtimeProject == null) return;
+                    sendCommand("reload", runtimeProject.getAbsolutePath());
+                    lastConsole = "";
+                    updateConsole();
+                });
+            }, "CodeLove-SAF-Reload").start();
+            return;
+        }
+
+        sendCommand("reload", activeProject.getAbsolutePath());
+        lastConsole = "";
+        updateConsole();
+    }
+
     private void resetScene() {
         if (activeProject == null || !editor.saveNow()) return;
 
@@ -2267,19 +2295,14 @@ public final class Workspace {
         header.addView(clear, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)));
 
-        TextView reload = new TextView(activity);
-        reload.setText("Reload");
-        reload.setTextColor(COLOR_TEXT);
-        reload.setTextSize(13);
+        LinearLayout reload = new LinearLayout(activity);
         reload.setGravity(Gravity.CENTER);
-        reload.setPadding(dp(12), 0, dp(12), 0);
         reload.setBackground(box(COLOR_FIELD, 10, false));
-        reload.setOnClickListener(v -> {
-            lastConsole = "";
-            updateConsole();
-        });
-        LinearLayout.LayoutParams reloadLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(30));
+        reload.addView(new IconView(activity, IconView.RELOAD, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        setButtonHint(reload, "Recarregar o projeto");
+        reload.setOnClickListener(v -> reloadProject());
+        LinearLayout.LayoutParams reloadLp = new LinearLayout.LayoutParams(dp(30), dp(30));
         reloadLp.setMargins(dp(6), 0, 0, 0);
         header.addView(reload, reloadLp);
 
@@ -2526,6 +2549,7 @@ public final class Workspace {
         static final int CHECK = 14;
         static final int ORIENTATION = 15;
         static final int CLOSE = 16;
+        static final int RELOAD = 17;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -2628,6 +2652,12 @@ public final class Workspace {
                     path.lineTo(18f, 18f);
                     path.moveTo(18f, 6f);
                     path.lineTo(6f, 18f);
+                    break;
+                case RELOAD:
+                    path.addArc(4f, 4f, 20f, 20f, 45f, 285f);
+                    path.moveTo(19f, 5f);
+                    path.lineTo(19f, 11f);
+                    path.lineTo(13f, 9f);
                     break;
                 case CHECK:
                     path.moveTo(4f, 12f);

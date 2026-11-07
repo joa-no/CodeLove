@@ -244,6 +244,14 @@ local function handleCommand(command, argument)
     setPlaying(true)
   elseif command == "pause" then
     setPlaying(false)
+  elseif command == "reload" then
+    if argument and argument ~= "" then
+      local wasPlaying = host.playing
+      openProject(argument)
+      if host.project and not host.errorText then
+        setPlaying(wasPlaying)
+      end
+    end
   elseif command == "clearlog" then
     host.logLines = {}
     host.logDirty = true
