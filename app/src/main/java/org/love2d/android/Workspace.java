@@ -2596,7 +2596,7 @@ public final class Workspace {
         private void drawCodeLine(Canvas canvas, float start, float y, float end, int color) {
             if (end <= start) return;
             previewPaint.setColor(color);
-            previewPaint.setStrokeWidth(Math.max(1f, dp(1.5f)));
+            previewPaint.setStrokeWidth(Math.max(1f, dp(2)));
             previewPaint.setStrokeCap(Paint.Cap.ROUND);
             canvas.drawLine(start, y, end, y, previewPaint);
         }
