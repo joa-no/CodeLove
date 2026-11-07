@@ -302,7 +302,7 @@ public final class Workspace {
 
         panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(box(COLOR_PANEL, 16, true));
+        panel.setBackground(box(COLOR_PANEL, 0, false));
         panel.setPadding(dp(12), dp(12), dp(12), dp(12));
 
         panel.addView(buildHeader(), new LinearLayout.LayoutParams(
@@ -911,8 +911,6 @@ public final class Workspace {
         float baseW = root.getWidth() - insetLeft - insetRight;
         float baseH = root.getHeight() - insetTop - insetBottom;
 
-        // Os paineis externos ocupam suas regioes ate as bordas da tela.
-        // O espacamento visual fica reservado aos controles internos.
         // No modo horizontal, mantemos a largura original do painel.
         // No vertical, o painel de arquivos vira uma gaveta sobreposta.
         int effectivePanelWidth = panelWidth;
@@ -930,9 +928,9 @@ public final class Workspace {
         int editorWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         if (editorOpen) {
             if (verticalMode) {
-                editorOffset = margin;
+                editorOffset = 0;
                 editorWidth = baseW > 0f
-                    ? Math.max(0, (int) baseW - 2 * margin)
+                    ? Math.max(0, (int) baseW)
                     : ViewGroup.LayoutParams.MATCH_PARENT;
             } else {
                 editorOffset = panelShown ? cursor : cursor + margin;
@@ -956,26 +954,32 @@ public final class Workspace {
                 Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
         }
 
-        // A superficie do LÖVE ocupa diretamente a area disponivel.
-        // No horizontal, reserva-se o espaco do painel; no vertical, os paineis
-        // continuam sobrepostos e o jogo usa toda a area sob a interface.
-        // Evita reduzir a superficie inteira por escala, o que deixava faixas
-        // descobertas nas bordas e no topo/rodape.
+        // O runtime continua com a mesma resolucao logica. No modo vertical,
+        // os paineis sao sobrepostos e nao reduzem a area do jogo.
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        surfaceLp.leftMargin = insetLeft + (!verticalMode && onLeft ? reserved : 0);
+        surfaceLp.leftMargin = insetLeft;
         surfaceLp.topMargin = insetTop;
-        surfaceLp.rightMargin = insetRight + (!verticalMode && !onLeft ? reserved : 0);
+        surfaceLp.rightMargin = insetRight;
         surfaceLp.bottomMargin = insetBottom;
         surface.setLayoutParams(surfaceLp);
 
-        // Limpa qualquer transformacao aplicada por um layout anterior.
+        float scale = 1f;
+        float shiftX = 0f;
+        float shiftY = 0f;
+        if (baseW > 0f && baseH > 0f && reserved > 0) {
+            float availW = Math.max(1f, baseW - reserved);
+            float availH = baseH;
+            scale = Math.min(1f, Math.min(availW / baseW, availH / baseH));
+            shiftX = (onLeft ? reserved : 0f) + (availW - baseW * scale) / 2f;
+            shiftY = (availH - baseH * scale) / 2f;
+        }
         surface.setPivotX(0f);
         surface.setPivotY(0f);
-        surface.setScaleX(1f);
-        surface.setScaleY(1f);
-        surface.setTranslationX(0f);
-        surface.setTranslationY(0f);
+        surface.setScaleX(scale);
+        surface.setScaleY(scale);
+        surface.setTranslationX(shiftX);
+        surface.setTranslationY(shiftY);
 
         RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -990,22 +994,22 @@ public final class Workspace {
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
                 Math.max(0, (int) baseW - 2 * margin), ViewGroup.LayoutParams.MATCH_PARENT);
             panelLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-            panelLp.leftMargin = insetLeft + margin;
-            panelLp.rightMargin = insetRight + margin;
-            panelLp.topMargin = panelTop;
-            panelLp.bottomMargin = insetBottomIme + margin;
+            panelLp.leftMargin = insetLeft;
+            panelLp.rightMargin = insetRight;
+            panelLp.topMargin = insetTop + mobileBarHeight;
+            panelLp.bottomMargin = insetBottomIme;
             panel.setLayoutParams(panelLp);
         } else {
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
                 effectivePanelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
             panelLp.addRule(onLeft
                 ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-            panelLp.topMargin = insetTop + margin;
-            panelLp.bottomMargin = insetBottomIme + margin;
+            panelLp.topMargin = insetTop;
+            panelLp.bottomMargin = insetBottomIme;
             if (onLeft) {
-                panelLp.leftMargin = panelOffset;
+                panelLp.leftMargin = panelOffset - margin;
             } else {
-                panelLp.rightMargin = panelOffset;
+                panelLp.rightMargin = panelOffset - margin;
             }
             panel.setLayoutParams(panelLp);
         }
@@ -1015,8 +1019,8 @@ public final class Workspace {
             editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
         editorLp.addRule(verticalMode || onLeft
             ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        editorLp.topMargin = insetTop + mobileBarHeight + margin;
-        editorLp.bottomMargin = insetBottomIme + margin;
+        editorLp.topMargin = insetTop + mobileBarHeight;
+        editorLp.bottomMargin = insetBottomIme;
         if (verticalMode || onLeft) {
             editorLp.leftMargin = verticalMode ? insetLeft + editorOffset : editorOffset;
         } else {
