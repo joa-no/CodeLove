@@ -1848,6 +1848,8 @@ public final class Workspace {
                         || activeProject == null || !sameFile(activeProject, project)) return;
                     playing = true;
                     sendCommand("play", "");
+                    // No modo vertical, o Play leva da edicao para a visualizacao do jogo.
+                    if (editor != null && editor.isOpen()) editor.close();
                     updatePlayButton();
                 });
             }, "CodeLove-SAF-Play").start();
@@ -1857,6 +1859,8 @@ public final class Workspace {
         sendCommand("open", activeProject.getAbsolutePath());
         playing = true;
         sendCommand("play", "");
+        // No modo vertical, o Play leva da edicao para a visualizacao do jogo.
+        if (editor != null && editor.isOpen()) editor.close();
         updatePlayButton();
     }
 
@@ -1947,7 +1951,10 @@ public final class Workspace {
 
     private void updateControlsVisibility() {
         boolean editorVisible = editor != null && editor.isOpen() && !fullscreen;
-        boolean showBar = activeProject != null && !editorVisible;
+        boolean verticalMode = root.getHeight() > root.getWidth();
+        // No vertical, os controles do editor ficam no rodape do proprio editor.
+        // Esconde a barra flutuante para nao cobrir o botao + da arvore de arquivos.
+        boolean showBar = activeProject != null && !editorVisible && !verticalMode;
         if (controlsBar != null) {
             controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
         }
