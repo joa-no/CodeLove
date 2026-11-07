@@ -12,8 +12,6 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -84,7 +82,7 @@ final class CodeEditor {
     private final LinearLayout view;
     private final TextView title;
     private final TextView dirtyMark;
-    private final LineNumberView gutter;
+    private final TextView gutter;
     private final EditText input;
     private PopupWindow autocompletePopup;
     private TextView autocompleteText;
@@ -171,9 +169,14 @@ final class CodeEditor {
         view.addView(divider, dividerLp);
 
         // ---- area de texto: numeros de linha + codigo (rola na vertical e na horizontal) ----
-        gutter = new LineNumberView(activity);
+        gutter = new TextView(activity);
+        gutter.setTypeface(Typeface.MONOSPACE);
+        gutter.setTextSize(13);
+        gutter.setTextColor(Workspace.COLOR_MUTED);
+        gutter.setGravity(Gravity.END | Gravity.TOP);
+        gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
-        gutter.setMinimumWidth(dp(34));
+        gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
@@ -1110,72 +1113,13 @@ final class CodeEditor {
         }
         if (!force && lines == lineCount) return;
         lineCount = lines;
-        gutter.setLineCount(lines);
-    }
 
-    /**
-     * Desenha apenas os numeros de linha que estao dentro da area visivel.
-     * Evita manter um TextView com centenas ou milhares de linhas de texto,
-     * cujo layout completo precisa ser recalculado quando a contagem muda.
-     */
-    private final class LineNumberView extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private int lines = 1;
-
-        LineNumberView(Context context) {
-            super(context);
-            paint.setTypeface(Typeface.MONOSPACE);
-            paint.setTextSize(13f * activity.getResources().getDisplayMetrics().scaledDensity);
-            paint.setColor(Workspace.COLOR_MUTED);
-            paint.setTextAlign(Paint.Align.RIGHT);
-            setWillNotDraw(false);
+        StringBuilder numbers = new StringBuilder();
+        for (int i = 0; i < lines; i++) {
+            if (i > 0) numbers.append("\n");
+            numbers.append(i + 1);
         }
-
-        void setLineCount(int count) {
-            int safeCount = Math.max(1, count);
-            if (lines == safeCount) return;
-            lines = safeCount;
-            requestLayout();
-            invalidate();
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            int digits = String.valueOf(lines).length();
-            float textWidth = paint.measureText(repeatNine(digits));
-            int desiredWidth = Math.max(getSuggestedMinimumWidth(),
-                (int) Math.ceil(textWidth) + getPaddingLeft() + getPaddingRight());
-            int lineHeight = Math.max(1, input.getLineHeight());
-            int desiredHeight = getPaddingTop() + getPaddingBottom() + lines * lineHeight;
-            desiredHeight = Math.max(desiredHeight, getSuggestedMinimumHeight());
-            setMeasuredDimension(
-                resolveSize(desiredWidth, widthMeasureSpec),
-                resolveSize(desiredHeight, heightMeasureSpec));
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            Rect visible = canvas.getClipBounds();
-            int lineHeight = Math.max(1, input.getLineHeight());
-            float firstBaseline = input.getBaseline();
-            int first = Math.max(0, (int) Math.floor((visible.top - firstBaseline) / lineHeight));
-            int last = Math.min(lines - 1,
-                (int) Math.ceil((visible.bottom - firstBaseline) / lineHeight));
-            float x = getWidth() - getPaddingRight();
-            for (int line = first; line <= last; line++) {
-                float y = firstBaseline + line * lineHeight;
-                if (y >= visible.top - lineHeight && y <= visible.bottom + lineHeight) {
-                    canvas.drawText(String.valueOf(line + 1), x, y, paint);
-                }
-            }
-        }
-
-        private String repeatNine(int count) {
-            StringBuilder value = new StringBuilder(count);
-            for (int i = 0; i < count; i++) value.append('9');
-            return value.toString();
-        }
+        gutter.setText(numbers.toString());
     }
 
     private void applyHighlight(Editable text) {
