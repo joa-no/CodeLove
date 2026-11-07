@@ -99,8 +99,6 @@ public final class Workspace {
     private OverlayUi ui;
     private SharedPreferences prefs;
     private LinearLayout consolePanel;
-    private LinearLayout mobileBar;
-    private boolean mobileFilesOpen = false;
     private TextView consoleText;
     private ScrollView consoleScroll;
     private LinearLayout consoleButton;
@@ -420,14 +418,6 @@ public final class Workspace {
         footerPlayButton.addView(footerPlayIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         footerPlayButton.setOnClickListener(v -> togglePlayback());
 
-        TextView footerResetButton = new TextView(activity);
-        footerResetButton.setText("\u21BA");
-        footerResetButton.setGravity(Gravity.CENTER);
-        footerResetButton.setTextColor(COLOR_TEXT);
-        footerResetButton.setTextSize(20);
-        footerResetButton.setBackground(box(COLOR_FIELD, 22, false));
-        footerResetButton.setOnClickListener(v -> resetScene());
-
         placeholder = buildPlaceholder();
 
         saveIcon = new IconView(activity, IconView.SAVE, COLOR_TEXT);
@@ -458,7 +448,6 @@ public final class Workspace {
         });
         editor.addFooterControl(saveButton, CONTROL_BUTTON_DP, 0);
         editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
-        editor.addFooterControl(footerResetButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editor.addFooterControl(consoleButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editorView = editor.getView();
         editorView.setVisibility(View.GONE);
@@ -468,8 +457,6 @@ public final class Workspace {
         root.addView(panel);
         root.addView(consolePanel);
         root.addView(controlsBar);
-        mobileBar = buildMobileBar();
-        root.addView(mobileBar);
 
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -548,51 +535,6 @@ public final class Workspace {
         header.addView(info, new LinearLayout.LayoutParams(dp(32), dp(32)));
 
         return header;
-    }
-
-    private LinearLayout buildMobileBar() {
-        // Barra superior integrada ao workspace. Ela ocupa toda a largura,
-        // sem ser um "cartao" flutuando sobre a area do jogo.
-        LinearLayout bar = new LinearLayout(activity);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setPadding(0, 0, 0, 0);
-        bar.setBackground(box(COLOR_PANEL, 0, true));
-
-        TextView brand = new TextView(activity);
-        brand.setText("CodeLove");
-        brand.setTextColor(COLOR_TEXT);
-        brand.setTextSize(15);
-        brand.setTypeface(Typeface.DEFAULT_BOLD);
-        brand.setGravity(Gravity.CENTER_VERTICAL);
-        brand.setPadding(dp(16), 0, dp(8), 0);
-        bar.addView(brand, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.MATCH_PARENT, 1.25f));
-
-        TextView files = mobileActionButton("Arquivos", v -> {
-            mobileFilesOpen = !mobileFilesOpen;
-            applyLayout();
-        });
-        bar.addView(files, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.MATCH_PARENT, 0.9f));
-
-        TextView console = mobileActionButton("Console", v -> {
-            if (editor == null || !editor.isOpen()) {
-                toast("Abra um arquivo para usar o console.");
-                return;
-            }
-            consoleOpen = !consoleOpen;
-            if (consoleOpen) updateConsole();
-            applyLayout();
-        });
-        bar.addView(console, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.MATCH_PARENT, 0.9f));
-
-        TextView screen = mobileActionButton("Tela", v -> showOrientationChooser(true));
-        bar.addView(screen, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.MATCH_PARENT, 0.9f));
-
-        return bar;
     }
 
     private void showInitialOrientationChooser() {
@@ -903,15 +845,14 @@ public final class Workspace {
             consoleOpen = false;
         }
 
-        boolean panelShown = !fullscreen && (!verticalMode || mobileFilesOpen);
-        // Inverter o lado só faz sentido no layout horizontal; no vertical,
-        // o painel funciona como uma gaveta sobreposta e não tem lado persistente.
+        boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
+        // No vertical, mostra os arquivos quando nao ha arquivo aberto;
+        // ao fechar o editor, a arvore volta automaticamente para a tela.
+        boolean panelShown = !fullscreen && (!verticalMode || !editorOpen);
         if (movePanelButton != null) {
             movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
         }
-        boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
         int sideInset = onLeft ? insetLeft : insetRight;
-        int mobileBarHeight = verticalMode && !fullscreen ? dp(48) : 0;
         if (ui != null) {
             ui.topInset = insetTop;
         }
@@ -950,7 +891,7 @@ public final class Workspace {
         }
 
         int editorVisibleHeight = Math.max(0, root.getHeight()
-            - insetTop - mobileBarHeight - insetBottomIme - 2 * margin);
+            - insetTop - insetBottomIme - 2 * margin);
         int consoleFooterSpace = dp(71);
         int consoleAvailableHeight = Math.max(0, editorVisibleHeight - consoleFooterSpace);
         int consoleHeight;
@@ -991,20 +932,19 @@ public final class Workspace {
 
         RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        placeholderLp.topMargin = insetTop + mobileBarHeight;
+        placeholderLp.topMargin = insetTop;
         placeholderLp.bottomMargin = insetBottom;
         placeholderLp.leftMargin = insetLeft + (!verticalMode && onLeft ? reserved : 0);
         placeholderLp.rightMargin = insetRight + (!verticalMode && !onLeft ? reserved : 0);
         placeholder.setLayoutParams(placeholderLp);
 
-        int panelTop = insetTop + mobileBarHeight + margin;
         if (verticalMode) {
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
                 Math.max(0, (int) baseW), ViewGroup.LayoutParams.MATCH_PARENT);
             panelLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
             panelLp.leftMargin = insetLeft;
             panelLp.rightMargin = insetRight;
-            panelLp.topMargin = insetTop + mobileBarHeight;
+            panelLp.topMargin = insetTop;
             panelLp.bottomMargin = insetBottomIme;
             panel.setLayoutParams(panelLp);
         } else {
@@ -1027,7 +967,7 @@ public final class Workspace {
             editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
         editorLp.addRule(verticalMode || onLeft
             ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        editorLp.topMargin = insetTop + mobileBarHeight;
+        editorLp.topMargin = insetTop;
         editorLp.bottomMargin = insetBottomIme;
         if (verticalMode || onLeft) {
             editorLp.leftMargin = verticalMode ? insetLeft + editorOffset : editorOffset;
@@ -1036,17 +976,6 @@ public final class Workspace {
         }
         editorView.setLayoutParams(editorLp);
         editorView.setVisibility(editorOpen ? View.VISIBLE : View.GONE);
-
-        // Barra superior exclusiva do modo vertical.
-        RelativeLayout.LayoutParams mobileBarLp = new RelativeLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
-        mobileBarLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-        mobileBarLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-        mobileBarLp.leftMargin = insetLeft;
-        mobileBarLp.rightMargin = insetRight;
-        mobileBarLp.topMargin = insetTop;
-        mobileBar.setLayoutParams(mobileBarLp);
-        mobileBar.setVisibility(verticalMode && !fullscreen ? View.VISIBLE : View.GONE);
 
         int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
         int buttonCount = 3;
@@ -1335,10 +1264,6 @@ public final class Workspace {
         if (row.dir) {
             renderTree();
         } else {
-            if (root.getHeight() > root.getWidth()) {
-                mobileFilesOpen = false;
-                applyLayout();
-            }
             openInEditor(row.file);
         }
     }
@@ -2228,12 +2153,6 @@ public final class Workspace {
             return;
         }
         selectProject(project);
-        if (!filePath.isEmpty()) {
-            File file = new File(filePath);
-            if (file.isFile() && isInside(file, project)) {
-                openInEditor(file);
-            }
-        }
     }
 
     private static String readText(File file) {
