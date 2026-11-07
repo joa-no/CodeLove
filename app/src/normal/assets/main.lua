@@ -247,7 +247,16 @@ local function handleCommand(command, argument)
   elseif command == "reload" then
     if argument and argument ~= "" then
       local wasPlaying = host.playing
-      openProject(argument)
+      local path, displayName = argument:match("^([^\t]*)\t(.*)$")
+      host.logLines = {}
+      host.logDirty = true
+      host.lastOpenedPath = nil
+      host.lastOpenedName = nil
+      if path then
+        openProject(path, displayName)
+      else
+        openProject(argument)
+      end
       if host.project and not host.errorText then
         setPlaying(wasPlaying)
       end

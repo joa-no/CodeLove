@@ -2100,17 +2100,21 @@ public final class Workspace {
                         || storage != activeSafStorage
                         || activeProject == null || !sameFile(activeProject, project)
                         || runtimeProject == null) return;
-                    sendCommand("reload", runtimeProject.getAbsolutePath());
+                    String runtimeName = storage.getDisplayName()
+                        .replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+                    sendCommand("reload", runtimeProject.getAbsolutePath() + "\t" + runtimeName);
                     lastConsole = "";
-                    updateConsole();
+                    if (consoleText != null) consoleText.setText("");
                 });
             }, "CodeLove-SAF-Reload").start();
             return;
         }
 
-        sendCommand("reload", activeProject.getAbsolutePath());
+        String runtimeName = projectDisplayName(activeProject)
+            .replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+        sendCommand("reload", activeProject.getAbsolutePath() + "\t" + runtimeName);
         lastConsole = "";
-        updateConsole();
+        if (consoleText != null) consoleText.setText("");
     }
 
     private void resetScene() {
