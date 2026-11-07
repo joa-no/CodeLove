@@ -110,6 +110,7 @@ public final class Workspace {
     private CodeEditor editor;
     private View editorView;
     private LinearLayout panel;
+    private View movePanelButton;
     private LinearLayout placeholder;
     private LinearLayout playButton;
     private TextView resetButton;
@@ -349,7 +350,7 @@ public final class Workspace {
         LinearLayout footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.addView(footerIconButton(IconView.PLUS, v -> showAddMenu(v)), footerButtonParams(true));
-        View movePanelButton = footerGlyphButton("\u21C4", v -> {
+        movePanelButton = footerGlyphButton("\u21C4", v -> {
             onLeft = !onLeft;
             applyLayout();
             saveState();
@@ -895,6 +896,11 @@ public final class Workspace {
         }
 
         boolean panelShown = !fullscreen && (!verticalMode || mobileFilesOpen);
+        // Inverter o lado só faz sentido no layout horizontal; no vertical,
+        // o painel funciona como uma gaveta sobreposta e não tem lado persistente.
+        if (movePanelButton != null) {
+            movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
+        }
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
         int sideInset = onLeft ? insetLeft : insetRight;
         int mobileBarHeight = verticalMode && !fullscreen ? dp(48) : 0;
