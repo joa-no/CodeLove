@@ -176,6 +176,9 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Reaplica a orientacao escolhida apos retornar do segundo plano.
+        // O SDL/Android pode restaurar a orientacao do sistema durante a retomada.
+        Workspace.applySavedOrientation(this);
         Workspace.onHostResume(this);
     }
 
