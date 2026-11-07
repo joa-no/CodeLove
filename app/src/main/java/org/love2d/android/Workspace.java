@@ -954,32 +954,26 @@ public final class Workspace {
                 Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
         }
 
-        // O runtime continua com a mesma resolucao logica. No modo vertical,
-        // os paineis sao sobrepostos e nao reduzem a area do jogo.
+        // A superficie do LÖVE ocupa diretamente a area disponivel.
+        // No horizontal, reserva-se o espaco do painel; no vertical, os paineis
+        // continuam sobrepostos e o jogo usa toda a area sob a interface.
+        // Evita reduzir a superficie inteira por escala, o que deixava faixas
+        // descobertas nas bordas e no topo/rodape.
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        surfaceLp.leftMargin = insetLeft;
+        surfaceLp.leftMargin = insetLeft + (!verticalMode && onLeft ? reserved : 0);
         surfaceLp.topMargin = insetTop;
-        surfaceLp.rightMargin = insetRight;
+        surfaceLp.rightMargin = insetRight + (!verticalMode && !onLeft ? reserved : 0);
         surfaceLp.bottomMargin = insetBottom;
         surface.setLayoutParams(surfaceLp);
 
-        float scale = 1f;
-        float shiftX = 0f;
-        float shiftY = 0f;
-        if (baseW > 0f && baseH > 0f && reserved > 0) {
-            float availW = Math.max(1f, baseW - reserved);
-            float availH = baseH;
-            scale = Math.min(1f, Math.min(availW / baseW, availH / baseH));
-            shiftX = (onLeft ? reserved : 0f) + (availW - baseW * scale) / 2f;
-            shiftY = (availH - baseH * scale) / 2f;
-        }
+        // Limpa qualquer transformacao aplicada por um layout anterior.
         surface.setPivotX(0f);
         surface.setPivotY(0f);
-        surface.setScaleX(scale);
-        surface.setScaleY(scale);
-        surface.setTranslationX(shiftX);
-        surface.setTranslationY(shiftY);
+        surface.setScaleX(1f);
+        surface.setScaleY(1f);
+        surface.setTranslationX(0f);
+        surface.setTranslationY(0f);
 
         RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
