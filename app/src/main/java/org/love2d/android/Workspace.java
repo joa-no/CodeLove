@@ -911,6 +911,8 @@ public final class Workspace {
         float baseW = root.getWidth() - insetLeft - insetRight;
         float baseH = root.getHeight() - insetTop - insetBottom;
 
+        // Os paineis externos ocupam suas regioes ate as bordas da tela.
+        // O espacamento visual fica reservado aos controles internos.
         // No modo horizontal, mantemos a largura original do painel.
         // No vertical, o painel de arquivos vira uma gaveta sobreposta.
         int effectivePanelWidth = panelWidth;
