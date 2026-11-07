@@ -23,6 +23,8 @@ package org.love2d.android;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
@@ -171,6 +173,32 @@ public class GameActivity extends SDLActivity {
             vibrator.cancel();
         }
         super.onPause();
+    }
+
+    /**
+     * O SDL pode solicitar uma orientacao sempre que o runtime cria ou redimensiona
+     * a janela. Depois que o usuario escolhe o formato do CodeLove, essa escolha
+     * persistida tem prioridade sobre qualquer solicitacao automatica do jogo.
+     */
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        SharedPreferences preferences = getSharedPreferences("codelove", MODE_PRIVATE);
+        String saved = preferences.getString("workspace_orientation", "");
+
+        int requested;
+        if ("portrait".equals(saved)) {
+            requested = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+        } else if ("landscape".equals(saved)) {
+            requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+        } else {
+            // Antes da escolha inicial, mantem o comportamento normal do SDL.
+            super.setOrientationBis(w, h, resizable, hint);
+            return;
+        }
+
+        if (getRequestedOrientation() != requested) {
+            setRequestedOrientation(requested);
+        }
     }
 
     @Override
