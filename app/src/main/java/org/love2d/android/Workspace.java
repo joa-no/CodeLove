@@ -96,6 +96,8 @@ public final class Workspace {
     private OverlayUi ui;
     private SharedPreferences prefs;
     private LinearLayout consolePanel;
+    private LinearLayout mobileBar;
+    private boolean mobileFilesOpen = false;
     private TextView consoleText;
     private ScrollView consoleScroll;
     private LinearLayout consoleButton;
@@ -446,6 +448,8 @@ public final class Workspace {
         root.addView(panel);
         root.addView(consolePanel);
         root.addView(controlsBar);
+        mobileBar = buildMobileBar();
+        root.addView(mobileBar);
 
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -513,6 +517,52 @@ public final class Workspace {
         header.addView(info, new LinearLayout.LayoutParams(dp(32), dp(32)));
 
         return header;
+    }
+
+    private LinearLayout buildMobileBar() {
+        LinearLayout bar = new LinearLayout(activity);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(8), dp(4), dp(8), dp(4));
+        bar.setBackground(box(COLOR_PANEL, 14, true));
+
+        TextView brand = new TextView(activity);
+        brand.setText("CodeLove");
+        brand.setTextColor(COLOR_TEXT);
+        brand.setTextSize(15);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        bar.addView(brand, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+
+        bar.addView(mobileActionButton("Arquivos", v -> {
+            mobileFilesOpen = !mobileFilesOpen;
+            applyLayout();
+        }));
+        LinearLayout.LayoutParams consoleParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
+        consoleParams.setMargins(dp(6), 0, 0, 0);
+        bar.addView(mobileActionButton("Console", v -> {
+            if (editor == null || !editor.isOpen()) {
+                toast("Abra um arquivo para usar o console.");
+                return;
+            }
+            consoleOpen = !consoleOpen;
+            if (consoleOpen) updateConsole();
+            applyLayout();
+        }), consoleParams);
+        return bar;
+    }
+
+    private TextView mobileActionButton(String label, View.OnClickListener listener) {
+        TextView button = new TextView(activity);
+        button.setText(label);
+        button.setTextColor(COLOR_TEXT);
+        button.setTextSize(12);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(10), 0, dp(10), 0);
+        button.setBackground(box(COLOR_FIELD, 10, false));
+        button.setOnClickListener(listener);
+        return button;
     }
 
     private LinearLayout footerIconButton(int kind, View.OnClickListener listener) {
@@ -648,69 +698,69 @@ public final class Workspace {
     // ------------------------------------------------------------------
 
     private void applyLayout() {
-        int sideInset = onLeft ? insetLeft : insetRight;
-        boolean panelShown = !fullscreen;
+        boolean verticalMode = root.getHeight() > root.getWidth();
+        boolean keyboardVisible = insetBottomIme > insetBottom + dp(80);
+        if (verticalMode && keyboardVisible) {
+            // O editor tem prioridade: o console nunca disputa espaco com o teclado.
+            consoleOpen = false;
+        }
+
+        boolean panelShown = !fullscreen && (!verticalMode || mobileFilesOpen);
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
+        int sideInset = onLeft ? insetLeft : insetRight;
+        int mobileBarHeight = verticalMode && !fullscreen ? dp(48) : 0;
         if (ui != null) {
             ui.topInset = insetTop;
         }
 
-        // Tamanho da area de jogo cheia: a tela sem as barras do sistema.
         float baseW = root.getWidth() - insetLeft - insetRight;
         float baseH = root.getHeight() - insetTop - insetBottom;
 
-        // Em telas menores, o painel usa uma parcela menor da largura disponivel.
-        // A estrutura visual permanece a mesma: apenas a largura do painel se
-        // adapta para devolver espaco ao editor e ao runtime. Em telas maiores,
-        // mantemos os 272dp originais.
+        // No modo horizontal, mantemos a largura original do painel.
+        // No vertical, o painel de arquivos vira uma gaveta sobreposta.
         int effectivePanelWidth = panelWidth;
-        if (baseW > 0f) {
-            float density = activity.getResources().getDisplayMetrics().density;
-            float baseWDp = baseW / Math.max(0.1f, density);
-            if (baseWDp < 1000f) {
-                int minPanelWidth = dp(220);
-                int adaptivePanelWidth = Math.round(baseW * 0.24f);
-                effectivePanelWidth = Math.min(
-                    panelWidth,
-                    Math.max(minPanelWidth, adaptivePanelWidth)
-                );
-            }
-        }
-
-        // Da borda da tela para dentro: [painel] [editor].
-        // O editor ocupa sempre todo o espaco restante, sem modo expandido.
         int cursor = sideInset;
         int panelOffset = 0;
         int editorOffset = 0;
-        if (panelShown) {
+        int reserved = 0;
+
+        if (panelShown && !verticalMode) {
             panelOffset = cursor + margin;
             cursor += margin + effectivePanelWidth + margin;
+            reserved = cursor - sideInset;
         }
+
         int editorWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         if (editorOpen) {
-            editorOffset = panelShown ? cursor : cursor + margin;
-            if (baseW > 0f) {
-                editorWidth = Math.max(0, (int) baseW - (editorOffset - sideInset) - margin);
-                cursor = editorOffset + editorWidth + margin;
+            if (verticalMode) {
+                editorOffset = margin;
+                editorWidth = baseW > 0f
+                    ? Math.max(0, (int) baseW - 2 * margin)
+                    : ViewGroup.LayoutParams.MATCH_PARENT;
             } else {
-                cursor = editorOffset + margin;
+                editorOffset = panelShown ? cursor : cursor + margin;
+                if (baseW > 0f) {
+                    editorWidth = Math.max(0,
+                        (int) baseW - (editorOffset - sideInset) - margin);
+                }
             }
         }
-        int reserved = cursor - sideInset;
 
-        // O console fica dentro da area visivel do editor, acima do rodape.
-        // Usa a altura REAL disponivel (incluindo o teclado), para nunca subir
-        // para fora da tela quando o teclado virtual estiver aberto.
-        int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
         int editorVisibleHeight = Math.max(0, root.getHeight()
-            - insetTop - margin - insetBottomIme - margin);
-        int consoleFooterSpace = dp(71); // padding inferior + divisor/margens + barra
+            - insetTop - mobileBarHeight - insetBottomIme - 2 * margin);
+        int consoleFooterSpace = dp(71);
         int consoleAvailableHeight = Math.max(0, editorVisibleHeight - consoleFooterSpace);
-        int consoleHeight = Math.min(dp(220),
-            Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
+        int consoleHeight;
+        if (verticalMode) {
+            consoleHeight = Math.min(dp(240),
+                Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
+        } else {
+            consoleHeight = Math.min(dp(220),
+                Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
+        }
 
-        // A area do jogo SEMPRE tem o mesmo tamanho: a tela cheia, sem as barras do
-        // sistema. Assim o jogo nao muda de resolucao quando o painel ou o teclado mudam.
+        // O runtime continua com a mesma resolucao logica. No modo vertical,
+        // os paineis sao sobrepostos e nao reduzem a area do jogo.
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         surfaceLp.leftMargin = insetLeft;
@@ -719,8 +769,6 @@ public final class Workspace {
         surfaceLp.bottomMargin = insetBottom;
         surface.setLayoutParams(surfaceLp);
 
-        // O jogo so encolhe (mesma proporcao) e vai para o espaco que sobrou,
-        // centralizado na vertical. Nao e esticado nem espremido.
         float scale = 1f;
         float shiftX = 0f;
         float shiftY = 0f;
@@ -738,56 +786,79 @@ public final class Workspace {
         surface.setTranslationX(shiftX);
         surface.setTranslationY(shiftY);
 
-        // Aviso "nenhum arquivo selecionado": ocupa a mesma area do jogo.
         RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        placeholderLp.topMargin = insetTop;
+        placeholderLp.topMargin = insetTop + mobileBarHeight;
         placeholderLp.bottomMargin = insetBottom;
-        placeholderLp.leftMargin = insetLeft + (onLeft ? reserved : 0);
-        placeholderLp.rightMargin = insetRight + (onLeft ? 0 : reserved);
+        placeholderLp.leftMargin = insetLeft + (!verticalMode && onLeft ? reserved : 0);
+        placeholderLp.rightMargin = insetRight + (!verticalMode && !onLeft ? reserved : 0);
         placeholder.setLayoutParams(placeholderLp);
 
-        // Painel de arquivos (acompanha o teclado: sobe junto com ele).
-        RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
-            effectivePanelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
-        panelLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        panelLp.topMargin = insetTop + margin;
-        panelLp.bottomMargin = insetBottomIme + margin;
-        if (onLeft) {
-            panelLp.leftMargin = panelOffset;
+        int panelTop = insetTop + mobileBarHeight + margin;
+        if (verticalMode) {
+            RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
+                Math.max(0, (int) baseW - 2 * margin), ViewGroup.LayoutParams.MATCH_PARENT);
+            panelLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+            panelLp.leftMargin = insetLeft + margin;
+            panelLp.rightMargin = insetRight + margin;
+            panelLp.topMargin = panelTop;
+            panelLp.bottomMargin = insetBottomIme + margin;
+            panel.setLayoutParams(panelLp);
         } else {
-            panelLp.rightMargin = panelOffset;
+            RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
+                effectivePanelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+            panelLp.addRule(onLeft
+                ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+            panelLp.topMargin = insetTop + margin;
+            panelLp.bottomMargin = insetBottomIme + margin;
+            if (onLeft) {
+                panelLp.leftMargin = panelOffset;
+            } else {
+                panelLp.rightMargin = panelOffset;
+            }
+            panel.setLayoutParams(panelLp);
         }
-        panel.setLayoutParams(panelLp);
         panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
 
-        // Editor de codigo: ocupa todo o espaco restante e acompanha o teclado.
-        int editorLayoutWidth = editorWidth;
         RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
-            editorLayoutWidth, ViewGroup.LayoutParams.MATCH_PARENT);
-        editorLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        editorLp.topMargin = insetTop + margin;
+            editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+        editorLp.addRule(verticalMode || onLeft
+            ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+        editorLp.topMargin = insetTop + mobileBarHeight + margin;
         editorLp.bottomMargin = insetBottomIme + margin;
-        if (onLeft) {
-            editorLp.leftMargin = editorOffset;
+        if (verticalMode || onLeft) {
+            editorLp.leftMargin = verticalMode ? insetLeft + editorOffset : editorOffset;
         } else {
             editorLp.rightMargin = editorOffset;
         }
         editorView.setLayoutParams(editorLp);
         editorView.setVisibility(editorOpen ? View.VISIBLE : View.GONE);
 
-        // Barra de controles do jogo: embaixo. Centralizada na area do jogo; em tela
-        // cheia vira uma barrinha translucida no canto, para nao atrapalhar.
+        // Barra superior exclusiva do modo vertical.
+        RelativeLayout.LayoutParams mobileBarLp = new RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        mobileBarLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        mobileBarLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+        mobileBarLp.leftMargin = insetLeft + margin;
+        mobileBarLp.rightMargin = insetRight + margin;
+        mobileBarLp.topMargin = insetTop + margin;
+        mobileBar.setLayoutParams(mobileBarLp);
+        mobileBar.setVisibility(verticalMode && !fullscreen ? View.VISIBLE : View.GONE);
+
+        int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
         int buttonCount = 3;
-        int barWidth = buttonCount * dp(CONTROL_BUTTON_DP) + (buttonCount - 1) * dp(BAR_GAP_DP)
-            + 2 * dp(BAR_PAD_DP);
-        int regionStart = insetLeft + (onLeft ? reserved : 0);
-        int regionWidth = root.getWidth() - insetLeft - insetRight - reserved;
+        int barWidth = buttonCount * dp(CONTROL_BUTTON_DP)
+            + (buttonCount - 1) * dp(BAR_GAP_DP) + 2 * dp(BAR_PAD_DP);
+        int regionStart = insetLeft + (!verticalMode && onLeft ? reserved : 0);
+        int regionWidth = root.getWidth() - insetLeft - insetRight
+            - (!verticalMode ? reserved : 0);
         int barX;
         if (root.getWidth() <= 0) {
             barX = 0;
         } else if (fullscreen) {
-            barX = onLeft ? insetLeft + margin : root.getWidth() - insetRight - margin - barWidth;
+            barX = onLeft
+                ? insetLeft + margin
+                : root.getWidth() - insetRight - margin - barWidth;
         } else {
             barX = regionStart + Math.max(0, (regionWidth - barWidth) / 2);
         }
@@ -799,23 +870,32 @@ public final class Workspace {
         controlsBar.setLayoutParams(barLp);
         controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
 
-        // Console integrado ao editor: ocupa a largura interna do editor e
-        // termina imediatamente antes do divisor/rodape de controles.
-        RelativeLayout.LayoutParams consoleLp = new RelativeLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
-        consoleLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-        consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        int consoleInset = dp(12);
-        if (onLeft) {
-            consoleLp.leftMargin = editorOffset + consoleInset;
-            consoleLp.rightMargin = insetRight + margin + consoleInset;
+        RelativeLayout.LayoutParams consoleLp;
+        if (verticalMode) {
+            consoleLp = new RelativeLayout.LayoutParams(
+                Math.max(0, (int) baseW - 2 * margin), consoleHeight);
+            consoleLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+            consoleLp.leftMargin = insetLeft + margin;
+            consoleLp.rightMargin = insetRight + margin;
+            consoleLp.bottomMargin = insetBottomIme + margin + consoleFooterSpace;
         } else {
-            consoleLp.rightMargin = editorOffset + consoleInset;
-            consoleLp.leftMargin = insetLeft + margin + consoleInset;
+            consoleLp = new RelativeLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
+            consoleLp.addRule(onLeft
+                ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
+            int consoleInset = dp(12);
+            if (onLeft) {
+                consoleLp.leftMargin = editorOffset + consoleInset;
+                consoleLp.rightMargin = insetRight + margin + consoleInset;
+            } else {
+                consoleLp.rightMargin = editorOffset + consoleInset;
+                consoleLp.leftMargin = insetLeft + margin + consoleInset;
+            }
+            consoleLp.bottomMargin = insetBottomIme + margin + consoleFooterSpace;
         }
-        consoleLp.bottomMargin = insetBottomIme + margin + consoleFooterSpace;
         consolePanel.setLayoutParams(consoleLp);
-        consolePanel.setVisibility((consoleOpen && editorOpen && consoleHeight > 0)
+        consolePanel.setVisibility((consoleOpen && editorOpen
+            && consoleHeight > 0 && !(verticalMode && keyboardVisible))
             ? View.VISIBLE : View.GONE);
 
         updateControlsVisibility();
@@ -1049,6 +1129,10 @@ public final class Workspace {
         if (row.dir) {
             renderTree();
         } else {
+            if (root.getHeight() > root.getWidth()) {
+                mobileFilesOpen = false;
+                applyLayout();
+            }
             openInEditor(row.file);
         }
     }
