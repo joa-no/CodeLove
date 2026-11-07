@@ -1036,6 +1036,8 @@ public final class Workspace {
         } else {
             consoleLp = new RelativeLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
+            // No horizontal, ancora o console no rodape, acima dos controles do editor.
+            consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
             consoleLp.addRule(onLeft
                 ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
             int consoleInset = dp(12);
