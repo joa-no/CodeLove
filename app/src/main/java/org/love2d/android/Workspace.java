@@ -1016,9 +1016,9 @@ public final class Workspace {
 
         RelativeLayout.LayoutParams closeLp = new RelativeLayout.LayoutParams(
             dp(CONTROL_BUTTON_DP), dp(CONTROL_BUTTON_DP));
-        closeLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        closeLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
         closeLp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-        closeLp.topMargin = insetTop + margin;
+        closeLp.bottomMargin = insetBottom + margin;
         closeLp.rightMargin = insetRight + margin;
         closePlaybackButton.setLayoutParams(closeLp);
 
@@ -2075,6 +2075,22 @@ public final class Workspace {
         });
         header.addView(clear, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)));
+
+        TextView reload = new TextView(activity);
+        reload.setText("Reload");
+        reload.setTextColor(COLOR_TEXT);
+        reload.setTextSize(13);
+        reload.setGravity(Gravity.CENTER);
+        reload.setPadding(dp(12), 0, dp(12), 0);
+        reload.setBackground(box(COLOR_FIELD, 10, false));
+        reload.setOnClickListener(v -> {
+            lastConsole = "";
+            updateConsole();
+        });
+        LinearLayout.LayoutParams reloadLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(30));
+        reloadLp.setMargins(dp(6), 0, 0, 0);
+        header.addView(reload, reloadLp);
 
         TextView close = new TextView(activity);
         close.setText("\u00D7");
