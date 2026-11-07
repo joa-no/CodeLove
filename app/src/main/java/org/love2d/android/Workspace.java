@@ -933,10 +933,10 @@ public final class Workspace {
                     ? Math.max(0, (int) baseW)
                     : ViewGroup.LayoutParams.MATCH_PARENT;
             } else {
-                editorOffset = panelShown ? cursor : cursor + margin;
+                editorOffset = panelShown ? cursor : sideInset;
                 if (baseW > 0f) {
                     editorWidth = Math.max(0,
-                        (int) baseW - (editorOffset - sideInset) - margin);
+                        (int) baseW - (editorOffset - sideInset));
                 }
             }
         }
@@ -992,7 +992,7 @@ public final class Workspace {
         int panelTop = insetTop + mobileBarHeight + margin;
         if (verticalMode) {
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
-                Math.max(0, (int) baseW - 2 * margin), ViewGroup.LayoutParams.MATCH_PARENT);
+                Math.max(0, (int) baseW), ViewGroup.LayoutParams.MATCH_PARENT);
             panelLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
             panelLp.leftMargin = insetLeft;
             panelLp.rightMargin = insetRight;
