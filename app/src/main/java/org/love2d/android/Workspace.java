@@ -1527,8 +1527,199 @@ public final class Workspace {
             actions.add(() -> rename(file));
             labels.add("Excluir");
             actions.add(() -> delete(file));
+            if (activeProject != null && isInside(file, activeProject)) {
+                labels.add("Mover para");
+                actions.add(() -> showMoveDestinationMenu(file));
+            }
         }
         ui.showMenu(anchor, labels, actions);
+    }
+
+    private void showMoveDestinationMenu(final File target) {
+        if (activeProject == null || sameFile(target, activeProject)
+            || !isInside(target, activeProject)) {
+            return;
+        }
+
+        ArrayList<File> destinations = new ArrayList<File>();
+        collectMoveFolders(activeProject, target, destinations);
+
+        if (destinations.isEmpty()) {
+            toast("Nao existem outras pastas para mover este item.");
+            return;
+        }
+
+        List<String> labels = new ArrayList<String>();
+        List<Runnable> actions = new ArrayList<Runnable>();
+        File targetParent = target.getParentFile();
+        for (File destination : destinations) {
+            if (targetParent != null && sameFile(destination, targetParent)) {
+                continue;
+            }
+            String label;
+            if (sameFile(destination, activeProject)) {
+                label = "Raiz do projeto";
+            } else {
+                int depth = relativeDepth(destination, activeProject);
+                StringBuilder prefix = new StringBuilder();
+                for (int i = 0; i < depth; i++) prefix.append("  ");
+                label = prefix.toString() + destination.getName();
+            }
+            labels.add(label);
+            actions.add(() -> moveItem(target, destination));
+        }
+
+        if (labels.isEmpty()) {
+            toast("Nao existem outras pastas para mover este item.");
+            return;
+        }
+
+        ui.showScrollableMenu(null, "Mover para", labels, actions);
+    }
+
+    private void collectMoveFolders(File directory, File target, List<File> out) {
+        if (directory == null || !isInside(directory, activeProject)) return;
+        if (sameFile(directory, target) || isInside(directory, target)) return;
+        out.add(directory);
+
+        if (out.size() >= 200) return;
+        try {
+            if (activeSafStorage != null && activeSafStorage.contains(directory)) {
+                List<DirectSafStorage.Entry> children = activeSafStorage.list(directory);
+                for (DirectSafStorage.Entry entry : children) {
+                    if (entry.directory) {
+                        collectMoveFolders(entry.file, target, out);
+                        if (out.size() >= 200) return;
+                    }
+                }
+            } else {
+                File[] children = directory.listFiles();
+                if (children == null) return;
+                Arrays.sort(children, new Comparator<File>() {
+                    @Override public int compare(File a, File b) {
+                        return a.getName().compareToIgnoreCase(b.getName());
+                    }
+                });
+                for (File child : children) {
+                    if (child.isDirectory()) {
+                        collectMoveFolders(child, target, out);
+                        if (out.size() >= 200) return;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "Falha ao listar destinos de movimento", e);
+        }
+    }
+
+    private int relativeDepth(File file, File rootDir) {
+        if (file == null || rootDir == null) return 0;
+        String rootPath = rootDir.getAbsolutePath();
+        String filePath = file.getAbsolutePath();
+        if (!isInside(file, rootDir)) return 0;
+        if (sameFile(file, rootDir)) return 0;
+        String relative = filePath.substring(rootPath.length() + 1);
+        if (relative.isEmpty()) return 0;
+        int depth = 1;
+        for (int i = 0; i < relative.length(); i++) {
+            if (relative.charAt(i) == File.separatorChar) depth++;
+        }
+        return depth;
+    }
+
+    private void moveItem(final File target, final File destination) {
+        if (activeProject == null || destination == null
+            || sameFile(target, activeProject) || sameFile(target, destination)
+            || !isInside(target, activeProject) || !isInside(destination, activeProject)
+            || isInside(destination, target)) {
+            toast("Destino invalido.");
+            return;
+        }
+
+        final File targetParent = target.getParentFile();
+        if (targetParent != null && sameFile(targetParent, destination)) {
+            toast("O item ja esta nessa pasta.");
+            return;
+        }
+
+        final File editedFile = editor.isOpen() ? editor.getFile() : null;
+        final boolean editedInsideTarget = editedFile != null && isInside(editedFile, target);
+        if (editedInsideTarget && !editor.close()) return;
+
+        playing = false;
+        sendCommand("close", "");
+
+        final String oldPath = target.getAbsolutePath();
+        final String editedRelativePath = editedInsideTarget && editedFile != null
+            ? relativePath(target, editedFile) : null;
+
+        try {
+            File moved;
+            if (activeSafStorage != null && activeSafStorage.contains(target)) {
+                moved = activeSafStorage.move(target, destination).getAbsoluteFile();
+            } else {
+                moved = FileOps.move(target, destination);
+            }
+
+            if (moved == null) {
+                toast("Nao consegui mover o item.");
+                return;
+            }
+
+            Set<String> next = new HashSet<String>();
+            String newPath = moved.getAbsolutePath();
+            for (String path : expanded) {
+                if (path.equals(oldPath)) {
+                    next.add(newPath);
+                } else if (path.startsWith(oldPath + File.separator)) {
+                    next.add(newPath + path.substring(oldPath.length()));
+                } else {
+                    next.add(path);
+                }
+            }
+            expanded.clear();
+            expanded.addAll(next);
+            expanded.add(destination.getAbsolutePath());
+            lastFolder = destination;
+
+            if (activeSafStorage != null) {
+                prepareRuntimeProject(false);
+            } else {
+                sendCommand("open", activeProject.getAbsolutePath());
+            }
+
+            renderTree();
+            if (editedInsideTarget && editedRelativePath != null) {
+                File reopened = new File(moved, editedRelativePath);
+                if (activeSafStorage != null) {
+                    refreshSafPath(moved);
+                }
+                openInEditor(reopened);
+            }
+            saveState();
+            toast("Item movido.");
+        } catch (IOException e) {
+            toast(e.getMessage() == null ? "Nao consegui mover o item." : e.getMessage());
+            renderTree();
+        }
+    }
+
+    private String relativePath(File rootDir, File file) {
+        String rootPath = rootDir.getAbsolutePath();
+        String filePath = file.getAbsolutePath();
+        if (!isInside(file, rootDir) || sameFile(file, rootDir)) return "";
+        return filePath.substring(rootPath.length() + 1);
+    }
+
+    private void refreshSafPath(File directory) throws IOException {
+        if (activeSafStorage == null || directory == null
+            || !activeSafStorage.contains(directory)) return;
+        List<DirectSafStorage.Entry> children = activeSafStorage.list(directory);
+        for (DirectSafStorage.Entry child : children) {
+            if (child.directory) {
+                refreshSafPath(child.file);
+            }
+        }
     }
 
     private void newFile(final File folder) {

@@ -140,6 +140,62 @@ final class OverlayUi {
         scrim.addView(card, lp);
     }
 
+    /** Menu com rolagem para listas longas, usado pelo seletor de destino. */
+    void showScrollableMenu(View anchor, String title, List<String> labels,
+                            List<Runnable> actions) {
+        FrameLayout scrim = openScrim(0x00000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 14, true));
+        card.setPadding(0, dp(8), 0, dp(8));
+        card.setClickable(true);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextColor(Workspace.COLOR_TEXT);
+        titleView.setTextSize(15);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setPadding(dp(16), dp(8), dp(16), dp(8));
+        card.addView(titleView);
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(Workspace.COLOR_BORDER);
+        card.addView(divider, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
+
+        ScrollView scroll = new ScrollView(activity);
+        LinearLayout items = new LinearLayout(activity);
+        items.setOrientation(LinearLayout.VERTICAL);
+        for (int i = 0; i < labels.size(); i++) {
+            final Runnable action = actions.get(i);
+            TextView item = new TextView(activity);
+            item.setText(labels.get(i));
+            item.setTextSize(15);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(16), 0, dp(16), 0);
+            item.setSingleLine(true);
+            item.setTextColor(Workspace.COLOR_TEXT);
+            item.setOnClickListener(v -> {
+                dismiss();
+                action.run();
+            });
+            items.addView(item, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        }
+        scroll.addView(items, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        int margin = dp(8);
+        int width = Math.min(dp(360), root.getWidth() - margin * 2);
+        int maxHeight = Math.max(dp(180), root.getHeight() - topInset - dp(32));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, maxHeight);
+        lp.gravity = Gravity.CENTER;
+        scrim.addView(card, lp);
+    }
+
     // ------------------------------------------------------------------
     // Janela para digitar um nome
     // ------------------------------------------------------------------

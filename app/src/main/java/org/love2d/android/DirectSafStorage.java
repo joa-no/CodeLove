@@ -277,6 +277,26 @@ final class DirectSafStorage implements CodeEditor.Storage {
         return dest;
     }
 
+    synchronized File move(File target, File destination) throws IOException {
+        Uri sourceUri = requireUri(target);
+        Uri sourceParentUri = requireUri(target.getParentFile());
+        Uri destinationUri = requireUri(destination);
+
+        // O provider precisa oferecer suporte a movimento entre diretorios.
+        Uri moved = DocumentsContract.moveDocument(
+            resolver, sourceUri, sourceParentUri, destinationUri);
+        if (moved == null) {
+            throw new IOException("O provedor nao conseguiu mover o item.");
+        }
+
+        File dest = new File(destination, target.getName());
+        Boolean targetWasDirectory = dirByPath.get(target.getAbsolutePath());
+        forgetRecursive(target);
+        remember(dest, moved, DocumentsContract.getDocumentId(moved),
+            targetWasDirectory != null && targetWasDirectory);
+        return dest;
+    }
+
     /**
      * Cria uma copia temporaria SOMENTE para o runtime do LOVE.
      * A copia nao e usada pelo editor nem e fonte de dados do projeto.

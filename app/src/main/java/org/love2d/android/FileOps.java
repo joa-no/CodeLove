@@ -66,6 +66,16 @@ final class FileOps {
         return folder.mkdir() ? folder : null;
     }
 
+    /** Move um item para outra pasta. Devolve o novo caminho, ou nulo se falhar. */
+    static File move(File target, File destination) {
+        if (target == null || destination == null || !destination.isDirectory()) {
+            return null;
+        }
+        File dest = new File(destination, target.getName());
+        if (dest.exists()) return null;
+        return target.renameTo(dest) ? dest : null;
+    }
+
     /** Apaga o arquivo, ou a pasta com tudo dentro. Devolve true se apagou tudo. */
     static boolean deleteRecursive(File target) {
         boolean ok = true;
