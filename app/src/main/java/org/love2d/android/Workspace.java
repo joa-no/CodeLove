@@ -11,7 +11,7 @@
 package org.love2d.android;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -664,14 +664,14 @@ public final class Workspace {
             content.addView(cancel, cancelParams);
         }
 
-        AlertDialog dialog = new AlertDialog.Builder(activity)
-            .setView(content)
-            .setCancelable(allowDismiss)
-            .create();
+        // Usa Dialog simples em vez de AlertDialog: o AlertDialog envolve a view
+        // em painéis internos do tema Android, que podem manter uma moldura quadrada
+        // mesmo quando o background da janela é transparente.
+        Dialog dialog = new Dialog(activity);
+        dialog.setContentView(content);
+        dialog.setCancelable(allowDismiss);
         dialog.setCanceledOnTouchOutside(allowDismiss);
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
-        }
+
         content.findViewWithTag("orientation_portrait").setOnClickListener(v -> {
             saveOrientationChoice(true);
             dialog.dismiss();
@@ -686,7 +686,8 @@ public final class Workspace {
 
         dialog.show();
         if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
+            dialog.getWindow().setBackgroundDrawable(
+                new ColorDrawable(android.graphics.Color.TRANSPARENT));
             int availableWidth = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
             dialog.getWindow().setLayout(Math.min(dp(420), availableWidth),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
