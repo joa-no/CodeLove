@@ -848,7 +848,7 @@ public final class Workspace {
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
         // No vertical, mostra os arquivos quando nao ha arquivo aberto;
         // ao fechar o editor, a arvore volta automaticamente para a tela.
-        boolean panelShown = !fullscreen && (!verticalMode || !editorOpen);
+        boolean panelShown = !fullscreen && (!verticalMode || (!editorOpen && !playing));
         if (movePanelButton != null) {
             movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
         }
