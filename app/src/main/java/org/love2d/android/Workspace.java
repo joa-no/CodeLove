@@ -115,6 +115,7 @@ public final class Workspace {
     private IconView playIcon;
     private IconView footerPlayIcon;
     private LinearLayout controlsBar;
+    private LinearLayout closePlaybackButton;
     private IconView fullscreenIcon;
     private TextView projectTitle;
     private TextView statusView;
@@ -410,6 +411,16 @@ public final class Workspace {
         controlsBar.addView(resetButton, barButtonParams(false));
         controlsBar.addView(fullscreenButton, barButtonParams(false));
 
+        // No modo vertical, oferece uma saida visivel da visualizacao do jogo.
+        closePlaybackButton = new LinearLayout(activity);
+        closePlaybackButton.setGravity(Gravity.CENTER);
+        closePlaybackButton.setBackground(box(COLOR_PANEL, 22, true));
+        closePlaybackButton.addView(new IconView(activity, IconView.CLOSE, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
+        setButtonHint(closePlaybackButton, "Sair da visualizacao e voltar aos arquivos");
+        closePlaybackButton.setOnClickListener(v -> exitPlaybackToFiles());
+        closePlaybackButton.setVisibility(View.GONE);
+
         // Controles equivalentes na barra inferior do editor.
         footerPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
         LinearLayout footerPlayButton = new LinearLayout(activity);
@@ -457,6 +468,7 @@ public final class Workspace {
         root.addView(panel);
         root.addView(consolePanel);
         root.addView(controlsBar);
+        root.addView(closePlaybackButton);
 
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -1001,6 +1013,14 @@ public final class Workspace {
         barLp.bottomMargin = insetBottom + margin;
         controlsBar.setLayoutParams(barLp);
         controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
+
+        RelativeLayout.LayoutParams closeLp = new RelativeLayout.LayoutParams(
+            dp(CONTROL_BUTTON_DP), dp(CONTROL_BUTTON_DP));
+        closeLp.addRule(RelativeLayout.ALIGN_PARENT_TOP);
+        closeLp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+        closeLp.topMargin = insetTop + margin;
+        closeLp.rightMargin = insetRight + margin;
+        closePlaybackButton.setLayoutParams(closeLp);
 
         RelativeLayout.LayoutParams consoleLp;
         if (verticalMode) {
@@ -1864,6 +1884,16 @@ public final class Workspace {
         updatePlayButton();
     }
 
+    private void exitPlaybackToFiles() {
+        if (!playing) return;
+        playing = false;
+        sendCommand("pause", "");
+        updatePlayButton();
+        // Recalcula o layout para restaurar a arvore de arquivos no vertical.
+        applyLayout();
+        renderTree();
+    }
+
     private void resetScene() {
         if (activeProject == null || !editor.saveNow()) return;
 
@@ -1957,6 +1987,10 @@ public final class Workspace {
         boolean showBar = activeProject != null && !editorVisible && !verticalMode;
         if (controlsBar != null) {
             controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
+        }
+        if (closePlaybackButton != null) {
+            closePlaybackButton.setVisibility(
+                playing && verticalMode ? View.VISIBLE : View.GONE);
         }
         if (consolePanel != null) {
             consolePanel.setVisibility(
@@ -2284,6 +2318,7 @@ public final class Workspace {
         static final int SAVE = 13;
         static final int CHECK = 14;
         static final int ORIENTATION = 15;
+        static final int CLOSE = 16;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -2380,6 +2415,12 @@ public final class Workspace {
                     path.lineTo(7f, 14f);
                     path.lineTo(17f, 14f);
                     path.lineTo(17f, 21f);
+                    break;
+                case CLOSE:
+                    path.moveTo(6f, 6f);
+                    path.lineTo(18f, 18f);
+                    path.moveTo(18f, 6f);
+                    path.lineTo(6f, 18f);
                     break;
                 case CHECK:
                     path.moveTo(4f, 12f);
