@@ -115,7 +115,9 @@ final class CodeEditor {
 
         view = new LinearLayout(activity);
         view.setOrientation(LinearLayout.VERTICAL);
-        view.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        // O editor acompanha os paineis: superficie retangular, sem moldura
+        // arredondada ou borda externa. O espacamento interno do conteudo permanece.
+        view.setBackground(box(Workspace.COLOR_PANEL, 0, false));
         view.setPadding(dp(12), dp(12), dp(12), dp(12));
 
         // ---- cabecalho: nome do arquivo, marca de "nao salvo" e botao de fechar ----
