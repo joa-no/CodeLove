@@ -28,6 +28,7 @@ import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -557,6 +558,14 @@ final class CodeEditor {
         }
 
         @Override
+        public boolean onInterceptTouchEvent(MotionEvent event) {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                followUntil = 0;
+            }
+            return super.onInterceptTouchEvent(event);
+        }
+
+        @Override
         public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
             return followCaret() && super.requestChildRectangleOnScreen(child, rectangle, immediate);
         }
@@ -565,6 +574,14 @@ final class CodeEditor {
     private final class CaretGuardHorizontalScrollView extends HorizontalScrollView {
         CaretGuardHorizontalScrollView(Context context) {
             super(context);
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent event) {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                followUntil = 0;
+            }
+            return super.onInterceptTouchEvent(event);
         }
 
         @Override
