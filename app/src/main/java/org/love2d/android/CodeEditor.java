@@ -12,8 +12,6 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -28,7 +26,6 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.text.style.ForegroundColorSpan;
 import android.util.Log;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -172,9 +169,14 @@ final class CodeEditor {
         view.addView(divider, dividerLp);
 
         // ---- area de texto: numeros de linha + codigo (rola na vertical e na horizontal) ----
-        gutter = new LineNumberView(activity);
+        gutter = new TextView(activity);
+        gutter.setTypeface(Typeface.MONOSPACE);
+        gutter.setTextSize(13);
+        gutter.setTextColor(Workspace.COLOR_MUTED);
+        gutter.setGravity(Gravity.END | Gravity.TOP);
+        gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
-        gutter.setMinimumWidth(dp(34));
+        gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
@@ -355,8 +357,7 @@ final class CodeEditor {
         scroll.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
             int height = b - t;
             input.setMinHeight(height);
-            gutter.setMinimumHeight(height);
-            gutter.setLineCount(lineCount, input.getLineHeight());
+            gutter.setMinHeight(height);
         });
     }
 
@@ -1113,62 +1114,12 @@ final class CodeEditor {
         if (!force && lines == lineCount) return;
         lineCount = lines;
 
-        gutter.setLineCount(lines, input.getLineHeight());
-    }
-
-    /** Desenha somente os numeros de linha dentro da regiao visivel do editor. */
-    private static final class LineNumberView extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final Rect clip = new Rect();
-        private int lineCount = 1;
-        private int lineHeight = 1;
-
-        LineNumberView(Context context) {
-            super(context);
-            paint.setTypeface(Typeface.MONOSPACE);
-            paint.setTextSize(TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_SP, 13, getResources().getDisplayMetrics()));
-            paint.setColor(Workspace.COLOR_MUTED);
-            paint.setTextAlign(Paint.Align.RIGHT);
-            setWillNotDraw(false);
+        StringBuilder numbers = new StringBuilder();
+        for (int i = 0; i < lines; i++) {
+            if (i > 0) numbers.append("\n");
+            numbers.append(i + 1);
         }
-
-        void setLineCount(int count, int height) {
-            int safeCount = Math.max(1, count);
-            int safeHeight = Math.max(1, height);
-            boolean dimensionsChanged = lineCount != safeCount || lineHeight != safeHeight;
-            lineCount = safeCount;
-            lineHeight = safeHeight;
-            if (dimensionsChanged) requestLayout();
-            invalidate();
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            int desiredWidth = (int) Math.ceil(paint.measureText(Integer.toString(lineCount)))
-                + getPaddingLeft() + getPaddingRight();
-            int desiredHeight = getPaddingTop() + getPaddingBottom() + lineCount * lineHeight;
-            desiredWidth = Math.max(getSuggestedMinimumWidth(), desiredWidth);
-            desiredHeight = Math.max(getSuggestedMinimumHeight(), desiredHeight);
-            setMeasuredDimension(resolveSize(desiredWidth, widthMeasureSpec),
-                resolveSize(desiredHeight, heightMeasureSpec));
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            if (!canvas.getClipBounds(clip)) return;
-            Paint.FontMetrics metrics = paint.getFontMetrics();
-            int contentTop = getPaddingTop();
-            int first = Math.max(0, (clip.top - contentTop) / lineHeight);
-            int last = Math.min(lineCount - 1,
-                Math.max(first, (clip.bottom - contentTop) / lineHeight));
-            float x = getWidth() - getPaddingRight();
-            for (int line = first; line <= last; line++) {
-                float baseline = contentTop + line * lineHeight - metrics.ascent;
-                canvas.drawText(Integer.toString(line + 1), x, baseline, paint);
-            }
-        }
+        gutter.setText(numbers.toString());
     }
 
     private void applyHighlight(Editable text) {
