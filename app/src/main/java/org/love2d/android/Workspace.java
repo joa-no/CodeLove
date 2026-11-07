@@ -159,9 +159,9 @@ public final class Workspace {
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         } else if ("landscape".equals(saved)) {
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-        } else {
-            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+        // Sem escolha salva, preserva a orientacao inicial definida por GameActivity.
+        // Nao liberar para o SDL, pois ele pode voltar a impor o formato horizontal.
     }
 
     public static void attach(Activity activity, ViewGroup layout, View surface) {

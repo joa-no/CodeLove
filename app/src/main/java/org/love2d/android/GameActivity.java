@@ -24,6 +24,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -191,8 +192,13 @@ public class GameActivity extends SDLActivity {
         } else if ("landscape".equals(saved)) {
             requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
         } else {
-            // Antes da escolha inicial, mantem o comportamento normal do SDL.
-            super.setOrientationBis(w, h, resizable, hint);
+            // Na primeira abertura, trava a orientacao que o aparelho ja esta usando.
+            // O SDL nao deve impor a orientacao padrao horizontal antes da escolha.
+            int currentOrientation = getResources().getConfiguration().orientation;
+            int initialOrientation = currentOrientation == Configuration.ORIENTATION_PORTRAIT
+                ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                : ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+            setRequestedOrientation(initialOrientation);
             return;
         }
 
