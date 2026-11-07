@@ -598,35 +598,75 @@ public final class Workspace {
     private void showOrientationChooser(boolean allowDismiss) {
         if (activity.isFinishing()) return;
 
+        // Janela desenhada com os mesmos componentes, cores e superficies do CodeLove.
         LinearLayout content = new LinearLayout(activity);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(20), dp(4), dp(20), dp(8));
+        content.setPadding(dp(20), dp(18), dp(20), dp(16));
+        content.setBackground(box(COLOR_PANEL, 18, true));
+
+        TextView brand = new TextView(activity);
+        brand.setText("CODELOVE");
+        brand.setTextColor(COLOR_LUA);
+        brand.setTextSize(11);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        brand.setLetterSpacing(0.10f);
+        content.addView(brand);
+
+        TextView title = new TextView(activity);
+        title.setText("Orientação da tela");
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleParams.setMargins(0, dp(5), 0, dp(5));
+        content.addView(title, titleParams);
 
         TextView explanation = new TextView(activity);
         explanation.setText("Escolha o formato mais adequado ao tamanho da sua tela.");
         explanation.setTextColor(COLOR_MUTED);
-        explanation.setTextSize(14);
-        explanation.setPadding(0, 0, 0, dp(14));
+        explanation.setTextSize(13);
+        explanation.setPadding(0, 0, 0, dp(16));
         content.addView(explanation);
 
-        content.addView(buildOrientationOption(true));
+        View portraitOption = buildOrientationOption(true);
+        LinearLayout.LayoutParams portraitParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        content.addView(portraitOption, portraitParams);
+
         View divider = new View(activity);
         divider.setBackgroundColor(COLOR_BORDER);
         LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
         dividerParams.setMargins(0, dp(12), 0, dp(12));
         content.addView(divider, dividerParams);
-        content.addView(buildOrientationOption(false));
+
+        View landscapeOption = buildOrientationOption(false);
+        content.addView(landscapeOption, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView cancel = null;
+        if (allowDismiss) {
+            cancel = new TextView(activity);
+            cancel.setText("Cancelar");
+            cancel.setTextColor(COLOR_MUTED);
+            cancel.setTextSize(13);
+            cancel.setGravity(Gravity.CENTER);
+            cancel.setPadding(dp(16), dp(10), dp(16), dp(10));
+            cancel.setBackground(box(COLOR_FIELD, 10, false));
+            cancel.setClickable(true);
+            cancel.setFocusable(true);
+            LinearLayout.LayoutParams cancelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cancelParams.gravity = Gravity.END;
+            cancelParams.setMargins(0, dp(14), 0, 0);
+            content.addView(cancel, cancelParams);
+        }
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
-            .setTitle("Orientação do CodeLove")
             .setView(content)
             .setCancelable(allowDismiss)
             .create();
-        if (allowDismiss) {
-            dialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Cancelar",
-                (d, which) -> d.dismiss());
-        }
         dialog.setCanceledOnTouchOutside(allowDismiss);
         content.findViewWithTag("orientation_portrait").setOnClickListener(v -> {
             saveOrientationChoice(true);
@@ -636,9 +676,16 @@ public final class Workspace {
             saveOrientationChoice(false);
             dialog.dismiss();
         });
+        if (cancel != null) {
+            cancel.setOnClickListener(v -> dialog.dismiss());
+        }
+
         dialog.show();
-        if (allowDismiss) {
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(COLOR_MUTED);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            int availableWidth = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
+            dialog.getWindow().setLayout(Math.min(dp(420), availableWidth),
+                ViewGroup.LayoutParams.WRAP_CONTENT);
         }
     }
 
@@ -2493,19 +2540,65 @@ public final class Workspace {
             super.onDraw(canvas);
             float width = getWidth();
             float height = getHeight();
-            float screenWidth = portrait ? width * 0.43f : width * 0.78f;
-            float screenHeight = portrait ? height * 0.78f : height * 0.48f;
+            float screenWidth = portrait ? width * 0.46f : width * 0.84f;
+            float screenHeight = portrait ? height * 0.84f : height * 0.52f;
             float left = (width - screenWidth) / 2f;
             float top = (height - screenHeight) / 2f;
-            previewPaint.setColor(COLOR_MUTED);
-            previewPaint.setStyle(Paint.Style.STROKE);
-            previewPaint.setStrokeWidth(dp(2));
-            canvas.drawRoundRect(left, top, left + screenWidth, top + screenHeight,
-                dp(5), dp(5), previewPaint);
+            float radius = dp(5);
+
+            // Moldura e superficie representam a janela do editor CodeLove.
             previewPaint.setStyle(Paint.Style.FILL);
-            previewPaint.setColor(COLOR_LUA);
-            float dot = dp(3);
-            canvas.drawCircle(width / 2f, top + screenHeight - dp(5), dot, previewPaint);
+            previewPaint.setColor(COLOR_OUTER);
+            canvas.drawRoundRect(left, top, left + screenWidth, top + screenHeight,
+                radius, radius, previewPaint);
+
+            previewPaint.setStyle(Paint.Style.STROKE);
+            previewPaint.setStrokeWidth(Math.max(1f, dp(1)));
+            previewPaint.setColor(COLOR_BORDER);
+            canvas.drawRoundRect(left, top, left + screenWidth, top + screenHeight,
+                radius, radius, previewPaint);
+
+            previewPaint.setStyle(Paint.Style.FILL);
+            previewPaint.setColor(COLOR_FIELD);
+            float headerHeight = Math.max(dp(5), screenHeight * 0.16f);
+            canvas.drawRoundRect(left + dp(1), top + dp(1),
+                left + screenWidth - dp(1), top + headerHeight, radius, radius, previewPaint);
+
+            float innerTop = top + headerHeight + dp(3);
+            float innerBottom = top + screenHeight - dp(4);
+            if (!portrait) {
+                float sidebarRight = left + screenWidth * 0.29f;
+                previewPaint.setColor(COLOR_PANEL);
+                canvas.drawRect(left + dp(2), innerTop, sidebarRight, innerBottom, previewPaint);
+                previewPaint.setColor(COLOR_LUA);
+                canvas.drawRect(left + dp(5), innerTop + dp(4),
+                    left + dp(8), innerTop + dp(7), previewPaint);
+                drawCodeLine(canvas, left + dp(12), innerTop + dp(5),
+                    sidebarRight - dp(4), COLOR_MUTED);
+                drawCodeLine(canvas, sidebarRight + dp(5), innerTop + dp(5),
+                    left + screenWidth - dp(6), COLOR_LUA);
+                drawCodeLine(canvas, sidebarRight + dp(5), innerTop + dp(11),
+                    left + screenWidth - dp(12), COLOR_MUTED);
+                drawCodeLine(canvas, sidebarRight + dp(5), innerTop + dp(17),
+                    left + screenWidth - dp(18), COLOR_MUTED);
+            } else {
+                drawCodeLine(canvas, left + dp(6), innerTop + dp(5),
+                    left + screenWidth - dp(6), COLOR_LUA);
+                drawCodeLine(canvas, left + dp(6), innerTop + dp(11),
+                    left + screenWidth - dp(12), COLOR_MUTED);
+                drawCodeLine(canvas, left + dp(6), innerTop + dp(17),
+                    left + screenWidth - dp(9), COLOR_MUTED);
+                drawCodeLine(canvas, left + dp(6), innerTop + dp(23),
+                    left + screenWidth - dp(18), COLOR_MUTED);
+            }
+        }
+
+        private void drawCodeLine(Canvas canvas, float start, float y, float end, int color) {
+            if (end <= start) return;
+            previewPaint.setColor(color);
+            previewPaint.setStrokeWidth(Math.max(1f, dp(1.5f)));
+            previewPaint.setStrokeCap(Paint.Cap.ROUND);
+            canvas.drawLine(start, y, end, y, previewPaint);
         }
     }
 
