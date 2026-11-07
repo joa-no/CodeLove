@@ -22,6 +22,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -602,11 +603,11 @@ public final class Workspace {
         LinearLayout content = new LinearLayout(activity);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(dp(20), dp(18), dp(20), dp(16));
-        content.setBackground(box(COLOR_PANEL, 18, true));
+        content.setBackground(box(COLOR_PANEL, 18, false));
 
         TextView brand = new TextView(activity);
         brand.setText("CODELOVE");
-        brand.setTextColor(COLOR_LUA);
+        brand.setTextColor(COLOR_FOLDER);
         brand.setTextSize(11);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
         brand.setLetterSpacing(0.10f);
@@ -668,6 +669,9 @@ public final class Workspace {
             .setCancelable(allowDismiss)
             .create();
         dialog.setCanceledOnTouchOutside(allowDismiss);
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
         content.findViewWithTag("orientation_portrait").setOnClickListener(v -> {
             saveOrientationChoice(true);
             dialog.dismiss();
@@ -682,7 +686,7 @@ public final class Workspace {
 
         dialog.show();
         if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
             int availableWidth = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
             dialog.getWindow().setLayout(Math.min(dp(420), availableWidth),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -2576,14 +2580,14 @@ public final class Workspace {
                 drawCodeLine(canvas, left + dp(12), innerTop + dp(5),
                     sidebarRight - dp(4), COLOR_MUTED);
                 drawCodeLine(canvas, sidebarRight + dp(5), innerTop + dp(5),
-                    left + screenWidth - dp(6), COLOR_LUA);
+                    left + screenWidth - dp(6), COLOR_FOLDER);
                 drawCodeLine(canvas, sidebarRight + dp(5), innerTop + dp(11),
                     left + screenWidth - dp(12), COLOR_MUTED);
                 drawCodeLine(canvas, sidebarRight + dp(5), innerTop + dp(17),
                     left + screenWidth - dp(18), COLOR_MUTED);
             } else {
                 drawCodeLine(canvas, left + dp(6), innerTop + dp(5),
-                    left + screenWidth - dp(6), COLOR_LUA);
+                    left + screenWidth - dp(6), COLOR_FOLDER);
                 drawCodeLine(canvas, left + dp(6), innerTop + dp(11),
                     left + screenWidth - dp(12), COLOR_MUTED);
                 drawCodeLine(canvas, left + dp(6), innerTop + dp(17),
