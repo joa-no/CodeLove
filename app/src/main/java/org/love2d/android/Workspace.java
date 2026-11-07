@@ -1078,6 +1078,9 @@ public final class Workspace {
             consoleLp = new RelativeLayout.LayoutParams(
                 Math.max(0, (int) baseW - 2 * margin), consoleHeight);
             consoleLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+            // Sem esta regra, o RelativeLayout ignora o bottomMargin como ancora
+            // e posiciona o console no topo. No vertical, ele deve ficar no rodape.
+            consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
             consoleLp.leftMargin = insetLeft + margin;
             consoleLp.rightMargin = insetRight + margin;
             consoleLp.bottomMargin = insetBottomIme + margin + consoleFooterSpace;
