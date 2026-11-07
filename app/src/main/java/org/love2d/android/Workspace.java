@@ -659,6 +659,24 @@ public final class Workspace {
         float baseW = root.getWidth() - insetLeft - insetRight;
         float baseH = root.getHeight() - insetTop - insetBottom;
 
+        // Em telas menores, o painel usa uma parcela menor da largura disponivel.
+        // A estrutura visual permanece a mesma: apenas a largura do painel se
+        // adapta para devolver espaco ao editor e ao runtime. Em telas maiores,
+        // mantemos os 272dp originais.
+        int effectivePanelWidth = panelWidth;
+        if (baseW > 0f) {
+            float density = activity.getResources().getDisplayMetrics().density;
+            float baseWDp = baseW / Math.max(0.1f, density);
+            if (baseWDp < 1000f) {
+                int minPanelWidth = dp(220);
+                int adaptivePanelWidth = Math.round(baseW * 0.24f);
+                effectivePanelWidth = Math.min(
+                    panelWidth,
+                    Math.max(minPanelWidth, adaptivePanelWidth)
+                );
+            }
+        }
+
         // Da borda da tela para dentro: [painel] [editor].
         // O editor ocupa sempre todo o espaco restante, sem modo expandido.
         int cursor = sideInset;
@@ -666,7 +684,7 @@ public final class Workspace {
         int editorOffset = 0;
         if (panelShown) {
             panelOffset = cursor + margin;
-            cursor += margin + panelWidth + margin;
+            cursor += margin + effectivePanelWidth + margin;
         }
         int editorWidth = ViewGroup.LayoutParams.MATCH_PARENT;
         if (editorOpen) {
@@ -731,7 +749,7 @@ public final class Workspace {
 
         // Painel de arquivos (acompanha o teclado: sobe junto com ele).
         RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
-            panelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
+            effectivePanelWidth, ViewGroup.LayoutParams.MATCH_PARENT);
         panelLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
         panelLp.topMargin = insetTop + margin;
         panelLp.bottomMargin = insetBottomIme + margin;
