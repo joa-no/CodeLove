@@ -76,9 +76,6 @@ final class CodeEditor {
     private static final int COLOR_STRING = 0xFF7EE0B5;
     private static final int COLOR_COMMENT = 0xFF6B7189;
 
-    // Diagnóstico temporário: desativa somente a colorização Lua para comparar desempenho.
-    private static final boolean DIAGNOSTIC_DISABLE_SYNTAX_HIGHLIGHT = true;
-
     private final Activity activity;
     private final Listener listener;
     private Storage storage;
@@ -1126,9 +1123,6 @@ final class CodeEditor {
     }
 
     private void applyHighlight(Editable text) {
-        if (DIAGNOSTIC_DISABLE_SYNTAX_HIGHLIGHT) {
-            return;
-        }
         ForegroundColorSpan[] old = text.getSpans(0, text.length(), ForegroundColorSpan.class);
         for (ForegroundColorSpan span : old) {
             text.removeSpan(span);
