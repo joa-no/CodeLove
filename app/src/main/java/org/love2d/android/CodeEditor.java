@@ -11,10 +11,6 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.os.Handler;
-import android.os.Looper;
-import android.view.FrameMetrics;
-import android.view.Window;
 import android.content.Context;
 import android.graphics.Rect;
 import android.graphics.Typeface;
@@ -85,7 +81,6 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final TextView title;
-    private final TextView profilerLabel;
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
@@ -111,91 +106,6 @@ final class CodeEditor {
     private boolean highlightLua;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
-
-    // Diagnostico temporario: mede frames Android durante a rolagem do editor.
-    // Nao muda a edicao, a colorizacao nem os numeros de linha.
-    private boolean profilerRegistered;
-    private boolean profilerActive;
-    private long profilerLastScrollAt;
-    private int profilerFrames;
-    private int profilerSlowFrames;
-    private long profilerPeakNs;
-    private long profilerDrawNs;
-    private long profilerLayoutNs;
-    private long profilerEditMeasureNs;
-    private long profilerGutterMeasureNs;
-    private int profilerEditMeasureCalls;
-    private int profilerGutterMeasureCalls;
-
-    private final Window.OnFrameMetricsAvailableListener profilerListener =
-        (window, metrics, dropCount) -> {
-            if (!profilerActive
-                || SystemClock.uptimeMillis() - profilerLastScrollAt > 500) return;
-            long total = metrics.getMetric(FrameMetrics.TOTAL_DURATION);
-            if (total <= 0) return;
-            profilerFrames++;
-            if (total > 24_000_000L) profilerSlowFrames++;
-            profilerPeakNs = Math.max(profilerPeakNs, total);
-            profilerDrawNs += Math.max(0L, metrics.getMetric(FrameMetrics.DRAW_DURATION));
-            profilerLayoutNs += Math.max(0L, metrics.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION));
-        };
-
-    private final Runnable profilerReporter = new Runnable() {
-        @Override
-        public void run() {
-            if (!profilerActive) return;
-            if (profilerFrames > 0) {
-                int slowPercent = (100 * profilerSlowFrames) / profilerFrames;
-                long peakMs = Math.round(profilerPeakNs / 1_000_000.0);
-                long drawMs = Math.round(profilerDrawNs / (1_000_000.0 * profilerFrames));
-                long layoutMs = Math.round(profilerLayoutNs / (1_000_000.0 * profilerFrames));
-                long editMs = Math.round(profilerEditMeasureNs / 1_000_000.0);
-                long gutterMs = Math.round(profilerGutterMeasureNs / 1_000_000.0);
-                profilerLabel.setText("Lentos " + slowPercent + "% | pico " + peakMs
-                    + "ms | layout " + layoutMs + "ms | draw " + drawMs + "ms"
-                    + "\nEditor measure: " + editMs + "ms/" + profilerEditMeasureCalls
-                    + "x | numeros measure: " + gutterMs + "ms/" + profilerGutterMeasureCalls + "x");
-                profilerLabel.setVisibility(View.VISIBLE);
-            }
-            profilerFrames = 0;
-            profilerSlowFrames = 0;
-            profilerPeakNs = 0L;
-            profilerDrawNs = 0L;
-            profilerLayoutNs = 0L;
-            profilerEditMeasureNs = 0L;
-            profilerGutterMeasureNs = 0L;
-            profilerEditMeasureCalls = 0;
-            profilerGutterMeasureCalls = 0;
-            if (SystemClock.uptimeMillis() - profilerLastScrollAt <= 1000) {
-                scroll.postDelayed(this, 1000);
-            } else {
-                profilerActive = false;
-            }
-        }
-    };
-
-    private void trackEditorScroll() {
-        if (file == null) return;
-        if (android.os.Build.VERSION.SDK_INT < 24) {
-            profilerLabel.setText("Diagnostico requer Android 7+");
-            profilerLabel.setVisibility(View.VISIBLE);
-            return;
-        }
-        profilerLastScrollAt = SystemClock.uptimeMillis();
-        if (!profilerActive) {
-            profilerActive = true;
-            profilerFrames = 0;
-            profilerSlowFrames = 0;
-            profilerPeakNs = 0L;
-            profilerDrawNs = 0L;
-            profilerLayoutNs = 0L;
-            profilerEditMeasureNs = 0L;
-            profilerGutterMeasureNs = 0L;
-            profilerEditMeasureCalls = 0;
-            profilerGutterMeasureCalls = 0;
-            scroll.postDelayed(profilerReporter, 1000);
-        }
-    }
 
     CodeEditor(Activity activity, Listener listener) {
         this.activity = activity;
@@ -229,14 +139,6 @@ final class CodeEditor {
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        profilerLabel = new TextView(activity);
-        profilerLabel.setTextSize(9);
-        profilerLabel.setTextColor(Workspace.COLOR_MUTED);
-        profilerLabel.setMaxLines(2);
-        profilerLabel.setTypeface(Typeface.MONOSPACE);
-        profilerLabel.setPadding(dp(4), dp(2), 0, dp(2));
-        profilerLabel.setVisibility(View.GONE);
-
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
         footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
@@ -258,8 +160,6 @@ final class CodeEditor {
 
         view.addView(header, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        view.addView(profilerLabel, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         View divider = new View(activity);
         divider.setBackgroundColor(Workspace.COLOR_BORDER);
@@ -269,17 +169,7 @@ final class CodeEditor {
         view.addView(divider, dividerLp);
 
         // ---- area de texto: numeros de linha + codigo (rola na vertical e na horizontal) ----
-        gutter = new TextView(activity) {
-            @Override
-            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                long begin = SystemClock.elapsedRealtimeNanos();
-                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-                if (profilerActive) {
-                    profilerGutterMeasureNs += SystemClock.elapsedRealtimeNanos() - begin;
-                    profilerGutterMeasureCalls++;
-                }
-            }
-        };
+        gutter = new TextView(activity);
         gutter.setTypeface(Typeface.MONOSPACE);
         gutter.setTextSize(13);
         gutter.setTextColor(Workspace.COLOR_MUTED);
@@ -288,16 +178,6 @@ final class CodeEditor {
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
-            @Override
-            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                long begin = SystemClock.elapsedRealtimeNanos();
-                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-                if (profilerActive) {
-                    profilerEditMeasureNs += SystemClock.elapsedRealtimeNanos() - begin;
-                    profilerEditMeasureCalls++;
-                }
-            }
-
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
                 InputConnection target = super.onCreateInputConnection(outAttrs);
@@ -457,9 +337,6 @@ final class CodeEditor {
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         scroll = new CaretGuardScrollView(activity);
-        scroll.setOnScrollChangeListener((v, sx, sy, oldSx, oldSy) -> {
-            if (sy != oldSy) trackEditorScroll();
-        });
         scroll.addView(row, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -546,12 +423,6 @@ final class CodeEditor {
         applyHighlight(input.getText());
         refreshGutter(input.getText(), true);
         scroll.scrollTo(0, 0);
-        profilerLabel.setVisibility(View.GONE);
-        if (android.os.Build.VERSION.SDK_INT >= 24 && !profilerRegistered) {
-            activity.getWindow().addOnFrameMetricsAvailableListener(
-                profilerListener, new Handler(Looper.getMainLooper()));
-            profilerRegistered = true;
-        }
         return true;
     }
 
@@ -563,12 +434,6 @@ final class CodeEditor {
         }
         dismissAutocompleteSuggestion();
         dismissParameterHint();
-        if (android.os.Build.VERSION.SDK_INT >= 24 && profilerRegistered) {
-            activity.getWindow().removeOnFrameMetricsAvailableListener(profilerListener);
-            profilerRegistered = false;
-        }
-        profilerActive = false;
-        profilerLabel.setVisibility(View.GONE);
         file = null;
         originalText = null;
         loading = true;
