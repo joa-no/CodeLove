@@ -177,6 +177,8 @@ final class CodeEditor {
         gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
+        // Diagnóstico temporário: preserva o espaço do gutter, mas evita desenhar os números.
+        gutter.setVisibility(View.INVISIBLE); // DIAGNOSTIC_HIDE_GUTTER
         input = new EditText(activity) {
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
