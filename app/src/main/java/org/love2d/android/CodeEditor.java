@@ -213,7 +213,6 @@ final class CodeEditor {
         input.setIncludeFontPadding(false);
         input.setPadding(dp(4), dp(4), dp(24), dp(4));
         input.setHorizontallyScrolling(true);
-        input.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         input.setInputType(InputType.TYPE_CLASS_TEXT
             | InputType.TYPE_TEXT_FLAG_MULTI_LINE
