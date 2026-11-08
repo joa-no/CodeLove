@@ -177,8 +177,7 @@ final class CodeEditor {
         gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
-        // Diagnóstico temporário: preserva o espaço do gutter, mas evita desenhar os números.
-        gutter.setVisibility(View.INVISIBLE); // DIAGNOSTIC_HIDE_GUTTER
+        gutter.setVisibility(View.VISIBLE);
         input = new EditText(activity) {
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
@@ -321,26 +320,37 @@ final class CodeEditor {
             return false;
         });
 
+        // Diagnóstico estrutural: o próprio EditText controla a rolagem vertical.
+        // Isso elimina o ScrollView vertical externo como responsável pela rolagem
+        // do documento, mantendo o gutter sincronizado com o scroll do texto.
         HorizontalScrollView horizontal = new CaretGuardHorizontalScrollView(activity);
         horizontal.setFillViewport(true);
 
-        LinearLayout horizontalContent = new LinearLayout(activity);
-        horizontalContent.setOrientation(LinearLayout.VERTICAL);
-        horizontalContent.addView(input, new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        horizontal.addView(horizontalContent, new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        input.setVerticalScrollBarEnabled(true);
+        input.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        input.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            gutter.scrollTo(0, scrollY);
+        });
+
+        horizontal.addView(input, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.TOP);
         row.addView(gutter, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         row.addView(horizontal, new LinearLayout.LayoutParams(
-            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
+        // O ScrollView externo permanece como recipiente sem área de rolagem vertical.
+        // A rolagem real do documento pertence ao EditText.
         scroll = new CaretGuardScrollView(activity);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         scroll.addView(row, new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         view.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -355,7 +365,8 @@ final class CodeEditor {
         view.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // O texto ocupa pelo menos a altura visivel (para tocar na parte vazia).
+        // O texto ocupa toda a altura visivel; a rolagem vertical agora pertence
+        // ao próprio EditText.
         scroll.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
             int height = b - t;
             input.setMinHeight(height);
@@ -422,7 +433,8 @@ final class CodeEditor {
         title.setText(target.getName());
         applyHighlight(input.getText());
         refreshGutter(input.getText(), true);
-        scroll.scrollTo(0, 0);
+        input.scrollTo(0, 0);
+        gutter.scrollTo(0, 0);
         return true;
     }
 
