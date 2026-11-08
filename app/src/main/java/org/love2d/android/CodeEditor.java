@@ -81,7 +81,7 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final TextView title;
-    private final TextView typingStats;
+    private TextView typingStats;
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
