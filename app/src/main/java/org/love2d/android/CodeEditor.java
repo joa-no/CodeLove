@@ -122,6 +122,10 @@ final class CodeEditor {
     private long profilerPeakNs;
     private long profilerDrawNs;
     private long profilerLayoutNs;
+    private long profilerEditMeasureNs;
+    private long profilerGutterMeasureNs;
+    private int profilerEditMeasureCalls;
+    private int profilerGutterMeasureCalls;
 
     private final Window.OnFrameMetricsAvailableListener profilerListener =
         (window, metrics, dropCount) -> {
@@ -145,8 +149,12 @@ final class CodeEditor {
                 long peakMs = Math.round(profilerPeakNs / 1_000_000.0);
                 long drawMs = Math.round(profilerDrawNs / (1_000_000.0 * profilerFrames));
                 long layoutMs = Math.round(profilerLayoutNs / (1_000_000.0 * profilerFrames));
+                long editMs = Math.round(profilerEditMeasureNs / 1_000_000.0);
+                long gutterMs = Math.round(profilerGutterMeasureNs / 1_000_000.0);
                 profilerLabel.setText("Lentos " + slowPercent + "% | pico " + peakMs
-                    + "ms | draw " + drawMs + "ms | layout " + layoutMs + "ms");
+                    + "ms | layout " + layoutMs + "ms | draw " + drawMs + "ms"
+                    + "\nEditor measure: " + editMs + "ms/" + profilerEditMeasureCalls
+                    + "x | numeros measure: " + gutterMs + "ms/" + profilerGutterMeasureCalls + "x");
                 profilerLabel.setVisibility(View.VISIBLE);
             }
             profilerFrames = 0;
@@ -154,6 +162,10 @@ final class CodeEditor {
             profilerPeakNs = 0L;
             profilerDrawNs = 0L;
             profilerLayoutNs = 0L;
+            profilerEditMeasureNs = 0L;
+            profilerGutterMeasureNs = 0L;
+            profilerEditMeasureCalls = 0;
+            profilerGutterMeasureCalls = 0;
             if (SystemClock.uptimeMillis() - profilerLastScrollAt <= 1000) {
                 scroll.postDelayed(this, 1000);
             } else {
@@ -177,6 +189,10 @@ final class CodeEditor {
             profilerPeakNs = 0L;
             profilerDrawNs = 0L;
             profilerLayoutNs = 0L;
+            profilerEditMeasureNs = 0L;
+            profilerGutterMeasureNs = 0L;
+            profilerEditMeasureCalls = 0;
+            profilerGutterMeasureCalls = 0;
             scroll.postDelayed(profilerReporter, 1000);
         }
     }
@@ -216,10 +232,10 @@ final class CodeEditor {
         profilerLabel = new TextView(activity);
         profilerLabel.setTextSize(9);
         profilerLabel.setTextColor(Workspace.COLOR_MUTED);
-        profilerLabel.setSingleLine(true);
-        profilerLabel.setPadding(dp(4), 0, 0, 0);
+        profilerLabel.setMaxLines(2);
+        profilerLabel.setTypeface(Typeface.MONOSPACE);
+        profilerLabel.setPadding(dp(4), dp(2), 0, dp(2));
         profilerLabel.setVisibility(View.GONE);
-        header.addView(profilerLabel);
 
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
         footer = new LinearLayout(activity);
@@ -242,6 +258,8 @@ final class CodeEditor {
 
         view.addView(header, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        view.addView(profilerLabel, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         View divider = new View(activity);
         divider.setBackgroundColor(Workspace.COLOR_BORDER);
@@ -251,7 +269,17 @@ final class CodeEditor {
         view.addView(divider, dividerLp);
 
         // ---- area de texto: numeros de linha + codigo (rola na vertical e na horizontal) ----
-        gutter = new TextView(activity);
+        gutter = new TextView(activity) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                long begin = SystemClock.elapsedRealtimeNanos();
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                if (profilerActive) {
+                    profilerGutterMeasureNs += SystemClock.elapsedRealtimeNanos() - begin;
+                    profilerGutterMeasureCalls++;
+                }
+            }
+        };
         gutter.setTypeface(Typeface.MONOSPACE);
         gutter.setTextSize(13);
         gutter.setTextColor(Workspace.COLOR_MUTED);
@@ -260,6 +288,16 @@ final class CodeEditor {
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                long begin = SystemClock.elapsedRealtimeNanos();
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                if (profilerActive) {
+                    profilerEditMeasureNs += SystemClock.elapsedRealtimeNanos() - begin;
+                    profilerEditMeasureCalls++;
+                }
+            }
+
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
                 InputConnection target = super.onCreateInputConnection(outAttrs);
