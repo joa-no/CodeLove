@@ -477,10 +477,12 @@ final class CodeEditor {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // O texto ocupa pelo menos a altura visivel (para tocar na parte vazia).
+        // Evita solicitar novo layout a cada callback quando a altura nao mudou.
         scroll.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
             int height = b - t;
-            input.setMinHeight(height);
-            gutter.setMinHeight(height);
+            if (height <= 0) return;
+            if (input.getMinHeight() != height) input.setMinHeight(height);
+            if (gutter.getMinHeight() != height) gutter.setMinHeight(height);
         });
     }
 
