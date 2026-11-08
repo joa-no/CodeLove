@@ -12,7 +12,6 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -83,7 +82,7 @@ final class CodeEditor {
     private final LinearLayout view;
     private final TextView title;
     private final TextView dirtyMark;
-    private final LineNumberView gutter;
+    private final TextView gutter;
     private final EditText input;
     private PopupWindow autocompletePopup;
     private TextView autocompleteText;
@@ -170,9 +169,14 @@ final class CodeEditor {
         view.addView(divider, dividerLp);
 
         // ---- area de texto: numeros de linha + codigo (rola na vertical e na horizontal) ----
-        gutter = new LineNumberView(activity);
+        gutter = new TextView(activity);
+        gutter.setTypeface(Typeface.MONOSPACE);
+        gutter.setTextSize(13);
+        gutter.setTextColor(Workspace.COLOR_MUTED);
+        gutter.setGravity(Gravity.END | Gravity.TOP);
+        gutter.setIncludeFontPadding(false);
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
-        gutter.setMinimumWidth(dp(34));
+        gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
@@ -328,7 +332,7 @@ final class CodeEditor {
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.addView(gutter, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         row.addView(horizontal, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -1109,8 +1113,13 @@ final class CodeEditor {
         }
         if (!force && lines == lineCount) return;
         lineCount = lines;
-        gutter.invalidate();
-        gutter.requestLayout();
+
+        StringBuilder numbers = new StringBuilder();
+        for (int i = 0; i < lines; i++) {
+            if (i > 0) numbers.append("\n");
+            numbers.append(i + 1);
+        }
+        gutter.setText(numbers.toString());
     }
 
     private void applyHighlight(Editable text) {
@@ -1125,47 +1134,6 @@ final class CodeEditor {
         for (int[] part : parts) {
             text.setSpan(new ForegroundColorSpan(colorFor(part[2])),
                 part[0], part[1], Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
-    }
-
-    private final class LineNumberView extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        LineNumberView(Context context) {
-            super(context);
-            paint.setTypeface(Typeface.MONOSPACE);
-            paint.setTextAlign(Paint.Align.RIGHT);
-            setWillNotDraw(false);
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            paint.setTextSize(input.getTextSize());
-            String sample = Integer.toString(Math.max(1, lineCount));
-            int desiredWidth = getPaddingLeft() + getPaddingRight()
-                + Math.round(paint.measureText(sample));
-            int width = resolveSize(Math.max(dp(34), desiredWidth), widthMeasureSpec);
-            int height = resolveSize(getSuggestedMinimumHeight(), heightMeasureSpec);
-            setMeasuredDimension(width, height);
-        }
-
-        @Override
-        protected void onDraw(android.graphics.Canvas canvas) {
-            paint.setTextSize(input.getTextSize());
-            paint.setColor(Workspace.COLOR_MUTED);
-            Paint.FontMetrics fm = paint.getFontMetrics();
-            int lineHeight = Math.max(1, input.getLineHeight());
-            float firstBaseline = getPaddingTop() - fm.top;
-            Rect clip = canvas.getClipBounds();
-            int firstLine = Math.max(0,
-                (int) Math.floor((clip.top - firstBaseline) / (float) lineHeight));
-            int lastLine = Math.min(lineCount - 1,
-                (int) Math.ceil((clip.bottom - firstBaseline) / (float) lineHeight));
-            float x = getWidth() - getPaddingRight();
-            for (int line = firstLine; line <= lastLine; line++) {
-                canvas.drawText(Integer.toString(line + 1),
-                    x, firstBaseline + line * lineHeight, paint);
-            }
         }
     }
 
