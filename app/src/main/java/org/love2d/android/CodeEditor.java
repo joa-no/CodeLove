@@ -81,6 +81,7 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final TextView title;
+    private final TextView typingStats;
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
@@ -106,6 +107,59 @@ final class CodeEditor {
     private boolean highlightLua;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
+
+    // Diagnostico temporario para medir somente o custo da digitacao.
+    // Coleta numeros em memoria e atualiza a tela quando o usuario para de digitar.
+    private long typingBeforeNs;
+    private int typingSamples;
+    private int typingInsertSamples;
+    private int typingDeleteSamples;
+    private long typingTotalNs;
+    private long typingPeakNs;
+    private long typingInsertNs;
+    private long typingDeleteNs;
+    private long typingHighlightNs;
+    private long typingGutterNs;
+    private long typingAutocompleteNs;
+    private long typingHintsNs;
+    private long typingOtherNs;
+
+    private final Runnable showTypingStats = () -> {
+        if (file == null || typingSamples == 0) return;
+        double divisor = 1_000_000.0 * typingSamples;
+        double insertAvg = typingInsertSamples == 0 ? 0
+            : typingInsertNs / (1_000_000.0 * typingInsertSamples);
+        double deleteAvg = typingDeleteSamples == 0 ? 0
+            : typingDeleteNs / (1_000_000.0 * typingDeleteSamples);
+        typingStats.setText(String.format(Locale.ROOT,
+            "Eventos %d | total %.1fms | pico %.1fms\n"
+            + "Digitar %d: %.1fms | apagar %d: %.1fms\n"
+            + "Cores %.1fms | linhas %.1fms | auto %.1fms | dicas %.1fms | outros %.1fms",
+            typingSamples, typingTotalNs / divisor, typingPeakNs / 1_000_000.0,
+            typingInsertSamples, insertAvg, typingDeleteSamples, deleteAvg,
+            typingHighlightNs / divisor, typingGutterNs / divisor,
+            typingAutocompleteNs / divisor, typingHintsNs / divisor,
+            typingOtherNs / divisor));
+        typingStats.setVisibility(View.VISIBLE);
+    };
+
+    private void resetTypingStats() {
+        input.removeCallbacks(showTypingStats);
+        typingBeforeNs = 0L;
+        typingSamples = 0;
+        typingInsertSamples = 0;
+        typingDeleteSamples = 0;
+        typingTotalNs = 0L;
+        typingPeakNs = 0L;
+        typingInsertNs = 0L;
+        typingDeleteNs = 0L;
+        typingHighlightNs = 0L;
+        typingGutterNs = 0L;
+        typingAutocompleteNs = 0L;
+        typingHintsNs = 0L;
+        typingOtherNs = 0L;
+        typingStats.setVisibility(View.GONE);
+    }
 
     CodeEditor(Activity activity, Listener listener) {
         this.activity = activity;
@@ -139,6 +193,13 @@ final class CodeEditor {
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
+        typingStats = new TextView(activity);
+        typingStats.setTextSize(9);
+        typingStats.setTypeface(Typeface.MONOSPACE);
+        typingStats.setTextColor(Workspace.COLOR_MUTED);
+        typingStats.setPadding(dp(4), dp(3), 0, dp(3));
+        typingStats.setVisibility(View.GONE);
+
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
         footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
@@ -159,6 +220,8 @@ final class CodeEditor {
         footer.addView(close, new LinearLayout.LayoutParams(dp(52), dp(44)));
 
         view.addView(header, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        view.addView(typingStats, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         View divider = new View(activity);
@@ -227,6 +290,9 @@ final class CodeEditor {
                 changeBefore = count;
                 changeAfter = after;
                 changeRemoved = count > 0 ? s.subSequence(start, start + count).toString() : "";
+                if (!loading && !applyingAutoIndent) {
+                    typingBeforeNs = SystemClock.elapsedRealtimeNanos();
+                }
             }
 
             @Override
@@ -238,6 +304,7 @@ final class CodeEditor {
                 if (loading || applyingAutoIndent) {
                     return;
                 }
+                long afterStartNs = SystemClock.elapsedRealtimeNanos();
 
                 // Ao inserir uma quebra de linha, preserva a indentacao atual
                 // e avanca um nivel quando a linha anterior abre um bloco Lua.
@@ -286,10 +353,35 @@ final class CodeEditor {
                 saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
+                long t0 = SystemClock.elapsedRealtimeNanos();
                 applyHighlight(s);
+                long t1 = SystemClock.elapsedRealtimeNanos();
                 refreshGutter(s, false);
+                long t2 = SystemClock.elapsedRealtimeNanos();
                 updateAutocompleteSuggestion(s);
+                long t3 = SystemClock.elapsedRealtimeNanos();
                 updateParameterHint(s);
+                long t4 = SystemClock.elapsedRealtimeNanos();
+
+                long beginNs = typingBeforeNs > 0 ? typingBeforeNs : afterStartNs;
+                long elapsedNs = Math.max(0, t4 - beginNs);
+                typingSamples++;
+                typingTotalNs += elapsedNs;
+                typingPeakNs = Math.max(typingPeakNs, elapsedNs);
+                if (changeBefore > changeAfter) {
+                    typingDeleteSamples++;
+                    typingDeleteNs += elapsedNs;
+                } else if (changeAfter > changeBefore) {
+                    typingInsertSamples++;
+                    typingInsertNs += elapsedNs;
+                }
+                typingHighlightNs += t1 - t0;
+                typingGutterNs += t2 - t1;
+                typingAutocompleteNs += t3 - t2;
+                typingHintsNs += t4 - t3;
+                typingOtherNs += Math.max(0, t0 - beginNs);
+                input.removeCallbacks(showTypingStats);
+                input.postDelayed(showTypingStats, 1100);
             }
         });
         input.setOnEditorActionListener((textView, actionId, event) -> {
@@ -423,6 +515,7 @@ final class CodeEditor {
         applyHighlight(input.getText());
         refreshGutter(input.getText(), true);
         scroll.scrollTo(0, 0);
+        resetTypingStats();
         return true;
     }
 
@@ -434,6 +527,7 @@ final class CodeEditor {
         }
         dismissAutocompleteSuggestion();
         dismissParameterHint();
+        resetTypingStats();
         file = null;
         originalText = null;
         loading = true;
