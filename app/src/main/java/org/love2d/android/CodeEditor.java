@@ -319,21 +319,13 @@ final class CodeEditor {
             return false;
         });
 
-        HorizontalScrollView horizontal = new CaretGuardHorizontalScrollView(activity);
-        horizontal.setFillViewport(true);
-
-        LinearLayout horizontalContent = new LinearLayout(activity);
-        horizontalContent.setOrientation(LinearLayout.VERTICAL);
-        horizontalContent.addView(input, new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        horizontal.addView(horizontalContent, new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
+        // Diagnóstico estrutural: remove o HorizontalScrollView externo.
+        // O próprio EditText já está configurado para rolagem horizontal.
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.addView(gutter, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        row.addView(horizontal, new LinearLayout.LayoutParams(
+        row.addView(input, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         scroll = new CaretGuardScrollView(activity);
