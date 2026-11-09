@@ -81,6 +81,7 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final TextView title;
+    private final TextView highlightDiagnosticToggle;
     private TextView typingStats;
     private final TextView dirtyMark;
     private final TextView gutter;
@@ -105,8 +106,45 @@ final class CodeEditor {
     private int changeAfter;
     private String changeRemoved = "";
     private boolean highlightLua;
+    private boolean diagnosticColorsDisabled;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
+
+    // Evita recalcular todo o destaque Lua dentro de cada evento do teclado.
+    // Uma pausa curta permite agrupar insercoes, exclusoes e pares automaticos.
+    private static final long HIGHLIGHT_IDLE_DELAY_MS = 180L;
+    private final Runnable pendingHighlight = this::applyPendingHighlight;
+
+    private void scheduleHighlight() {
+        input.removeCallbacks(pendingHighlight);
+        if (file != null && highlightLua && !diagnosticColorsDisabled) {
+            input.postDelayed(pendingHighlight, HIGHLIGHT_IDLE_DELAY_MS);
+        }
+    }
+
+    private void applyPendingHighlight() {
+        if (file != null && highlightLua && !diagnosticColorsDisabled) {
+            applyHighlight(input.getText());
+        }
+    }
+
+    private void toggleDiagnosticColors() {
+        if (file == null || !highlightLua) return;
+        diagnosticColorsDisabled = !diagnosticColorsDisabled;
+        input.removeCallbacks(pendingHighlight);
+        if (diagnosticColorsDisabled) {
+            Editable text = input.getText();
+            ForegroundColorSpan[] spans = text.getSpans(
+                0, text.length(), ForegroundColorSpan.class);
+            for (ForegroundColorSpan span : spans) {
+                text.removeSpan(span);
+            }
+        } else {
+            applyHighlight(input.getText());
+        }
+        highlightDiagnosticToggle.setText(
+            diagnosticColorsDisabled ? "Cores OFF" : "Cores ON");
+    }
 
     // Diagnostico temporario para medir somente o custo da digitacao.
     // Coleta numeros em memoria e atualiza a tela quando o usuario para de digitar.
@@ -192,6 +230,18 @@ final class CodeEditor {
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        // Controle exclusivo de diagnóstico: permite comparar o mesmo Lua
+        // com spans coloridos ou sem spans, sem desativar recursos Lua.
+        highlightDiagnosticToggle = new TextView(activity);
+        highlightDiagnosticToggle.setText("Cores ON");
+        highlightDiagnosticToggle.setTextSize(11);
+        highlightDiagnosticToggle.setTextColor(Workspace.COLOR_MUTED);
+        highlightDiagnosticToggle.setGravity(Gravity.CENTER);
+        highlightDiagnosticToggle.setPadding(dp(8), dp(6), dp(8), dp(6));
+        highlightDiagnosticToggle.setVisibility(View.GONE);
+        highlightDiagnosticToggle.setOnClickListener(v -> toggleDiagnosticColors());
+        header.addView(highlightDiagnosticToggle);
 
         typingStats = new TextView(activity);
         typingStats.setTextSize(9);
@@ -354,7 +404,7 @@ final class CodeEditor {
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
                 long t0 = SystemClock.elapsedRealtimeNanos();
-                applyHighlight(s);
+                scheduleHighlight();
                 long t1 = SystemClock.elapsedRealtimeNanos();
                 refreshGutter(s, false);
                 long t2 = SystemClock.elapsedRealtimeNanos();
@@ -500,9 +550,14 @@ final class CodeEditor {
             return false;
         }
 
+        input.removeCallbacks(pendingHighlight);
         file = target;
         originalText = text;
         highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
+        diagnosticColorsDisabled = false;
+        highlightDiagnosticToggle.setText("Cores ON");
+        highlightDiagnosticToggle.setVisibility(
+            highlightLua ? View.VISIBLE : View.GONE);
 
         loading = true;
         input.setText(text);
@@ -528,6 +583,9 @@ final class CodeEditor {
         dismissAutocompleteSuggestion();
         dismissParameterHint();
         resetTypingStats();
+        input.removeCallbacks(pendingHighlight);
+        diagnosticColorsDisabled = false;
+        highlightDiagnosticToggle.setVisibility(View.GONE);
         file = null;
         originalText = null;
         loading = true;
@@ -849,7 +907,7 @@ final class CodeEditor {
                             try {
                                 current.delete(position, position + 1);
                                 input.setSelection(position + 1);
-                                applyHighlight(current);
+                                scheduleHighlight();
                             } finally {
                                 applyingAutoIndent = false;
                             }
@@ -870,7 +928,7 @@ final class CodeEditor {
             try {
                 current.insert(position, String.valueOf(closer));
                 input.setSelection(position);
-                applyHighlight(current);
+                scheduleHighlight();
             } finally {
                 applyingAutoIndent = false;
             }
@@ -892,7 +950,7 @@ final class CodeEditor {
             applyingAutoIndent = true;
             try {
                 current.delete(position, position + 1);
-                applyHighlight(current);
+                scheduleHighlight();
             } finally {
                 applyingAutoIndent = false;
             }
@@ -924,7 +982,7 @@ final class CodeEditor {
             try {
                 current.insert(expectedCursor, innerIndent + "\n" + baseIndent);
                 input.setSelection(expectedCursor + innerIndent.length());
-                applyHighlight(current);
+                scheduleHighlight();
                 refreshGutter(current, false);
             } finally {
                 applyingAutoIndent = false;
@@ -1223,7 +1281,7 @@ final class CodeEditor {
         for (ForegroundColorSpan span : old) {
             text.removeSpan(span);
         }
-        if (!highlightLua) {
+        if (!highlightLua || diagnosticColorsDisabled) {
             return;
         }
         List<int[]> parts = LuaSyntax.scan(text.toString());
