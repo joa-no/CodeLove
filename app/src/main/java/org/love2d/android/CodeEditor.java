@@ -83,6 +83,7 @@ final class CodeEditor {
     private final LinearLayout view;
     private final TextView title;
     private final TextView highlightDiagnosticToggle;
+    private final TextView assistDiagnosticToggle;
     private TextView typingStats;
     private final TextView dirtyMark;
     private final TextView gutter;
@@ -108,6 +109,7 @@ final class CodeEditor {
     private String changeRemoved = "";
     private boolean highlightLua;
     private boolean diagnosticColorsDisabled;
+    private boolean diagnosticAssistsDisabled;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
 
@@ -131,6 +133,20 @@ final class CodeEditor {
             delayedHighlightCalls++;
             delayedHighlightTotalNs += dt;
             delayedHighlightPeakNs = Math.max(delayedHighlightPeakNs, dt);
+        }
+    }
+
+    private void toggleDiagnosticAssists() {
+        if (file == null || !highlightLua) return;
+        diagnosticAssistsDisabled = !diagnosticAssistsDisabled;
+        dismissAutocompleteSuggestion();
+        dismissParameterHint();
+        assistDiagnosticToggle.setText(
+            diagnosticAssistsDisabled ? "Ajuda OFF" : "Ajuda ON");
+        resetTypingStats();
+        if (!diagnosticAssistsDisabled) {
+            updateAutocompleteSuggestion(input.getText());
+            updateParameterHint(input.getText());
         }
     }
 
@@ -277,6 +293,18 @@ final class CodeEditor {
         highlightDiagnosticToggle.setVisibility(View.GONE);
         highlightDiagnosticToggle.setOnClickListener(v -> toggleDiagnosticColors());
         header.addView(highlightDiagnosticToggle);
+
+        // Diagnostico temporario: isola autocomplete e dicas de parametros
+        // sem afetar a colorizacao, a indentacao ou a rolagem.
+        assistDiagnosticToggle = new TextView(activity);
+        assistDiagnosticToggle.setText("Ajuda ON");
+        assistDiagnosticToggle.setTextSize(11);
+        assistDiagnosticToggle.setTextColor(Workspace.COLOR_MUTED);
+        assistDiagnosticToggle.setGravity(Gravity.CENTER);
+        assistDiagnosticToggle.setPadding(dp(8), dp(6), dp(8), dp(6));
+        assistDiagnosticToggle.setVisibility(View.GONE);
+        assistDiagnosticToggle.setOnClickListener(v -> toggleDiagnosticAssists());
+        header.addView(assistDiagnosticToggle);
 
         typingStats = new TextView(activity);
         typingStats.setTextSize(9);
@@ -459,9 +487,13 @@ final class CodeEditor {
                 long t1 = SystemClock.elapsedRealtimeNanos();
                 refreshGutter(s, false);
                 long t2 = SystemClock.elapsedRealtimeNanos();
-                updateAutocompleteSuggestion(s);
+                if (!diagnosticAssistsDisabled) {
+                    updateAutocompleteSuggestion(s);
+                }
                 long t3 = SystemClock.elapsedRealtimeNanos();
-                updateParameterHint(s);
+                if (!diagnosticAssistsDisabled) {
+                    updateParameterHint(s);
+                }
                 long t4 = SystemClock.elapsedRealtimeNanos();
 
                 long beginNs = typingBeforeNs > 0 ? typingBeforeNs : afterStartNs;
@@ -606,8 +638,12 @@ final class CodeEditor {
         originalText = text;
         highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
         diagnosticColorsDisabled = false;
+        diagnosticAssistsDisabled = false;
         highlightDiagnosticToggle.setText("Cores ON");
         highlightDiagnosticToggle.setVisibility(
+            highlightLua ? View.VISIBLE : View.GONE);
+        assistDiagnosticToggle.setText("Ajuda ON");
+        assistDiagnosticToggle.setVisibility(
             highlightLua ? View.VISIBLE : View.GONE);
 
         loading = true;
@@ -636,7 +672,9 @@ final class CodeEditor {
         resetTypingStats();
         input.removeCallbacks(pendingHighlight);
         diagnosticColorsDisabled = false;
+        diagnosticAssistsDisabled = false;
         highlightDiagnosticToggle.setVisibility(View.GONE);
+        assistDiagnosticToggle.setVisibility(View.GONE);
         file = null;
         originalText = null;
         loading = true;
