@@ -125,6 +125,7 @@ public final class Workspace {
     private long swipeDownTime;
     private LinearLayout panel;
     private View movePanelButton;
+    private Dialog settingsDialog;
     private LinearLayout placeholder;
     private LinearLayout playButton;
     private TextView resetButton;
@@ -609,26 +610,163 @@ public final class Workspace {
         nameLp.setMargins(dp(10), 0, dp(8), 0);
         header.addView(name, nameLp);
 
-        LinearLayout orientation = new LinearLayout(activity);
-        orientation.setGravity(Gravity.CENTER);
-        orientation.setBackground(box(COLOR_FIELD, 10, false));
-        orientation.addView(new IconView(activity, IconView.ORIENTATION, COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(18), dp(18)));
-        setButtonHint(orientation, "Alterar orientação da tela");
-        orientation.setOnClickListener(v -> showOrientationChooser(true));
-        LinearLayout.LayoutParams orientationLp = new LinearLayout.LayoutParams(dp(32), dp(32));
-        orientationLp.setMargins(0, 0, dp(6), 0);
-        header.addView(orientation, orientationLp);
-
-        LinearLayout info = new LinearLayout(activity);
-        info.setGravity(Gravity.CENTER);
-        info.setBackground(box(COLOR_FIELD, 10, false));
-        info.addView(new IconView(activity, IconView.INFO, COLOR_MUTED),
-            new LinearLayout.LayoutParams(dp(18), dp(18)));
-        info.setOnClickListener(v -> showAbout());
-        header.addView(info, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        // A engrenagem e o unico acesso do cabecalho as opcoes do aplicativo.
+        // Orientacao e informacoes passam a ser acessadas dentro de Configuracoes.
+        LinearLayout settingsButton = new LinearLayout(activity);
+        settingsButton.setGravity(Gravity.CENTER);
+        settingsButton.setBackground(box(COLOR_FIELD, 10, false));
+        settingsButton.addView(new IconView(activity, IconView.SETTINGS, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
+        setButtonHint(settingsButton, "Configurações");
+        settingsButton.setClickable(true);
+        settingsButton.setFocusable(true);
+        settingsButton.setOnClickListener(v -> showSettings());
+        header.addView(settingsButton, new LinearLayout.LayoutParams(dp(40), dp(40)));
 
         return header;
+    }
+
+    /** Configuracoes nativas com a identidade visual do CodeLove. */
+    private void showSettings() {
+        if (activity.isFinishing()) return;
+        if (settingsDialog != null && settingsDialog.isShowing()) return;
+
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(18), dp(20), dp(20));
+        content.setBackground(box(COLOR_PANEL, 18, false));
+
+        TextView brand = new TextView(activity);
+        brand.setText("CODELOVE");
+        brand.setTextColor(COLOR_FOLDER);
+        brand.setTextSize(11);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        brand.setLetterSpacing(0.10f);
+        content.addView(brand);
+
+        LinearLayout heading = new LinearLayout(activity);
+        heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams headingLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headingLp.setMargins(0, dp(6), 0, dp(12));
+        content.addView(heading, headingLp);
+
+        TextView title = new TextView(activity);
+        title.setText("Configurações");
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextColor(COLOR_TEXT);
+        heading.addView(title, new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        LinearLayout close = new LinearLayout(activity);
+        close.setGravity(Gravity.CENTER);
+        close.setBackground(box(COLOR_FIELD, 10, false));
+        close.addView(new IconView(activity, IconView.CLOSE, COLOR_MUTED),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        setButtonHint(close, "Fechar configurações");
+        close.setClickable(true);
+        close.setFocusable(true);
+        heading.addView(close, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+        TextView explanation = new TextView(activity);
+        explanation.setText("Preferências e informações do aplicativo");
+        explanation.setTextColor(COLOR_MUTED);
+        explanation.setTextSize(13);
+        LinearLayout.LayoutParams explanationLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        explanationLp.setMargins(0, 0, 0, dp(14));
+        content.addView(explanation, explanationLp);
+
+        content.addView(buildSettingsRow(
+            IconView.ORIENTATION, "Orientação da tela",
+            "Escolher entre vertical e horizontal", v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                showOrientationChooser(true);
+            }));
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        dividerLp.setMargins(0, dp(10), 0, dp(10));
+        content.addView(divider, dividerLp);
+
+        content.addView(buildSettingsRow(
+            IconView.INFO, "Sobre o CodeLove",
+            "Créditos, informações e licenças", v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                showAbout();
+            }));
+
+        // Uma ScrollView evita cortes em celulares no modo horizontal.
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setFillViewport(false);
+        scroll.addView(content, new ScrollView.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        Dialog dialog = new Dialog(activity);
+        settingsDialog = dialog;
+        dialog.setContentView(scroll);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.setOnDismissListener(d -> {
+            if (settingsDialog == dialog) settingsDialog = null;
+        });
+        close.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(
+                new ColorDrawable(android.graphics.Color.TRANSPARENT));
+            int availableWidth = activity.getResources().getDisplayMetrics().widthPixels - dp(32);
+            int dialogWidth = Math.max(dp(220), Math.min(dp(420), availableWidth));
+            dialog.getWindow().setLayout(dialogWidth,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private View buildSettingsRow(int iconKind, String name, String description,
+        View.OnClickListener action) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(12), dp(12), dp(12));
+        row.setBackground(box(COLOR_FIELD, 12, true));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setContentDescription(name + ". " + description);
+        row.setOnClickListener(action);
+
+        row.addView(new IconView(activity, iconKind, COLOR_FOLDER),
+            new LinearLayout.LayoutParams(dp(22), dp(22)));
+
+        LinearLayout labels = new LinearLayout(activity);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams labelsLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        labelsLp.setMargins(dp(12), 0, dp(10), 0);
+        row.addView(labels, labelsLp);
+
+        TextView heading = new TextView(activity);
+        heading.setText(name);
+        heading.setTextColor(COLOR_TEXT);
+        heading.setTextSize(15);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        labels.addView(heading);
+
+        TextView hint = new TextView(activity);
+        hint.setText(description);
+        hint.setTextColor(COLOR_MUTED);
+        hint.setTextSize(12);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hintLp.setMargins(0, dp(4), 0, 0);
+        labels.addView(hint, hintLp);
+
+        row.addView(new IconView(activity, IconView.CHEVRON_RIGHT, COLOR_MUTED),
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        return row;
     }
 
     private void showInitialOrientationChooser() {
@@ -2860,6 +2998,7 @@ public final class Workspace {
         static final int ORIENTATION = 15;
         static final int CLOSE = 16;
         static final int RELOAD = 17;
+        static final int SETTINGS = 18;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -2904,6 +3043,19 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case SETTINGS:
+                    // Engrenagem vetorial, alinhada aos demais icones do CodeLove.
+                    for (int i = 0; i < 32; i++) {
+                        double angle = (Math.PI * 2.0 * i) / 32.0 - Math.PI / 2.0;
+                        float radius = (i % 4 == 0 || i % 4 == 3) ? 10f : 7.6f;
+                        float x = 12f + radius * (float) Math.cos(angle);
+                        float y = 12f + radius * (float) Math.sin(angle);
+                        if (i == 0) path.moveTo(x, y);
+                        else path.lineTo(x, y);
+                    }
+                    path.close();
+                    path.addCircle(12f, 12f, 3.2f, Path.Direction.CW);
                     break;
                 case INFO:
                     path.addCircle(12f, 12f, 9f, Path.Direction.CW);
