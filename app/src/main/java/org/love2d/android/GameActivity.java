@@ -154,23 +154,23 @@ public class GameActivity extends SDLActivity {
     }
 
     /**
-     * O SDL antigo pode restaurar a barra de status depois do onCreate,
-     * ao aplicar COMMAND_CHANGE_WINDOW_STYLE (modo de janela do jogo).
-     * Reaplica o ajuste do CodeLove apos o comando original ser executado
-     * pela fila da UI, sem interferir na resolucao/estado nativo do SDL.
+     * O SDL3 chama setWindowStyle(false) na inicializacao e pode repetir
+     * o comando ao configurar a janela do jogo. No CodeLove, a barra de
+     * status deve permanecer oculta na Activity isolada de execucao.
+     *
+     * Impedir apenas a transicao para o modo com barras evita o ciclo
+     * ocultar/mostrar, sem alterar o SDL usado nas outras variantes
+     * ou os pedidos explicitos de fullscreen dos jogos.
      */
     @Override
     protected boolean sendCommand(int command, Object data) {
-        boolean sent = super.sendCommand(command, data);
-        if (standaloneRuntime && command == COMMAND_CHANGE_WINDOW_STYLE) {
-            View decor = getWindow().getDecorView();
-            decor.post(() -> {
-                if (!isFinishing() && !isDestroyed()) {
-                    hideStandaloneStatusBar();
-                }
-            });
+        if (standaloneRuntime
+                && command == COMMAND_CHANGE_WINDOW_STYLE
+                && data instanceof Integer
+                && ((Integer) data).intValue() == 0) {
+            return true;
         }
-        return sent;
+        return super.sendCommand(command, data);
     }
 
     /**
