@@ -107,6 +107,8 @@ public final class Workspace {
     private File lastFolder = null; // ultima pasta tocada no projeto aberto
     private CodeEditor editor;
     private View editorView;
+    private View drawerScrim;
+    private boolean fileDrawerOpen;
     private LinearLayout panel;
     private View movePanelButton;
     private LinearLayout placeholder;
@@ -509,6 +511,27 @@ public final class Workspace {
 
             @Override
             public void onClosed() {
+                fileDrawerOpen = false;
+                applyLayout();
+                renderTree();
+                saveState();
+            }
+
+            @Override
+            public void onFilesRequested() {
+                if (root.getHeight() <= root.getWidth() || !editor.isOpen()) return;
+                fileDrawerOpen = !fileDrawerOpen;
+                if (fileDrawerOpen) {
+                    android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager)
+                        activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
+                }
+                applyLayout();
+            }
+
+            @Override
+            public void onActiveTabChanged() {
                 applyLayout();
                 renderTree();
                 saveState();
@@ -522,6 +545,14 @@ public final class Workspace {
 
         root.addView(placeholder);
         root.addView(editorView);
+        drawerScrim = new View(activity);
+        drawerScrim.setBackgroundColor(0x90000000);
+        drawerScrim.setVisibility(View.GONE);
+        drawerScrim.setOnClickListener(v -> {
+            fileDrawerOpen = false;
+            applyLayout();
+        });
+        root.addView(drawerScrim);
         root.addView(panel);
         root.addView(consolePanel);
         root.addView(controlsBar);
@@ -916,9 +947,10 @@ public final class Workspace {
         }
 
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
-        // No vertical, mostra os arquivos quando nao ha arquivo aberto;
-        // ao fechar o editor, a arvore volta automaticamente para a tela.
-        boolean panelShown = !fullscreen && (!verticalMode || (!editorOpen && !playing));
+        if (editor != null) editor.setPortraitTabs(verticalMode && surface == null);
+        if (!verticalMode) fileDrawerOpen = false;
+        boolean panelShown = !fullscreen && (!verticalMode
+            || !editorOpen || fileDrawerOpen);
         if (movePanelButton != null) {
             movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
         }
@@ -1011,8 +1043,11 @@ public final class Workspace {
         placeholder.setLayoutParams(placeholderLp);
 
         if (verticalMode) {
+            int drawerWidth = editorOpen && fileDrawerOpen
+                ? Math.max(0, Math.min((int) (baseW * 0.86f), dp(340)))
+                : Math.max(0, (int) baseW);
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
-                Math.max(0, (int) baseW), ViewGroup.LayoutParams.MATCH_PARENT);
+                drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT);
             panelLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
             panelLp.leftMargin = insetLeft;
             panelLp.rightMargin = insetRight;
@@ -1034,6 +1069,15 @@ public final class Workspace {
             panel.setLayoutParams(panelLp);
         }
         panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
+        RelativeLayout.LayoutParams scrimLp = new RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        scrimLp.leftMargin = insetLeft;
+        scrimLp.rightMargin = insetRight;
+        scrimLp.topMargin = insetTop;
+        scrimLp.bottomMargin = insetBottomIme;
+        drawerScrim.setLayoutParams(scrimLp);
+        drawerScrim.setVisibility(verticalMode && editorOpen && fileDrawerOpen
+            ? View.VISIBLE : View.GONE);
 
         RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
             editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -1335,6 +1379,7 @@ public final class Workspace {
             && (activeProject == null
                 || !project.getAbsolutePath().equals(activeProject.getAbsolutePath()))) {
             selectProject(project);
+            if (activeProject == null || !sameFile(activeProject, project)) return;
             rememberFolder(row);
             if (!row.dir) {
                 openInEditor(row.file);
@@ -1706,7 +1751,7 @@ public final class Workspace {
 
         final File editedFile = editor.isOpen() ? editor.getFile() : null;
         final boolean editedInsideTarget = editedFile != null && isInside(editedFile, target);
-        if (editedInsideTarget && !editor.close()) return;
+        if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
 
         playing = false;
         sendCommand("close", "");
@@ -1877,7 +1922,7 @@ public final class Workspace {
     private void doDirectRename(File target, String newName) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
         File editedFile = editor.isOpen() ? editor.getFile() : null;
-        if (editedFile != null && isInside(editedFile, target) && !editor.close()) return;
+        if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
         if (isActiveProject) sendCommand("close", "");
 
         try {
@@ -1910,7 +1955,7 @@ public final class Workspace {
     private void doRename(File target, File dest) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
         File editedFile = editor.isOpen() ? editor.getFile() : null;
-        if (editedFile != null && isInside(editedFile, target) && !editor.close()) return;
+        if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
         if (isActiveProject) sendCommand("close", "");
 
         if (!target.renameTo(dest)) {
@@ -1964,7 +2009,7 @@ public final class Workspace {
 
     private void doDelete(File target) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
-        if (editor.isOpen() && isInside(editor.getFile(), target) && !editor.close()) return;
+        if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
         if (isActiveProject) sendCommand("close", "");
 
         boolean ok;
@@ -2009,6 +2054,7 @@ public final class Workspace {
         editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
             ? activeSafStorage : null);
         if (editor.open(file)) {
+            fileDrawerOpen = false;
             if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
             applyLayout();
             renderTree();
@@ -2065,7 +2111,7 @@ public final class Workspace {
         boolean changingProject = activeProject == null
             || !sameFile(activeProject, project)
             || activeSafStorage != storage;
-        if (editor != null && editor.isOpen() && changingProject && !editor.close()) {
+        if (editor != null && editor.isOpen() && changingProject && !editor.closeAllTabs()) {
             return;
         }
 
@@ -2100,7 +2146,10 @@ public final class Workspace {
 
     private void openStandalonePlayback(File project, String displayName) {
         if (project == null || !project.isDirectory()) return;
-        if (editor != null && editor.isOpen() && !editor.close()) return;
+        if (editor != null && editor.hasUnsavedTabs()) {
+            toast("Salve as abas com alteracoes antes de executar o jogo.");
+            return;
+        }
         Intent intent = new Intent(activity, GameActivity.class);
         intent.putExtra(EXTRA_RUNTIME_ONLY, true);
         intent.putExtra(EXTRA_RUNTIME_PROJECT, project.getAbsolutePath());
@@ -2112,6 +2161,10 @@ public final class Workspace {
 
     private void launchStandalonePlayback() {
         if (activeProject == null || (editor != null && !editor.saveNow())) return;
+        if (editor != null && editor.hasUnsavedTabs()) {
+            toast("Salve as abas com alteracoes antes de executar o jogo.");
+            return;
+        }
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
             final File selected = activeProject;

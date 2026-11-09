@@ -48,6 +48,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.Locale;
 
 final class CodeEditor {
@@ -65,6 +68,8 @@ final class CodeEditor {
 
         /** Chamado quando o editor foi fechado. */
         void onClosed();
+        void onFilesRequested();
+        void onActiveTabChanged();
 
     }
 
@@ -81,6 +86,11 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final TextView title;
+    private final TextView filesMenuButton;
+    private final HorizontalScrollView tabsScroller;
+    private final LinearLayout tabsRow;
+    private final LinkedHashMap<String, TabState> openTabs = new LinkedHashMap<>();
+    private boolean portraitTabs;
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
@@ -92,6 +102,23 @@ final class CodeEditor {
     private final ScrollView scroll;
     private final LinearLayout footer;
     private final View footerSpacer;
+
+    /** Estado de uma aba enquanto outro arquivo e editado. */
+    private static final class TabState {
+        final File file;
+        final Storage storage;
+        String text;
+        String original;
+        boolean dirty;
+        int selection;
+        int scrollY;
+        TabState(File file, Storage storage, String text) {
+            this.file = file;
+            this.storage = storage;
+            this.text = text;
+            this.original = text;
+        }
+    }
 
     private File file;           // arquivo aberto (nulo se nenhum)
     private String originalText; // conteudo lido na abertura, usado para detectar conflito externo
@@ -171,6 +198,19 @@ final class CodeEditor {
         dirtyMark.setVisibility(View.GONE);
         header.addView(dirtyMark);
 
+        filesMenuButton = new TextView(activity);
+        filesMenuButton.setText("\u2630");
+        filesMenuButton.setTextColor(Workspace.COLOR_TEXT);
+        filesMenuButton.setTextSize(24);
+        filesMenuButton.setGravity(Gravity.CENTER);
+        filesMenuButton.setContentDescription("Abrir pastas e arquivos");
+        filesMenuButton.setBackground(box(Workspace.COLOR_FIELD, 10, false));
+        filesMenuButton.setVisibility(View.GONE);
+        filesMenuButton.setOnClickListener(v -> listener.onFilesRequested());
+        LinearLayout.LayoutParams menuLp = new LinearLayout.LayoutParams(dp(42), dp(40));
+        menuLp.setMargins(0, 0, dp(10), 0);
+        header.addView(filesMenuButton, menuLp);
+
         title = new TextView(activity);
         title.setTextColor(Workspace.COLOR_TEXT);
         title.setTextSize(15);
@@ -200,6 +240,21 @@ final class CodeEditor {
 
         view.addView(header, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // Abas representam apenas os arquivos abertos, nao todos de uma pasta.
+        tabsRow = new LinearLayout(activity);
+        tabsRow.setOrientation(LinearLayout.HORIZONTAL);
+        tabsRow.setGravity(Gravity.CENTER_VERTICAL);
+        tabsScroller = new HorizontalScrollView(activity);
+        tabsScroller.setHorizontalScrollBarEnabled(false);
+        tabsScroller.setBackgroundColor(Workspace.COLOR_OUTER);
+        tabsScroller.addView(tabsRow, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        tabsScroller.setVisibility(View.GONE);
+        LinearLayout.LayoutParams tabsLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
+        tabsLp.setMargins(0, dp(8), 0, 0);
+        view.addView(tabsScroller, tabsLp);
         View divider = new View(activity);
         divider.setBackgroundColor(Workspace.COLOR_BORDER);
         LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
@@ -319,7 +374,9 @@ final class CodeEditor {
                 scheduleAutoPair(s);
                 schedulePairedDeletion(s);
 
+                boolean firstDirty = !dirty;
                 dirty = true;
+                if (firstDirty && portraitTabs) renderTabStrip();
                 listener.onEdited();
                 saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
@@ -436,65 +493,225 @@ final class CodeEditor {
         this.storage = storage;
     }
 
-    /** Abre outro arquivo somente depois de preservar as alteracoes atuais. */
+    /** Exibe as abas e o menu somente no layout vertical sem SDL. */
+    void setPortraitTabs(boolean enabled) {
+        if (portraitTabs == enabled) return;
+        portraitTabs = enabled;
+        filesMenuButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        renderTabStrip();
+    }
+
+    private void snapshotActiveTab() {
+        if (file == null) return;
+        TabState tab = openTabs.get(file.getAbsolutePath());
+        if (tab == null) return;
+        tab.text = input.getText().toString();
+        tab.original = originalText;
+        tab.dirty = dirty;
+        tab.selection = Math.max(0, input.getSelectionStart());
+        tab.scrollY = scroll.getScrollY();
+    }
+
+    private void showTab(TabState tab) {
+        dismissAutocompleteSuggestion();
+        dismissParameterHint();
+        input.removeCallbacks(pendingHighlight);
+        cancelDeletionAssistance();
+        file = tab.file;
+        storage = tab.storage;
+        originalText = tab.original;
+        highlightLua = file.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
+        loading = true;
+        try {
+            input.setText(tab.text);
+            input.setSelection(Math.min(Math.max(0, tab.selection), input.length()));
+        } finally {
+            loading = false;
+        }
+        dirty = tab.dirty;
+        saveFailureNotified = false;
+        refreshDirtyMark();
+        title.setText(file.getName());
+        applyHighlight(input.getText());
+        refreshGutter(input.getText(), true);
+        followUntil = 0;
+        int restoreY = tab.scrollY;
+        scroll.scrollTo(0, restoreY);
+        scroll.post(() -> {
+            if (file != null && file.equals(tab.file)) scroll.scrollTo(0, restoreY);
+        });
+        renderTabStrip();
+        listener.onActiveTabChanged();
+    }
+
+    private void renderTabStrip() {
+        tabsScroller.setVisibility(portraitTabs && file != null
+            ? View.VISIBLE : View.GONE);
+        if (!portraitTabs) return;
+        tabsRow.removeAllViews();
+        for (TabState tab : openTabs.values()) {
+            String key = tab.file.getAbsolutePath();
+            boolean active = file != null && file.getAbsolutePath().equals(key);
+            boolean unsaved = active ? dirty : tab.dirty;
+            LinearLayout cell = new LinearLayout(activity);
+            cell.setGravity(Gravity.CENTER_VERTICAL);
+            cell.setOrientation(LinearLayout.HORIZONTAL);
+            cell.setPadding(dp(9), 0, dp(7), 0);
+            cell.setBackground(box(active ? Workspace.COLOR_FIELD : Workspace.COLOR_PANEL,
+                8, active));
+            TextView name = new TextView(activity);
+            name.setText(tab.file.getName() + (unsaved ? " \u2022" : ""));
+            name.setTextSize(12);
+            name.setTextColor(active ? Workspace.COLOR_TEXT : Workspace.COLOR_MUTED);
+            name.setSingleLine(true);
+            name.setMaxWidth(dp(130));
+            name.setEllipsize(TextUtils.TruncateAt.END);
+            cell.addView(name);
+            name.setOnClickListener(v -> open(tab.file));
+            TextView close = new TextView(activity);
+            close.setText("\u00D7");
+            close.setTextSize(21);
+            close.setGravity(Gravity.CENTER);
+            close.setTextColor(Workspace.COLOR_MUTED);
+            close.setContentDescription("Fechar " + tab.file.getName());
+            cell.addView(close, new LinearLayout.LayoutParams(dp(30), dp(36)));
+            close.setOnClickListener(v -> closeTab(key));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(38));
+            lp.setMargins(0, 0, dp(6), 0);
+            tabsRow.addView(cell, lp);
+        }
+    }
+
+    /** Selecionar uma aba preserva texto nao salvo nas demais. */
     boolean open(File target) {
-        if (dirty) {
+        if (target == null) return false;
+        String key = target.getAbsolutePath();
+        if (file != null && file.getAbsolutePath().equals(key)) return true;
+        // Preserva a regra anterior no horizontal, sem abas visiveis.
+        if (!portraitTabs && dirty) {
             notifyUnsavedChanges();
             return false;
         }
-
-        String text;
-        try {
-            text = storage != null ? storage.readText(target, MAX_BYTES) : readText(target);
-        } catch (IOException e) {
-            Log.w(TAG, "Falha ao ler " + target, e);
-            return false;
+        TabState next = openTabs.get(key);
+        if (next == null) {
+            String text;
+            try {
+                text = storage != null ? storage.readText(target, MAX_BYTES) : readText(target);
+            } catch (IOException error) {
+                Log.w(TAG, "Falha ao ler " + target, error);
+                return false;
+            }
+            if (text == null) return false;
+            next = new TabState(target, storage, text);
         }
-        if (text == null) {
-            return false;
-        }
-
-        input.removeCallbacks(pendingHighlight);
-        cancelDeletionAssistance();
-        file = target;
-        originalText = text;
-        highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
-        loading = true;
-        input.setText(text);
-        input.setSelection(0);
-        loading = false;
-
-        dirty = false;
-        refreshDirtyMark();
-        title.setText(target.getName());
-        applyHighlight(input.getText());
-        refreshGutter(input.getText(), true);
-        scroll.scrollTo(0, 0);
+        snapshotActiveTab();
+        openTabs.put(key, next);
+        showTab(next);
         return true;
     }
 
-    /** Fecha somente se todas as alteracoes puderem ser gravadas. */
-    boolean close() {
-        if (dirty) {
-            notifyUnsavedChanges();
-            return false;
-        }
+    private void emptyEditor() {
         dismissAutocompleteSuggestion();
         dismissParameterHint();
         input.removeCallbacks(pendingHighlight);
         cancelDeletionAssistance();
         file = null;
         originalText = null;
-        loading = true;
-        input.setText("");
-        loading = false;
         dirty = false;
-        refreshDirtyMark();
+        loading = true;
+        try { input.setText(""); }
+        finally { loading = false; }
+        title.setText("");
+        renderTabStrip();
         listener.onClosed();
+    }
+
+    private boolean closeTab(String key) {
+        snapshotActiveTab();
+        TabState target = openTabs.get(key);
+        if (target == null) return true;
+        if (target.dirty) {
+            notifyUnsavedChanges();
+            return false;
+        }
+        boolean activeRemoved = file != null && file.getAbsolutePath().equals(key);
+        openTabs.remove(key);
+        if (activeRemoved) {
+            if (openTabs.isEmpty()) emptyEditor();
+            else {
+                TabState last = null;
+                for (TabState tab : openTabs.values()) last = tab;
+                showTab(last);
+            }
+        } else renderTabStrip();
         return true;
     }
 
-    /** Informa se ainda ha alteracoes que nao foram gravadas com sucesso. */
+    /** O X do rodape fecha a aba atual no vertical. */
+    boolean close() {
+        if (file == null) return true;
+        return portraitTabs ? closeTab(file.getAbsolutePath()) : closeAllTabs();
+    }
+
+    boolean hasUnsavedTabs() {
+        if (dirty) return true;
+        for (TabState tab : openTabs.values()) {
+            if (tab.dirty) return true;
+        }
+        return false;
+    }
+
+    boolean closeAllTabs() {
+        snapshotActiveTab();
+        if (hasUnsavedTabs()) {
+            notifyUnsavedChanges();
+            return false;
+        }
+        openTabs.clear();
+        emptyEditor();
+        return true;
+    }
+
+    /** Mantem exclusao, movimento e renomeacao seguros para todas as abas. */
+    boolean closeTabsInside(File target) {
+        if (target == null) return true;
+        snapshotActiveTab();
+        ArrayList<String> affected = new ArrayList<>();
+        String prefix = target.getAbsolutePath();
+        for (Map.Entry<String, TabState> entry : openTabs.entrySet()) {
+            String path = entry.getKey();
+            if (path.equals(prefix) || path.startsWith(prefix + File.separator)) {
+                if (entry.getValue().dirty) {
+                    notifyUnsavedChanges();
+                    return false;
+                }
+                affected.add(path);
+            }
+        }
+        if (affected.isEmpty()) return true;
+        boolean activeRemoved = file != null && affected.contains(file.getAbsolutePath());
+        for (String path : affected) openTabs.remove(path);
+        if (activeRemoved) {
+            if (openTabs.isEmpty()) emptyEditor();
+            else {
+                TabState last = null;
+                for (TabState tab : openTabs.values()) last = tab;
+                showTab(last);
+            }
+        } else renderTabStrip();
+        return true;
+    }
+
+    boolean hasTabInside(File target) {
+        if (target == null) return false;
+        String prefix = target.getAbsolutePath();
+        for (String path : openTabs.keySet()) {
+            if (path.equals(prefix) || path.startsWith(prefix + File.separator)) return true;
+        }
+        return false;
+    }
+
     boolean hasUnsavedChanges() {
         return dirty;
     }
@@ -572,6 +789,13 @@ final class CodeEditor {
         dirty = false;
         saveFailureNotified = false;
         refreshDirtyMark();
+        TabState tab = openTabs.get(file.getAbsolutePath());
+        if (tab != null) {
+            tab.text = text;
+            tab.original = text;
+            tab.dirty = false;
+        }
+        if (portraitTabs) renderTabStrip();
         listener.onSaved(file);
         return true;
     }
