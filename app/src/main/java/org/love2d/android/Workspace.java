@@ -28,6 +28,7 @@ import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -94,7 +95,6 @@ public final class Workspace {
     private DirectSafStorage activeSafStorage = null; // fonte direta SAF, quando aplicavel
     private File runtimeProject = null; // snapshot temporario usado somente pelo LOVE
     private boolean playing = false;
-    private String lastStatus = "";
 
     private OverlayUi ui;
     private SharedPreferences prefs;
@@ -109,6 +109,10 @@ public final class Workspace {
     private View editorView;
     private View drawerScrim;
     private boolean fileDrawerOpen;
+    private boolean swipeCandidate;
+    private boolean swipeCaptured;
+    private float swipeDownX;
+    private float swipeDownY;
     private LinearLayout panel;
     private View movePanelButton;
     private LinearLayout placeholder;
@@ -120,7 +124,6 @@ public final class Workspace {
     private LinearLayout closePlaybackButton;
     private IconView fullscreenIcon;
     private TextView projectTitle;
-    private TextView statusView;
     private IconView saveIcon;
     private LinearLayout projectNotice;
     private LinearLayout treeBox;
@@ -232,7 +235,7 @@ public final class Workspace {
                 workspace.updateConsole();
             }
             workspace.renderTree();
-            workspace.startStatusPolling();
+            workspace.startConsolePolling();
         }
     }
 
@@ -240,7 +243,7 @@ public final class Workspace {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity) {
             workspace.hostResumed = false;
-            workspace.stopStatusPolling();
+            workspace.stopConsolePolling();
         }
     }
 
@@ -249,7 +252,7 @@ public final class Workspace {
         if (workspace != null && workspace.activity == activity) {
             workspace.hostResumed = false;
             workspace.disposed = true;
-            workspace.stopStatusPolling();
+            workspace.stopConsolePolling();
             workspace.deleteRuntimeProject();
             currentInstance = null;
         }
@@ -384,17 +387,6 @@ public final class Workspace {
         scrollLp.setMargins(0, dp(10), 0, 0);
         panel.addView(scroll, scrollLp);
 
-        // Mensagem do executor (Lua) no pe do painel.
-        statusView = new TextView(activity);
-        statusView.setText("Aguardando o executor...");
-        statusView.setTextColor(COLOR_MUTED);
-        statusView.setTextSize(12);
-        statusView.setMaxLines(3);
-        statusView.setEllipsize(TextUtils.TruncateAt.END);
-        statusView.setPadding(dp(4), dp(8), dp(4), 0);
-        panel.addView(statusView, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
         // Rodape do painel: botoes de acao (perto dos dedos).
         View footerDivider = new View(activity);
         footerDivider.setBackgroundColor(COLOR_BORDER);
@@ -520,14 +512,7 @@ public final class Workspace {
             @Override
             public void onFilesRequested() {
                 if (root.getHeight() <= root.getWidth() || fullscreen) return;
-                fileDrawerOpen = !fileDrawerOpen;
-                if (fileDrawerOpen) {
-                    android.view.inputmethod.InputMethodManager imm =
-                        (android.view.inputmethod.InputMethodManager)
-                        activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-                    if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
-                }
-                applyLayout();
+                setDrawerOpen(!fileDrawerOpen);
             }
 
             @Override
@@ -548,10 +533,7 @@ public final class Workspace {
         drawerScrim = new View(activity);
         drawerScrim.setBackgroundColor(0x90000000);
         drawerScrim.setVisibility(View.GONE);
-        drawerScrim.setOnClickListener(v -> {
-            fileDrawerOpen = false;
-            applyLayout();
-        });
+        drawerScrim.setOnClickListener(v -> setDrawerOpen(false));
         root.addView(drawerScrim);
         root.addView(panel);
         root.addView(consolePanel);
@@ -561,12 +543,12 @@ public final class Workspace {
         root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
             public void onViewAttachedToWindow(View v) {
-                startStatusPolling();
+                startConsolePolling();
             }
 
             @Override
             public void onViewDetachedFromWindow(View v) {
-                stopStatusPolling();
+                stopConsolePolling();
                 editor.saveNow();
             }
         });
@@ -937,6 +919,77 @@ public final class Workspace {
     // ------------------------------------------------------------------
     // Posicao do painel, do botao e da area do jogo
     // ------------------------------------------------------------------
+
+    /** Usa o mesmo estado para menu, toque externo e gestos. */
+    private void setDrawerOpen(boolean opened) {
+        if (fileDrawerOpen == opened) return;
+        fileDrawerOpen = opened;
+        if (opened) {
+            InputMethodManager imm = (InputMethodManager)
+                activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
+        }
+        applyLayout();
+    }
+
+    /**
+     * 0 = toque normal, 1 = deslize detectado (cancelar toque filho),
+     * 2 = restante do gesto ja detectado. Somente Activity de edicao.
+     */
+    static int handleEditorSwipe(Activity activity, MotionEvent event) {
+        Workspace w = currentInstance;
+        if (w == null || w.activity != activity || w.disposed
+            || w.surface != null || w.fullscreen || w.root.getWidth() <= 0
+            || w.root.getHeight() <= w.root.getWidth()) return 0;
+        return w.handleDrawerTouch(event);
+    }
+
+    private int handleDrawerTouch(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            swipeCaptured = false;
+            swipeDownX = event.getX();
+            swipeDownY = event.getY();
+            float left = insetLeft;
+            float width = Math.min(root.getWidth() * 0.86f, dp(340));
+            swipeCandidate = fileDrawerOpen
+                ? swipeDownX >= left && swipeDownX <= left + width
+                : swipeDownX >= left && swipeDownX <= left + dp(44);
+            return 0;
+        }
+        if (action == MotionEvent.ACTION_POINTER_DOWN) {
+            swipeCandidate = false;
+            return swipeCaptured ? 2 : 0;
+        }
+        if (action == MotionEvent.ACTION_MOVE) {
+            if (swipeCaptured) return 2;
+            if (!swipeCandidate || event.getPointerCount() != 1) return 0;
+            float dx = event.getX() - swipeDownX;
+            float dy = event.getY() - swipeDownY;
+            if (Math.abs(dy) > dp(15) && Math.abs(dy) >= Math.abs(dx)) {
+                swipeCandidate = false;
+                return 0;
+            }
+            if (Math.abs(dx) >= dp(55)
+                    && Math.abs(dx) > Math.abs(dy) * 1.35f) {
+                if ((!fileDrawerOpen && dx > 0) || (fileDrawerOpen && dx < 0)) {
+                    swipeCaptured = true;
+                    swipeCandidate = false;
+                    setDrawerOpen(!fileDrawerOpen);
+                    return 1;
+                }
+                swipeCandidate = false;
+            }
+            return 0;
+        }
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            boolean consumed = swipeCaptured;
+            swipeCaptured = false;
+            swipeCandidate = false;
+            return consumed ? 2 : 0;
+        }
+        return swipeCaptured ? 2 : 0;
+    }
 
     private void applyLayout() {
         boolean verticalMode = root.getHeight() > root.getWidth();
@@ -2598,7 +2651,7 @@ public final class Workspace {
         }
     }
 
-    /** Mostra, no pe do painel, a ultima mensagem do executor. */
+    /** Atualiza o console periodicamente, sem indicadores antigos do executor. */
     private boolean hostResumed = false;
     private boolean disposed = false;
 
@@ -2608,30 +2661,22 @@ public final class Workspace {
             && (android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed());
     }
 
-    private void startStatusPolling() {
+    private void startConsolePolling() {
         if (!canPollStatus()) return;
-        root.removeCallbacks(statusPoller);
-        root.postDelayed(statusPoller, 700);
+        root.removeCallbacks(consolePoller);
+        root.postDelayed(consolePoller, 700);
     }
 
-    private void stopStatusPolling() {
-        root.removeCallbacks(statusPoller);
+    private void stopConsolePolling() {
+        root.removeCallbacks(consolePoller);
     }
 
-    private final Runnable statusPoller = new Runnable() {
+    private final Runnable consolePoller = new Runnable() {
         @Override
         public void run() {
             if (!canPollStatus()) return;
 
             try {
-                String text = readText(new File(channelDir, "status.txt"));
-                if (text != null) {
-                    text = text.trim();
-                    if (!text.isEmpty() && !text.equals(lastStatus)) {
-                        lastStatus = text;
-                        statusView.setText(text);
-                    }
-                }
                 if (consoleOpen) {
                     updateConsole();
                 }
