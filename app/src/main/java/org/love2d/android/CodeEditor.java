@@ -602,8 +602,10 @@ final class CodeEditor {
     }
 
     private void renderTabStrip() {
-        // A faixa de abas permanece presente no estado vazio do vertical.
-        tabsScroller.setVisibility(portraitTabs ? View.VISIBLE : View.GONE);
+        // No vertical, remove a faixa escura quando nao ha abas abertas.
+        // O editor vazio e o botao do explorador continuam visiveis.
+        tabsScroller.setVisibility(portraitTabs && !openTabs.isEmpty()
+            ? View.VISIBLE : View.GONE);
         if (!portraitTabs) return;
         tabsRow.removeAllViews();
         for (TabState tab : openTabs.values()) {

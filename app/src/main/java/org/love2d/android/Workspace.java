@@ -1326,11 +1326,14 @@ public final class Workspace {
             line.addView(new View(activity), new LinearLayout.LayoutParams(dp(14), dp(14)));
         }
 
-        // Icone da pasta ou do arquivo.
+        // Pastas preservam o icone existente. Arquivos usam a mesma
+        // identificacao de linguagem exibida nas abas do editor.
         LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(18), dp(18));
         iconLp.setMargins(dp(6), 0, dp(8), 0);
-        line.addView(new IconView(activity,
-            row.dir ? IconView.FOLDER : IconView.FILE, colorFor(row)), iconLp);
+        View fileIcon = row.dir
+            ? new IconView(activity, IconView.FOLDER, colorFor(row))
+            : new LanguageTabIcon(activity, row.file.getName());
+        line.addView(fileIcon, iconLp);
 
         TextView label = new TextView(activity);
         label.setText(row.file.getName());
