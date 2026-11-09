@@ -76,10 +76,18 @@ final class CodeEditor {
     private static final String TAG = "CodeLove";
     private static final long MAX_BYTES = 512L * 1024L;
 
-    private static final int COLOR_KEYWORD = 0xFFC4A5FF;
-    private static final int COLOR_NUMBER = 0xFFF2A65A;
-    private static final int COLOR_STRING = 0xFF7EE0B5;
-    private static final int COLOR_COMMENT = 0xFF6B7189;
+    private static int COLOR_KEYWORD = 0xFFC4A5FF;
+    private static int COLOR_NUMBER = 0xFFF2A65A;
+    private static int COLOR_STRING = 0xFF7EE0B5;
+    private static int COLOR_COMMENT = 0xFF6B7189;
+
+    /** Mantem realce Lua legivel tanto no escuro quanto no claro. */
+    static void configureSyntaxTheme(boolean light) {
+        COLOR_KEYWORD = light ? 0xFF6E47B9 : 0xFFC4A5FF;
+        COLOR_NUMBER = light ? 0xFFA45112 : 0xFFF2A65A;
+        COLOR_STRING = light ? 0xFF16805A : 0xFF7EE0B5;
+        COLOR_COMMENT = light ? 0xFF66738B : 0xFF6B7189;
+    }
 
     private final Activity activity;
     private final Listener listener;
@@ -304,7 +312,7 @@ final class CodeEditor {
         input.setTypeface(Typeface.MONOSPACE);
         input.setTextSize(13);
         input.setTextColor(Workspace.COLOR_TEXT);
-        input.setHighlightColor(0x665B6EE1);
+        input.setHighlightColor(Workspace.isLightTheme() ? 0x665D74D5 : 0x665B6EE1);
         input.setBackground(null);
         input.setGravity(Gravity.TOP | Gravity.START);
         input.setIncludeFontPadding(false);
@@ -516,6 +524,13 @@ final class CodeEditor {
 
     File getFile() {
         return file;
+    }
+
+    /** Lista estavel de abas, para recriar a interface apos mudar a aparencia. */
+    ArrayList<File> getOpenTabFiles() {
+        ArrayList<File> files = new ArrayList<>();
+        for (TabState tab : openTabs.values()) files.add(tab.file);
+        return files;
     }
 
     void setStorage(Storage storage) {

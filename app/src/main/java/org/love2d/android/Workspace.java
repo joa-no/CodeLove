@@ -16,6 +16,7 @@ import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.SharedPreferences;
@@ -62,19 +63,84 @@ public final class Workspace {
     private static final String TAG = "CodeLove";
     private static final int REQUEST_ADD_PROJECT_TREE = 4102;
     private static final String PREF_WORKSPACE_ORIENTATION = "workspace_orientation";
+    private static final String PREF_APPEARANCE = "appearance_theme";
     private static Workspace currentInstance;
 
+    /** Apenas caminhos: nenhuma Activity ou view e guardada na recriacao de tema. */
+    private static final class ThemeSession {
+        final String projectPath;
+        final ArrayList<File> files;
+        final File activeFile;
+        final boolean drawerOpen;
+
+        ThemeSession(String projectPath, ArrayList<File> files,
+                File activeFile, boolean drawerOpen) {
+            this.projectPath = projectPath;
+            this.files = files;
+            this.activeFile = activeFile;
+            this.drawerOpen = drawerOpen;
+        }
+    }
+    private static ThemeSession pendingThemeSession;
+
     // Cores inspiradas no desenho de referencia (tema escuro).
-    static final int COLOR_OUTER = 0xFF0D0F16;
-    static final int COLOR_PANEL = 0xFF151822;
-    static final int COLOR_FIELD = 0xFF1B1F2B;
-    static final int COLOR_BORDER = 0xFF272C3B;
-    static final int COLOR_TEXT = 0xFFE6E8EE;
-    static final int COLOR_MUTED = 0xFF8A8FA3;
-    static final int COLOR_FOLDER = 0xFFA78BFA;
-    static final int COLOR_LUA = 0xFF7AA2F7;
-    static final int COLOR_IMAGE = 0xFF5EEAD4;
-    static final int COLOR_OTHER = 0xFF9CA3AF;
+    // Paleta ativa. O valor inicial mantem a aparencia aprovada na build #300.
+    // Atualizada antes da criacao das views; nenhum jogo ou superficie SDL muda.
+    static int COLOR_OUTER = 0xFF0D0F16;
+    static int COLOR_PANEL = 0xFF151822;
+    static int COLOR_FIELD = 0xFF1B1F2B;
+    static int COLOR_BORDER = 0xFF272C3B;
+    static int COLOR_TEXT = 0xFFE6E8EE;
+    static int COLOR_MUTED = 0xFF8A8FA3;
+    static int COLOR_FOLDER = 0xFFA78BFA;
+    static int COLOR_LUA = 0xFF7AA2F7;
+    static int COLOR_IMAGE = 0xFF5EEAD4;
+    static int COLOR_OTHER = 0xFF9CA3AF;
+    static int COLOR_DANGER = 0xFFFF7B8A;
+    static int COLOR_ACCENT_TEXT = 0xFF0D0F16;
+    private static boolean lightThemeActive;
+
+    /** Resolve a preferencia persistente com a configuracao real do Android. */
+    static void configureTheme(Context context) {
+        String selected = context.getSharedPreferences("codelove", Context.MODE_PRIVATE)
+            .getString(PREF_APPEARANCE, "dark");
+        boolean systemLight = (context.getResources().getConfiguration().uiMode
+            & Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES;
+        lightThemeActive = "light".equals(selected)
+            || ("auto".equals(selected) && systemLight);
+        if (lightThemeActive) {
+            COLOR_OUTER = 0xFFF3F5F9;
+            COLOR_PANEL = 0xFFFFFFFF;
+            COLOR_FIELD = 0xFFE9EDF5;
+            COLOR_BORDER = 0xFFCAD3E1;
+            COLOR_TEXT = 0xFF202638;
+            COLOR_MUTED = 0xFF626C81;
+            COLOR_FOLDER = 0xFF7751BC;
+            COLOR_LUA = 0xFF3457AA;
+            COLOR_IMAGE = 0xFF0D8177;
+            COLOR_OTHER = 0xFF5A6576;
+            COLOR_DANGER = 0xFFB3263C;
+            COLOR_ACCENT_TEXT = 0xFFFFFFFF;
+        } else {
+            COLOR_OUTER = 0xFF0D0F16;
+            COLOR_PANEL = 0xFF151822;
+            COLOR_FIELD = 0xFF1B1F2B;
+            COLOR_BORDER = 0xFF272C3B;
+            COLOR_TEXT = 0xFFE6E8EE;
+            COLOR_MUTED = 0xFF8A8FA3;
+            COLOR_FOLDER = 0xFFA78BFA;
+            COLOR_LUA = 0xFF7AA2F7;
+            COLOR_IMAGE = 0xFF5EEAD4;
+            COLOR_OTHER = 0xFF9CA3AF;
+            COLOR_DANGER = 0xFFFF7B8A;
+            COLOR_ACCENT_TEXT = 0xFF0D0F16;
+        }
+        CodeEditor.configureSyntaxTheme(lightThemeActive);
+    }
+
+    static boolean isLightTheme() {
+        return lightThemeActive;
+    }
 
     private static final int PANEL_WIDTH_DP = 272;
     private static final int MARGIN_DP = 8;
@@ -155,6 +221,7 @@ public final class Workspace {
         this.gamesDir = gamesDir;
         this.channelDir = channelDir(activity);
         this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
+        configureTheme(activity);
         this.onLeft = prefs.getBoolean("panel_left", true);
         this.panelWidth = dp(PANEL_WIDTH_DP);
         this.margin = dp(MARGIN_DP);
@@ -188,6 +255,7 @@ public final class Workspace {
         currentInstance = workspace;
         workspace.build();
         workspace.importPreviouslyRegisteredProjects();
+        workspace.restoreThemeSession();
         workspace.showInitialOrientationChooser();
     }
 
@@ -205,6 +273,7 @@ public final class Workspace {
         currentInstance = workspace;
         workspace.build();
         workspace.importPreviouslyRegisteredProjects();
+        workspace.restoreThemeSession();
         workspace.showInitialOrientationChooser();
     }
 
@@ -232,6 +301,35 @@ public final class Workspace {
                 prepareRuntimeProject(false);
             }
         }, "CodeLove-SAF-RuntimeRestore").start();
+    }
+
+    /** Restaura abas limpas apos alternar o tema; preserva a pasta e o arquivo ativo. */
+    private void restoreThemeSession() {
+        if (surface != null || pendingThemeSession == null) return;
+        ThemeSession session = pendingThemeSession;
+        pendingThemeSession = null;
+        if (session.projectPath == null || activeProject == null
+            || !session.projectPath.equals(activeProject.getAbsolutePath())) return;
+        for (File file : session.files) {
+            editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
+                ? activeSafStorage : null);
+            editor.open(file);
+        }
+        if (session.activeFile != null) {
+            editor.setStorage(activeSafStorage != null
+                && activeSafStorage.contains(session.activeFile)
+                ? activeSafStorage : null);
+            editor.open(session.activeFile);
+        }
+        applyLayout();
+        renderTree();
+        if (session.drawerOpen) {
+            root.post(() -> {
+                if (!disposed && activity != null && currentInstance == this
+                    && root.getHeight() > root.getWidth()) setDrawerOpen(true);
+            });
+        }
+        saveState();
     }
 
     /** Sincroniza o polling da interface com o ciclo de vida da Activity SDL. */
@@ -679,6 +777,23 @@ public final class Workspace {
         explanationLp.setMargins(0, 0, 0, dp(14));
         content.addView(explanation, explanationLp);
 
+        String appearance = prefs.getString(PREF_APPEARANCE, "dark");
+        String appearanceName = "light".equals(appearance) ? "Claro"
+            : ("auto".equals(appearance) ? "Automático (Android)" : "Escuro");
+        content.addView(buildSettingsRow(
+            IconView.PALETTE, "Aparência", "Tema: " + appearanceName,
+            v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                showAppearanceChooser();
+            }));
+
+        View appearanceDivider = new View(activity);
+        appearanceDivider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams appearanceDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        appearanceDividerLp.setMargins(0, dp(10), 0, dp(10));
+        content.addView(appearanceDivider, appearanceDividerLp);
+
         content.addView(buildSettingsRow(
             IconView.ORIENTATION, "Orientação da tela",
             "Escolher entre vertical e horizontal", v -> {
@@ -767,6 +882,126 @@ public final class Workspace {
         row.addView(new IconView(activity, IconView.CHEVRON_RIGHT, COLOR_MUTED),
             new LinearLayout.LayoutParams(dp(18), dp(18)));
         return row;
+    }
+
+    /** Seleciona o tema, sem inserir controles inativos no painel principal. */
+    private void showAppearanceChooser() {
+        if (activity.isFinishing()) return;
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(18), dp(20), dp(20));
+        content.setBackground(box(COLOR_PANEL, 18, false));
+
+        TextView brand = new TextView(activity);
+        brand.setText("CODELOVE");
+        brand.setTextColor(COLOR_FOLDER);
+        brand.setTextSize(11);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(brand);
+
+        TextView title = new TextView(activity);
+        title.setText("Aparência");
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(0, dp(8), 0, dp(12));
+        content.addView(title, titleLp);
+
+        String current = prefs.getString(PREF_APPEARANCE, "dark");
+        Dialog dialog = new Dialog(activity);
+        String[] values = {"auto", "dark", "light"};
+        String[] names = {"Automático", "Escuro", "Claro"};
+        String[] descriptions = {
+            "Acompanha o tema do Android",
+            "Aparência escura do CodeLove",
+            "Aparência clara do CodeLove"
+        };
+        for (int i = 0; i < values.length; i++) {
+            final String value = values[i];
+            final boolean selected = value.equals(current);
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14), dp(12), dp(12), dp(12));
+            row.setBackground(box(selected ? COLOR_FIELD : COLOR_PANEL,
+                12, selected));
+            LinearLayout labels = new LinearLayout(activity);
+            labels.setOrientation(LinearLayout.VERTICAL);
+            TextView name = new TextView(activity);
+            name.setText(names[i]);
+            name.setTextColor(COLOR_TEXT);
+            name.setTextSize(15);
+            name.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            labels.addView(name);
+            TextView description = new TextView(activity);
+            description.setText(descriptions[i]);
+            description.setTextColor(COLOR_MUTED);
+            description.setTextSize(12);
+            labels.addView(description);
+            row.addView(labels, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            if (selected) {
+                row.addView(new IconView(activity, IconView.CHECK, COLOR_FOLDER),
+                    new LinearLayout.LayoutParams(dp(20), dp(20)));
+            }
+            row.setClickable(true);
+            row.setFocusable(true);
+            row.setContentDescription(names[i] + (selected ? ", selecionado" : ""));
+            row.setOnClickListener(v -> {
+                dialog.dismiss();
+                changeAppearance(value);
+            });
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i != 0) rowLp.topMargin = dp(8);
+            content.addView(row, rowLp);
+        }
+
+        TextView cancel = new TextView(activity);
+        cancel.setText("Cancelar");
+        cancel.setTextColor(COLOR_MUTED);
+        cancel.setTextSize(13);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(dp(12), dp(10), dp(12), dp(10));
+        cancel.setBackground(box(COLOR_FIELD, 10, false));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cancelLp.gravity = Gravity.END;
+        cancelLp.topMargin = dp(14);
+        content.addView(cancel, cancelLp);
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        dialog.setContentView(content);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(
+                new ColorDrawable(android.graphics.Color.TRANSPARENT));
+            int width = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
+            dialog.getWindow().setLayout(Math.min(dp(420), width),
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private void changeAppearance(String selected) {
+        String previous = prefs.getString(PREF_APPEARANCE, "dark");
+        if (previous.equals(selected)) return;
+
+        // Nao recriar o editor caso alguma aba ainda tenha texto nao salvo.
+        if (editor != null && editor.hasUnsavedTabs()) {
+            toast("Salve as alterações de todas as abas antes de mudar o tema.");
+            return;
+        }
+        if (surface == null) {
+            pendingThemeSession = new ThemeSession(
+                activeProject == null ? null : activeProject.getAbsolutePath(),
+                editor == null ? new ArrayList<File>() : editor.getOpenTabFiles(),
+                editor == null ? null : editor.getFile(), fileDrawerOpen);
+        }
+        prefs.edit().putString(PREF_APPEARANCE, selected).apply();
+        activity.recreate();
     }
 
     private void showInitialOrientationChooser() {
@@ -1767,10 +2002,10 @@ public final class Workspace {
 
         TextView retry = new TextView(activity);
         retry.setText("Selecionar novamente");
-        retry.setTextColor(0xFF1B1F2B);
+        retry.setTextColor(COLOR_ACCENT_TEXT);
         retry.setTextSize(13);
         retry.setGravity(Gravity.CENTER);
-        retry.setBackground(box(0xFFA78BFA, 10, false));
+        retry.setBackground(box(COLOR_FOLDER, 10, false));
         retry.setPadding(dp(12), 0, dp(12), 0);
         actions.addView(retry, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
@@ -2999,6 +3234,7 @@ public final class Workspace {
         static final int CLOSE = 16;
         static final int RELOAD = 17;
         static final int SETTINGS = 18;
+        static final int PALETTE = 19;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -3043,6 +3279,14 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case PALETTE:
+                    path.addOval(3f, 3f, 21f, 21f, Path.Direction.CW);
+                    path.addCircle(8f, 10f, 1.0f, Path.Direction.CW);
+                    path.addCircle(12f, 7f, 1.0f, Path.Direction.CW);
+                    path.addCircle(16f, 10f, 1.0f, Path.Direction.CW);
+                    path.moveTo(15f, 15f);
+                    path.cubicTo(18f, 13f, 19f, 19f, 15f, 20f);
                     break;
                 case SETTINGS:
                     // Engrenagem vetorial, alinhada aos demais icones do CodeLove.

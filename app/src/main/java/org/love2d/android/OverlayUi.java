@@ -39,7 +39,7 @@ final class OverlayUi {
         void accept(String text);
     }
 
-    private static final int COLOR_DANGER = 0xFFFF7B8A;
+    // A cor de perigo acompanha o tema ativo definido pelo Workspace.
 
     private final Activity activity;
     private final RelativeLayout root;
@@ -96,7 +96,7 @@ final class OverlayUi {
             item.setGravity(Gravity.CENTER_VERTICAL);
             item.setPadding(dp(16), 0, dp(16), 0);
             item.setSingleLine(true);
-            item.setTextColor(labels.get(i).startsWith("Excluir") ? COLOR_DANGER : Workspace.COLOR_TEXT);
+            item.setTextColor(labels.get(i).startsWith("Excluir") ? Workspace.COLOR_DANGER : Workspace.COLOR_TEXT);
             item.setOnClickListener(v -> {
                 dismiss();
                 action.run();
@@ -232,7 +232,7 @@ final class OverlayUi {
         card.addView(field, fieldLp);
 
         final TextView error = new TextView(activity);
-        error.setTextColor(COLOR_DANGER);
+        error.setTextColor(Workspace.COLOR_DANGER);
         error.setTextSize(12);
         error.setPadding(dp(4), dp(6), dp(4), 0);
         error.setVisibility(View.GONE);
@@ -257,7 +257,7 @@ final class OverlayUi {
             return true;
         });
 
-        card.addView(buttons("Cancelar", confirmLabel, Workspace.COLOR_FOLDER, 0xFF0D0F16,
+        card.addView(buttons("Cancelar", confirmLabel, Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT,
             confirm), buttonsParams());
 
         int width = Math.min(dp(360), root.getWidth() - dp(32));
@@ -354,7 +354,7 @@ final class OverlayUi {
         row.addView(toggle, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));
 
-        TextView close = button("Fechar", Workspace.COLOR_FOLDER, 0xFF0D0F16);
+        TextView close = button("Fechar", Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT);
         close.setTypeface(Typeface.DEFAULT_BOLD);
         close.setOnClickListener(v -> dismiss());
         LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
@@ -393,7 +393,7 @@ final class OverlayUi {
         text.setTextSize(15);
         card.addView(text);
 
-        card.addView(buttons("Cancelar", confirmLabel, COLOR_DANGER, 0xFF0D0F16, new Runnable() {
+        card.addView(buttons("Cancelar", confirmLabel, Workspace.COLOR_DANGER, Workspace.COLOR_ACCENT_TEXT, new Runnable() {
             @Override
             public void run() {
                 dismiss();

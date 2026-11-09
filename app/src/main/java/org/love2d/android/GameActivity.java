@@ -124,6 +124,8 @@ public class GameActivity extends SDLActivity {
         }
 
         super.onCreate(savedInstanceState);
+        // Tema da UI do executor (botao de voltar), sem alterar o jogo SDL.
+        Workspace.configureTheme(this);
 
         // Aplica a preferencia salva sem depender da rotacao automatica do Android.
         Workspace.applySavedOrientation(this);
