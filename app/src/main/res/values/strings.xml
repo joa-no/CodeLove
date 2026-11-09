@@ -116,4 +116,6 @@
     <string name="cl_fileops_chars">The name contains forbidden characters.</string>
     <string name="cl_fileops_long">Name is too long (maximum 64 characters).</string>
     <string name="cl_empty_hint_horizontal">Select a file in the file explorer to start editing.</string>
+    <string name="cl_save_before_reload">Save changes in all tabs before reloading the project.</string>
+    <string name="cl_save_before_restart">Save changes in all tabs before restarting the game.</string>
 </resources>

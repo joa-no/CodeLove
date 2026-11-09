@@ -116,4 +116,6 @@
     <string name="cl_fileops_chars">El nombre contiene caracteres no permitidos.</string>
     <string name="cl_fileops_long">Nombre demasiado largo (máximo de 64 caracteres).</string>
     <string name="cl_empty_hint_horizontal">Selecciona un archivo en el explorador para comenzar a editar.</string>
+    <string name="cl_save_before_reload">Guarda los cambios de todas las pestañas antes de recargar el proyecto.</string>
+    <string name="cl_save_before_restart">Guarda los cambios de todas las pestañas antes de reiniciar el juego.</string>
 </resources>

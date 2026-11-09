@@ -651,8 +651,8 @@ public final class Workspace {
 
             @Override
             public void onViewDetachedFromWindow(View v) {
+                // Encerrar/recriar uma Activity nao autoriza gravar o codigo.
                 stopConsolePolling();
-                editor.saveNow();
             }
         });
 
@@ -2838,6 +2838,15 @@ public final class Workspace {
         saveState();
     }
 
+    /** Nunca gravar arquivos indiretamente ao executar ou reiniciar o jogo. */
+    private boolean editorChangesAreSaved(int messageId) {
+        if (editor != null && editor.hasUnsavedTabs()) {
+            toast(activity.getString(messageId));
+            return false;
+        }
+        return true;
+    }
+
     private void openStandalonePlayback(File project, String displayName) {
         if (project == null || !project.isDirectory()) return;
         if (editor != null && editor.hasUnsavedTabs()) {
@@ -2854,11 +2863,8 @@ public final class Workspace {
     }
 
     private void launchStandalonePlayback() {
-        if (activeProject == null || (editor != null && !editor.saveNow())) return;
-        if (editor != null && editor.hasUnsavedTabs()) {
-            toast(activity.getString(R.string.cl_save_before_play));
-            return;
-        }
+        if (activeProject == null) return;
+        if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
             final File selected = activeProject;
@@ -2888,7 +2894,7 @@ public final class Workspace {
             return;
         }
         if (activeProject == null) return;
-        if (editor != null && !editor.saveNow()) return;
+        if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
 
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
@@ -2930,7 +2936,8 @@ public final class Workspace {
     }
 
     private void reloadProject() {
-        if (activeProject == null || (editor != null && !editor.saveNow())) return;
+        if (activeProject == null) return;
+        if (!editorChangesAreSaved(R.string.cl_save_before_reload)) return;
 
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
@@ -2962,7 +2969,8 @@ public final class Workspace {
     }
 
     private void resetScene() {
-        if (activeProject == null || !editor.saveNow()) return;
+        if (activeProject == null) return;
+        if (!editorChangesAreSaved(R.string.cl_save_before_restart)) return;
 
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
