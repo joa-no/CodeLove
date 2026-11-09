@@ -64,6 +64,7 @@ public final class Workspace {
     private static final int REQUEST_ADD_PROJECT_TREE = 4102;
     private static final String PREF_WORKSPACE_ORIENTATION = "workspace_orientation";
     private static final String PREF_APPEARANCE = "appearance_theme";
+    private static final String PREF_LANGUAGE = "workspace_language";
     private static Workspace currentInstance;
 
     /** Apenas caminhos: nenhuma Activity ou view e guardada na recriacao de tema. */
@@ -769,10 +770,13 @@ public final class Workspace {
         content.addView(explanation, explanationLp);
 
         String appearance = prefs.getString(PREF_APPEARANCE, "dark");
-        String appearanceName = "light".equals(appearance) ? "Claro"
-            : ("auto".equals(appearance) ? "Automático (Android)" : "Escuro");
+        String appearanceName = activity.getString("light".equals(appearance)
+            ? R.string.cl_theme_light
+            : ("auto".equals(appearance) ? R.string.cl_theme_auto_android
+                : R.string.cl_theme_dark));
         content.addView(buildSettingsRow(
-            IconView.PALETTE, "Aparência", "Tema: " + appearanceName,
+            IconView.PALETTE, activity.getString(R.string.cl_appearance),
+            activity.getString(R.string.cl_theme_status, appearanceName),
             v -> {
                 if (settingsDialog != null) settingsDialog.dismiss();
                 showAppearanceChooser();
@@ -784,6 +788,26 @@ public final class Workspace {
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
         appearanceDividerLp.setMargins(0, dp(10), 0, dp(10));
         content.addView(appearanceDivider, appearanceDividerLp);
+
+        String language = prefs.getString(PREF_LANGUAGE, "auto");
+        int languageNameId = "pt".equals(language) ? R.string.cl_language_pt
+            : "en".equals(language) ? R.string.cl_language_en
+            : "es".equals(language) ? R.string.cl_language_es
+            : R.string.cl_language_auto_android;
+        content.addView(buildSettingsRow(
+            IconView.LANGUAGE, activity.getString(R.string.cl_language),
+            activity.getString(R.string.cl_language_status,
+                activity.getString(languageNameId)),
+            v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                showLanguageChooser();
+            }));
+        View languageDivider = new View(activity);
+        languageDivider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams languageDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        languageDividerLp.setMargins(0, dp(10), 0, dp(10));
+        content.addView(languageDivider, languageDividerLp);
 
         content.addView(buildSettingsRow(
             IconView.ORIENTATION, "Orientação da tela",
@@ -974,6 +998,120 @@ public final class Workspace {
             dialog.getWindow().setLayout(Math.min(dp(420), width),
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+    }
+
+    /** Idioma do Android ou escolha manual. Sem alterar os comandos Lua. */
+    private void showLanguageChooser() {
+        if (activity.isFinishing()) return;
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(18), dp(20), dp(20));
+        content.setBackground(box(COLOR_PANEL, 18, false));
+        TextView brand = new TextView(activity);
+        brand.setText("CODELOVE");
+        brand.setTextColor(COLOR_FOLDER);
+        brand.setTextSize(11);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(brand);
+        TextView title = new TextView(activity);
+        title.setText(activity.getString(R.string.cl_language));
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLp.setMargins(0, dp(8), 0, dp(12));
+        content.addView(title, titleLp);
+
+        String[] values = {"auto", "pt", "en", "es"};
+        int[] names = {R.string.cl_theme_auto, R.string.cl_language_pt,
+            R.string.cl_language_en, R.string.cl_language_es};
+        int[] descriptions = {R.string.cl_language_auto_desc, R.string.cl_language_pt_desc,
+            R.string.cl_language_en_desc, R.string.cl_language_es_desc};
+        String current = prefs.getString(PREF_LANGUAGE, "auto");
+        Dialog dialog = new Dialog(activity);
+        for (int i = 0; i < values.length; i++) {
+            final String value = values[i];
+            boolean selected = value.equals(current);
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14), dp(12), dp(12), dp(12));
+            row.setBackground(box(selected ? COLOR_FIELD : COLOR_PANEL, 12, selected));
+            LinearLayout labels = new LinearLayout(activity);
+            labels.setOrientation(LinearLayout.VERTICAL);
+            TextView name = new TextView(activity);
+            name.setText(activity.getString(names[i]));
+            name.setTextSize(15);
+            name.setTextColor(COLOR_TEXT);
+            name.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            labels.addView(name);
+            TextView description = new TextView(activity);
+            description.setText(activity.getString(descriptions[i]));
+            description.setTextColor(COLOR_MUTED);
+            description.setTextSize(12);
+            labels.addView(description);
+            row.addView(labels, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            if (selected) {
+                row.addView(new IconView(activity, IconView.CHECK, COLOR_FOLDER),
+                    new LinearLayout.LayoutParams(dp(20), dp(20)));
+            }
+            row.setClickable(true);
+            row.setFocusable(true);
+            row.setContentDescription(name.getText() +
+                (selected ? activity.getString(R.string.cl_selected) : ""));
+            row.setOnClickListener(v -> {
+                dialog.dismiss();
+                changeLanguage(value);
+            });
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i != 0) rowLp.topMargin = dp(8);
+            content.addView(row, rowLp);
+        }
+        TextView cancel = new TextView(activity);
+        cancel.setText(activity.getString(R.string.cl_cancel));
+        cancel.setTextColor(COLOR_MUTED);
+        cancel.setTextSize(13);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(dp(12), dp(10), dp(12), dp(10));
+        cancel.setBackground(box(COLOR_FIELD, 10, false));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cancelLp.gravity = Gravity.END;
+        cancelLp.topMargin = dp(14);
+        content.addView(cancel, cancelLp);
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(content);
+        dialog.setContentView(scroll);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(
+                new ColorDrawable(android.graphics.Color.TRANSPARENT));
+            int width = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
+            int height = activity.getResources().getDisplayMetrics().heightPixels - dp(36);
+            dialog.getWindow().setLayout(Math.min(dp(420), width), Math.min(dp(450), height));
+        }
+    }
+
+    private void changeLanguage(String selected) {
+        if (prefs.getString(PREF_LANGUAGE, "auto").equals(selected)) return;
+        if (editor != null && editor.hasUnsavedTabs()) {
+            toast(activity.getString(R.string.cl_save_tabs_language));
+            return;
+        }
+        if (surface == null) {
+            pendingThemeSession = new ThemeSession(
+                activeProject == null ? null : activeProject.getAbsolutePath(),
+                editor == null ? null : editor.captureThemeTabs(), fileDrawerOpen);
+        }
+        prefs.edit().putString(PREF_LANGUAGE, selected).apply();
+        if (activity.getWindow() != null) activity.getWindow().setWindowAnimations(0);
+        activity.recreate();
     }
 
     private void changeAppearance(String selected) {
@@ -3240,6 +3378,7 @@ public final class Workspace {
         static final int RELOAD = 17;
         static final int SETTINGS = 18;
         static final int PALETTE = 19;
+        static final int LANGUAGE = 20;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -3284,6 +3423,19 @@ public final class Workspace {
                     path.moveTo(9f, 6f);
                     path.lineTo(15f, 12f);
                     path.lineTo(9f, 18f);
+                    break;
+                case LANGUAGE:
+                    path.addCircle(11f, 12f, 9f, Path.Direction.CW);
+                    path.moveTo(2f, 12f);
+                    path.lineTo(20f, 12f);
+                    path.moveTo(11f, 3f);
+                    path.cubicTo(4f, 9f, 4f, 15f, 11f, 21f);
+                    path.moveTo(11f, 3f);
+                    path.cubicTo(18f, 9f, 18f, 15f, 11f, 21f);
+                    path.moveTo(4f, 8f);
+                    path.lineTo(18f, 8f);
+                    path.moveTo(4f, 16f);
+                    path.lineTo(18f, 16f);
                     break;
                 case PALETTE:
                     path.addOval(3f, 3f, 21f, 21f, Path.Direction.CW);
