@@ -107,9 +107,6 @@ public class GameActivity extends SDLActivity {
 
         Intent intent = getIntent();
         standaloneRuntime = intent.getBooleanExtra(Workspace.EXTRA_RUNTIME_ONLY, false);
-        // O SDL cria e configura a janela durante super.onCreate().
-        // Definir fullscreen antes evita a barra na primeira apresentacao.
-        if (standaloneRuntime) hideStandaloneStatusBar();
         handleIntent(intent, true);
         // Prevent SDL sending filedropped event. Let us do that instead.
         intent.setData(null);
@@ -140,11 +137,8 @@ public class GameActivity extends SDLActivity {
         nativeSetDefaultStreamValues(getAudioFreq(), getAudioSMP());
 
         // Editor separado: o executor SDL fica livre de paineis.
-        if (standaloneRuntime) {
-            showStandaloneExit();
-            // Segunda aplicacao apos o SDL anexar a superficie na janela.
-            mLayout.postOnAnimation(this::hideStandaloneStatusBar);
-        } else Workspace.attach(this, mLayout, mSurface);
+        if (standaloneRuntime) showStandaloneExit();
+        else Workspace.attach(this, mLayout, mSurface);
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
@@ -157,6 +151,26 @@ public class GameActivity extends SDLActivity {
             sendUriAsDroppedFile(delayedUri);
             delayedUri = null;
         }
+    }
+
+    /**
+     * O SDL antigo pode restaurar a barra de status depois do onCreate,
+     * ao aplicar COMMAND_CHANGE_WINDOW_STYLE (modo de janela do jogo).
+     * Reaplica o ajuste do CodeLove apos o comando original ser executado
+     * pela fila da UI, sem interferir na resolucao/estado nativo do SDL.
+     */
+    @Override
+    protected boolean sendCommand(int command, Object data) {
+        boolean sent = super.sendCommand(command, data);
+        if (standaloneRuntime && command == COMMAND_CHANGE_WINDOW_STYLE) {
+            View decor = getWindow().getDecorView();
+            decor.post(() -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    hideStandaloneStatusBar();
+                }
+            });
+        }
+        return sent;
     }
 
     /**
