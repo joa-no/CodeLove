@@ -163,6 +163,18 @@ public final class Workspace {
         // Nao liberar para o SDL, pois ele pode voltar a impor o formato horizontal.
     }
 
+    /** Ambiente de edicao Java sem uma superficie SDL sob os paineis. */
+    public static void attachEditor(Activity activity, RelativeLayout layout) {
+        if (activity == null || layout == null) return;
+        File games = activity.getExternalFilesDir("games");
+        if (games != null && !games.isDirectory()) games.mkdirs();
+        Workspace workspace = new Workspace(activity, layout, null, games);
+        currentInstance = workspace;
+        workspace.build();
+        workspace.importPreviouslyRegisteredProjects();
+        workspace.showInitialOrientationChooser();
+    }
+
     public static void attach(Activity activity, ViewGroup layout, View surface) {
         if (activity == null || surface == null || !(layout instanceof RelativeLayout)) {
             return;
@@ -211,6 +223,12 @@ public final class Workspace {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity && !workspace.disposed) {
             workspace.hostResumed = true;
+            if (workspace.surface == null && workspace.playing) {
+                workspace.playing = false;
+                workspace.updatePlayButton();
+                workspace.applyLayout();
+                workspace.updateConsole();
+            }
             workspace.renderTree();
             workspace.startStatusPolling();
         }
@@ -274,6 +292,43 @@ public final class Workspace {
         new File(dir, "commands.txt").delete(); // remove o protocolo antigo, se existir
         new File(dir, "status.txt").delete();
         return dir.getAbsolutePath();
+    }
+
+    /** Contrato entre editor Android e executor SDL. */
+    public static final String EXTRA_RUNTIME_ONLY = "org.love2d.android.RUNTIME_ONLY";
+    public static final String EXTRA_RUNTIME_PROJECT = "org.love2d.android.RUNTIME_PROJECT";
+    public static final String EXTRA_RUNTIME_NAME = "org.love2d.android.RUNTIME_NAME";
+
+    /** Insere open/play na fila limpa, antes de o SDL iniciar. */
+    public static void queueStandaloneRuntime(Context context, String path, String name) {
+        if (path == null || path.isEmpty())
+            throw new IllegalArgumentException("Projeto ausente");
+        File queue = new File(channelDir(context), "commands");
+        if (!queue.isDirectory() && !queue.mkdirs())
+            throw new IllegalStateException("Fila de execucao indisponivel");
+        String safeName = name == null ? "" :
+            name.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
+        writeStandaloneCommand(queue, 1, "open", path + "\t" + safeName);
+        writeStandaloneCommand(queue, 2, "play", "");
+    }
+
+    private static void writeStandaloneCommand(File queue, int number,
+            String command, String argument) {
+        String filename = String.format(Locale.ROOT, "command-%010d.txt", number);
+        File target = new File(queue, filename);
+        File temporary = new File(queue, filename + ".tmp");
+        try (FileOutputStream output = new FileOutputStream(temporary)) {
+            output.write((command + "\t" + argument).getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            output.getFD().sync();
+        } catch (IOException e) {
+            temporary.delete();
+            throw new IllegalStateException("Falha ao iniciar o jogo", e);
+        }
+        if (!temporary.renameTo(target)) {
+            temporary.delete();
+            throw new IllegalStateException("Falha ao publicar " + command);
+        }
     }
 
     private int dp(int value) {
@@ -408,8 +463,10 @@ public final class Workspace {
         controlsBar.setPadding(dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP));
         controlsBar.setVisibility(View.GONE);
         controlsBar.addView(playButton, barButtonParams(true));
-        controlsBar.addView(resetButton, barButtonParams(false));
-        controlsBar.addView(fullscreenButton, barButtonParams(false));
+        if (surface != null) {
+            controlsBar.addView(resetButton, barButtonParams(false));
+            controlsBar.addView(fullscreenButton, barButtonParams(false));
+        }
 
         // No modo vertical, oferece uma saida visivel da visualizacao do jogo.
         closePlaybackButton = new LinearLayout(activity);
@@ -839,7 +896,8 @@ public final class Workspace {
             if (imm != null) {
                 imm.hideSoftInputFromWindow(search.getWindowToken(), 0);
             }
-            surface.requestFocus();
+            if (surface != null) surface.requestFocus();
+            else root.requestFocus();
             return true;
         });
         return search;
@@ -917,6 +975,7 @@ public final class Workspace {
 
         // O runtime continua com a mesma resolucao logica. No modo vertical,
         // os paineis sao sobrepostos e nao reduzem a area do jogo.
+        if (surface != null) {
         RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         surfaceLp.leftMargin = insetLeft;
@@ -941,6 +1000,7 @@ public final class Workspace {
         surface.setScaleY(scale);
         surface.setTranslationX(shiftX);
         surface.setTranslationY(shiftY);
+        }
 
         RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -990,7 +1050,7 @@ public final class Workspace {
         editorView.setVisibility(editorOpen ? View.VISIBLE : View.GONE);
 
         int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
-        int buttonCount = 3;
+        int buttonCount = surface == null ? 1 : 3;
         int barWidth = buttonCount * dp(CONTROL_BUTTON_DP)
             + (buttonCount - 1) * dp(BAR_GAP_DP) + 2 * dp(BAR_PAD_DP);
         int regionStart = insetLeft + (!verticalMode && onLeft ? reserved : 0);
@@ -2038,7 +2098,42 @@ public final class Workspace {
         saveState();
     }
 
+    private void openStandalonePlayback(File project, String displayName) {
+        if (project == null || !project.isDirectory()) return;
+        if (editor != null && editor.isOpen() && !editor.close()) return;
+        Intent intent = new Intent(activity, GameActivity.class);
+        intent.putExtra(EXTRA_RUNTIME_ONLY, true);
+        intent.putExtra(EXTRA_RUNTIME_PROJECT, project.getAbsolutePath());
+        intent.putExtra(EXTRA_RUNTIME_NAME, displayName);
+        playing = true;
+        updatePlayButton();
+        activity.startActivity(intent);
+    }
+
+    private void launchStandalonePlayback() {
+        if (activeProject == null || (editor != null && !editor.saveNow())) return;
+        if (activeSafStorage != null) {
+            final DirectSafStorage storage = activeSafStorage;
+            final File selected = activeProject;
+            new Thread(() -> {
+                if (!prepareRuntimeProject(true)) return;
+                activity.runOnUiThread(() -> {
+                    if (disposed || currentInstance != this
+                        || storage != activeSafStorage || activeProject == null
+                        || !sameFile(activeProject, selected)) return;
+                    openStandalonePlayback(runtimeProject, storage.getDisplayName());
+                });
+            }, "CodeLove-SAF-StandalonePlay").start();
+        } else {
+            openStandalonePlayback(activeProject, projectDisplayName(activeProject));
+        }
+    }
+
     private void togglePlayback() {
+        if (surface == null) {
+            launchStandalonePlayback();
+            return;
+        }
         if (playing) {
             playing = false;
             sendCommand("pause", "");

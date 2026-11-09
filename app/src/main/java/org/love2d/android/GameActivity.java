@@ -62,6 +62,7 @@ public class GameActivity extends SDLActivity {
     private Uri delayedUri = null;
     private String[] args;
     private boolean isFused;
+    private boolean standaloneRuntime;
 
     private static native void nativeSetDefaultStreamValues(int sampleRate, int framesPerBurst);
 
@@ -104,6 +105,7 @@ public class GameActivity extends SDLActivity {
         }
 
         Intent intent = getIntent();
+        standaloneRuntime = intent.getBooleanExtra(Workspace.EXTRA_RUNTIME_ONLY, false);
         handleIntent(intent, true);
         // Prevent SDL sending filedropped event. Let us do that instead.
         intent.setData(null);
@@ -111,6 +113,11 @@ public class GameActivity extends SDLActivity {
         // CodeLove: prepara o canal de comandos e diz ao executor (Lua) onde ele fica.
         // Precisa vir ANTES do super.onCreate, que inicia o LOVE.
         String channel = Workspace.prepareChannel(this);
+        if (standaloneRuntime) {
+            Workspace.queueStandaloneRuntime(this,
+                intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT),
+                intent.getStringExtra(Workspace.EXTRA_RUNTIME_NAME));
+        }
         if (isFused) {
             args = new String[]{channel};
         }
@@ -127,8 +134,9 @@ public class GameActivity extends SDLActivity {
         // Set low-latency audio values
         nativeSetDefaultStreamValues(getAudioFreq(), getAudioSMP());
 
-        // CodeLove: monta o painel lateral ao lado da area do jogo.
-        Workspace.attach(this, mLayout, mSurface);
+        // Editor separado: o executor SDL fica livre de paineis.
+        if (standaloneRuntime) showStandaloneExit();
+        else Workspace.attach(this, mLayout, mSurface);
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
@@ -141,6 +149,40 @@ public class GameActivity extends SDLActivity {
             sendUriAsDroppedFile(delayedUri);
             delayedUri = null;
         }
+    }
+
+    private void showStandaloneExit() {
+        android.widget.TextView close = new android.widget.TextView(this);
+        close.setText("\u2715");
+        close.setTextColor(Workspace.COLOR_TEXT);
+        close.setTextSize(19);
+        close.setGravity(android.view.Gravity.CENTER);
+        float density = getResources().getDisplayMetrics().density;
+        int size = (int) (44 * density + 0.5f);
+        int margin = (int) (12 * density + 0.5f);
+        android.graphics.drawable.GradientDrawable background =
+            new android.graphics.drawable.GradientDrawable();
+        background.setColor(Workspace.COLOR_PANEL);
+        background.setCornerRadius(12 * density);
+        close.setBackground(background);
+        close.setContentDescription("Voltar ao CodeLove");
+        close.setOnClickListener(v -> finish());
+        android.widget.RelativeLayout.LayoutParams params =
+            new android.widget.RelativeLayout.LayoutParams(size, size);
+        params.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
+        params.addRule(android.widget.RelativeLayout.ALIGN_PARENT_RIGHT);
+        params.topMargin = margin;
+        params.rightMargin = margin;
+        mLayout.addView(close, params);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (standaloneRuntime) {
+            finish();
+            return;
+        }
+        super.onBackPressed();
     }
 
     @Override
