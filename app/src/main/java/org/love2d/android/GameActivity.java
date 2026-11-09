@@ -160,7 +160,10 @@ public class GameActivity extends SDLActivity {
      */
     private void returnToEditor() {
         if (!standaloneRuntime) return;
-        Intent editorIntent = new Intent(this, EditorActivity.class);
+        // EditorActivity exists only in the normal flavor. Do not reference
+        // its class symbol here: GameActivity must compile in embed flavors.
+        Intent editorIntent = new Intent();
+        editorIntent.setClassName(this, "org.love2d.android.EditorActivity");
         editorIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(editorIntent);
