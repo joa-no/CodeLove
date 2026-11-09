@@ -509,8 +509,8 @@ public final class Workspace {
         panel.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
 
-        // Controles do jogo: a versao da barra flutuante continua disponivel
-        // quando o editor esta fechado ou em tela cheia.
+        // Barra flutuante herdada: so para a Activity com superficie SDL.
+        // A EditorActivity usa exclusivamente os botoes integrados ao editor.
         playIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
         playButton = new LinearLayout(activity);
         playButton.setGravity(Gravity.CENTER);
@@ -1595,9 +1595,13 @@ public final class Workspace {
         }
 
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
-        boolean blankPortrait = verticalMode && surface == null && !fullscreen;
-        boolean editorScreenVisible = editorOpen || blankPortrait;
-        if (editor != null) editor.setPortraitTabs(verticalMode && surface == null);
+        // EditorActivity nao possui superficie de jogo: o editor ocupa sempre
+        // a area de trabalho, inclusive quando nenhum arquivo esta selecionado.
+        boolean editorScreenVisible = !fullscreen && (surface == null || editorOpen);
+        if (editor != null) {
+            editor.setPortraitTabs(verticalMode && surface == null);
+            editor.setEmptyWorkspaceEnabled(surface == null);
+        }
         if (!verticalMode) {
             fileDrawerOpen = false;
             cancelDrawerAnimation();
@@ -3047,7 +3051,10 @@ public final class Workspace {
         boolean verticalMode = root.getHeight() > root.getWidth();
         // No vertical, os controles do editor ficam no rodape do proprio editor.
         // Esconde a barra flutuante para nao cobrir o botao + da arvore de arquivos.
-        boolean showBar = activeProject != null && !editorVisible && !verticalMode;
+        // A barra flutuante com Play nao faz parte da EditorActivity. No modo
+        // horizontal, a execucao permanece no Play integrado ao rodape do editor.
+        boolean showBar = surface != null && activeProject != null
+            && !editorVisible && !verticalMode;
         if (controlsBar != null) {
             controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
         }

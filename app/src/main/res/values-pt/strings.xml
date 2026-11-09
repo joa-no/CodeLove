@@ -115,4 +115,5 @@
     <string name="cl_fileops_exists">Já existe um item com esse nome.</string>
     <string name="cl_fileops_chars">O nome contém caracteres proibidos.</string>
     <string name="cl_fileops_long">Nome muito longo (máximo de 64 caracteres).</string>
+    <string name="cl_empty_hint_horizontal">Selecione um arquivo no painel de arquivos para começar a editar.</string>
 </resources>

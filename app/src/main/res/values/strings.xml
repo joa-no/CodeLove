@@ -115,4 +115,5 @@
     <string name="cl_fileops_exists">An item with this name already exists.</string>
     <string name="cl_fileops_chars">The name contains forbidden characters.</string>
     <string name="cl_fileops_long">Name is too long (maximum 64 characters).</string>
+    <string name="cl_empty_hint_horizontal">Select a file in the file explorer to start editing.</string>
 </resources>

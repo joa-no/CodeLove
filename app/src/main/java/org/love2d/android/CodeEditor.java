@@ -102,6 +102,8 @@ final class CodeEditor {
     private final LinearLayout tabsRow;
     private final LinkedHashMap<String, TabState> openTabs = new LinkedHashMap<>();
     private boolean portraitTabs;
+    private boolean emptyWorkspaceEnabled;
+    private final TextView emptyHint;
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
@@ -495,7 +497,7 @@ final class CodeEditor {
         emptyTitle.setGravity(Gravity.CENTER);
         emptyState.addView(emptyTitle, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView emptyHint = new TextView(activity);
+        emptyHint = new TextView(activity);
         emptyHint.setText(activity.getString(R.string.cl_empty_hint));
         emptyHint.setTextColor(Workspace.COLOR_MUTED);
         emptyHint.setTextSize(13);
@@ -610,9 +612,18 @@ final class CodeEditor {
         renderTabStrip();
     }
 
+    /** A EditorActivity mostra a area vazia mesmo em horizontal, sem criar arquivo. */
+    void setEmptyWorkspaceEnabled(boolean enabled) {
+        if (emptyWorkspaceEnabled == enabled) return;
+        emptyWorkspaceEnabled = enabled;
+        updateEmptyState();
+    }
+
     /** Somente a apresentacao muda; o editor real continua fechado sem arquivo. */
     private void updateEmptyState() {
-        boolean noFile = portraitTabs && file == null;
+        boolean noFile = emptyWorkspaceEnabled && file == null;
+        emptyHint.setText(activity.getString(portraitTabs
+            ? R.string.cl_empty_hint : R.string.cl_empty_hint_horizontal));
         emptyState.setVisibility(noFile ? View.VISIBLE : View.GONE);
         scroll.setVisibility(noFile ? View.GONE : View.VISIBLE);
         footerDivider.setVisibility(noFile ? View.GONE : View.VISIBLE);
