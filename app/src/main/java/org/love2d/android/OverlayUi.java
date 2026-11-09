@@ -96,7 +96,7 @@ final class OverlayUi {
             item.setGravity(Gravity.CENTER_VERTICAL);
             item.setPadding(dp(16), 0, dp(16), 0);
             item.setSingleLine(true);
-            item.setTextColor(labels.get(i).startsWith("Excluir") ? Workspace.COLOR_DANGER : Workspace.COLOR_TEXT);
+            item.setTextColor(labels.get(i).startsWith(activity.getString(R.string.cl_delete)) ? Workspace.COLOR_DANGER : Workspace.COLOR_TEXT);
             item.setOnClickListener(v -> {
                 dismiss();
                 action.run();
@@ -257,7 +257,7 @@ final class OverlayUi {
             return true;
         });
 
-        card.addView(buttons("Cancelar", confirmLabel, Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT,
+        card.addView(buttons(activity.getString(R.string.cl_cancel), confirmLabel, Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT,
             confirm), buttonsParams());
 
         int width = Math.min(dp(360), root.getWidth() - dp(32));
@@ -311,7 +311,7 @@ final class OverlayUi {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView by = new TextView(activity);
-        by.setText("Desenvolvido por " + author);
+        by.setText(activity.getString(R.string.cl_developed_by, author));
         by.setTextColor(Workspace.COLOR_MUTED);
         by.setTextSize(14);
         by.setGravity(Gravity.CENTER);
@@ -342,19 +342,19 @@ final class OverlayUi {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.END);
 
-        final TextView toggle = button("Licen\u00E7as", Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
+        final TextView toggle = button(activity.getString(R.string.cl_licenses), Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
         final boolean[] showingLicenses = {false};
         toggle.setOnClickListener(v -> {
             showingLicenses[0] = !showingLicenses[0];
             body.setText(showingLicenses[0] ? licenses : credits);
             body.setTextSize(showingLicenses[0] ? 11 : 14);
-            toggle.setText(showingLicenses[0] ? "Agradecimentos" : "Licen\u00E7as");
+            toggle.setText(showingLicenses[0] ? activity.getString(R.string.cl_acknowledgements) : activity.getString(R.string.cl_licenses));
             scroll.scrollTo(0, 0);
         });
         row.addView(toggle, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));
 
-        TextView close = button("Fechar", Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT);
+        TextView close = button(activity.getString(R.string.cl_close), Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT);
         close.setTypeface(Typeface.DEFAULT_BOLD);
         close.setOnClickListener(v -> dismiss());
         LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
@@ -393,7 +393,7 @@ final class OverlayUi {
         text.setTextSize(15);
         card.addView(text);
 
-        card.addView(buttons("Cancelar", confirmLabel, Workspace.COLOR_DANGER, Workspace.COLOR_ACCENT_TEXT, new Runnable() {
+        card.addView(buttons(activity.getString(R.string.cl_cancel), confirmLabel, Workspace.COLOR_DANGER, Workspace.COLOR_ACCENT_TEXT, new Runnable() {
             @Override
             public void run() {
                 dismiss();

@@ -239,7 +239,7 @@ final class CodeEditor {
         filesMenuButton.setTextColor(Workspace.COLOR_TEXT);
         filesMenuButton.setTextSize(24);
         filesMenuButton.setGravity(Gravity.CENTER);
-        filesMenuButton.setContentDescription("Abrir pastas e arquivos");
+        filesMenuButton.setContentDescription(activity.getString(R.string.cl_open_files));
         filesMenuButton.setBackground(box(Workspace.COLOR_FIELD, 10, false));
         filesMenuButton.setVisibility(View.GONE);
         filesMenuButton.setOnClickListener(v -> listener.onFilesRequested());
@@ -488,7 +488,7 @@ final class CodeEditor {
         emptyState.setGravity(Gravity.CENTER);
         emptyState.setPadding(dp(24), dp(24), dp(24), dp(24));
         TextView emptyTitle = new TextView(activity);
-        emptyTitle.setText("Nenhum arquivo aberto");
+        emptyTitle.setText(activity.getString(R.string.cl_empty_open));
         emptyTitle.setTextColor(Workspace.COLOR_TEXT);
         emptyTitle.setTextSize(18);
         emptyTitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -496,7 +496,7 @@ final class CodeEditor {
         emptyState.addView(emptyTitle, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         TextView emptyHint = new TextView(activity);
-        emptyHint.setText("Toque em \u2630 para acessar suas pastas e abrir um arquivo.");
+        emptyHint.setText(activity.getString(R.string.cl_empty_hint));
         emptyHint.setTextColor(Workspace.COLOR_MUTED);
         emptyHint.setTextSize(13);
         emptyHint.setGravity(Gravity.CENTER);
@@ -704,7 +704,7 @@ final class CodeEditor {
             close.setTextSize(21);
             close.setGravity(Gravity.CENTER);
             close.setTextColor(Workspace.COLOR_MUTED);
-            close.setContentDescription("Fechar " + tab.file.getName());
+            close.setContentDescription(activity.getString(R.string.cl_close_file, tab.file.getName()));
             cell.addView(close, new LinearLayout.LayoutParams(dp(30), dp(36)));
             close.setOnClickListener(v -> closeTab(key));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -871,10 +871,10 @@ final class CodeEditor {
 
         if (originalText == null || !originalText.equals(current)) {
             new AlertDialog.Builder(activity)
-                .setTitle("Arquivo alterado fora do CodeLove")
-                .setMessage("Este arquivo foi modificado em outro lugar desde que voce o abriu. Se salvar agora, essas alteracoes externas serao substituidas pelo texto deste editor.")
-                .setNegativeButton("Cancelar", (dialog, which) -> { })
-                .setPositiveButton("Sobrescrever", (dialog, which) -> writeTextNow(text))
+                .setTitle(activity.getString(R.string.cl_file_changed_title))
+                .setMessage(activity.getString(R.string.cl_file_changed_message))
+                .setNegativeButton(activity.getString(R.string.cl_cancel), (dialog, which) -> { })
+                .setPositiveButton(activity.getString(R.string.cl_overwrite), (dialog, which) -> writeTextNow(text))
                 .show();
             return false;
         }
@@ -934,7 +934,7 @@ final class CodeEditor {
 
     private void notifyUnsavedChanges() {
         Toast.makeText(activity,
-            "Salve o arquivo pelo botao Salvar antes de troca-lo ou fecha-lo.",
+            activity.getString(R.string.cl_save_before_switch),
             Toast.LENGTH_LONG).show();
     }
 
@@ -944,7 +944,7 @@ final class CodeEditor {
         }
         saveFailureNotified = true;
         Toast.makeText(activity,
-            "Nao foi possivel salvar. Suas alteracoes continuam no editor.",
+            activity.getString(R.string.cl_save_failure),
             Toast.LENGTH_LONG).show();
     }
 
@@ -1443,7 +1443,8 @@ final class CodeEditor {
             parameterHintPopup.setBackgroundDrawable(box(Workspace.COLOR_FIELD, 8, false));
             parameterHintPopup.setOutsideTouchable(true);
         }
-        parameterHintText.setText(function + signature + "\nArgumento atual: " + (argument + 1));
+        parameterHintText.setText(function + signature + "\n"
+            + activity.getString(R.string.cl_current_arg, argument + 1));
         if (!input.isAttachedToWindow() || input.getLayout() == null) return;
 
         android.text.Layout layout = input.getLayout();
@@ -1506,7 +1507,7 @@ final class CodeEditor {
 
     private void refreshDirtyMark() {
         dirtyMark.setVisibility(dirty ? View.VISIBLE : View.GONE);
-        String hint = dirty ? "Alterações ainda não salvas" : "";
+        String hint = dirty ? activity.getString(R.string.cl_unsaved_mark) : "";
         dirtyMark.setContentDescription(hint);
         if (android.os.Build.VERSION.SDK_INT >= 26) {
             dirtyMark.setTooltipText(dirty ? hint : null);

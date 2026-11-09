@@ -1,6 +1,7 @@
 package org.love2d.android;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.MotionEvent;
@@ -8,6 +9,12 @@ import android.widget.RelativeLayout;
 
 /** Editor CodeLove independente da superficie SDL. */
 public final class EditorActivity extends Activity {
+    @Override
+    protected void attachBaseContext(Context base) {
+        // Aplica a escolha antes de qualquer view/Resources ser criada.
+        super.attachBaseContext(CodeLoveLocale.wrap(base));
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);

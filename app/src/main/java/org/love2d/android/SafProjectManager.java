@@ -73,12 +73,12 @@ final class SafProjectManager {
         }
         String fallback = treeUri == null ? null : treeUri.getLastPathSegment();
         return fallback == null || fallback.trim().isEmpty()
-            ? "Projeto externo" : fallback;
+            ? context.getString(R.string.cl_fallback_project) : fallback;
     }
 
     static ProjectSelection inspectProject(Context context, Uri treeUri) {
         if (treeUri == null || !"content".equals(treeUri.getScheme())) {
-            return ProjectSelection.invalid("O Android retornou uma pasta invalida.");
+            return ProjectSelection.invalid(context.getString(R.string.cl_saf_invalid));
         }
 
         try {
@@ -87,18 +87,18 @@ final class SafProjectManager {
             // que contenha main.lua: isso esconderia niveis da arvore SAF.
             String rootId = DocumentsContract.getTreeDocumentId(treeUri);
             if (rootId == null || rootId.isEmpty()) {
-                return ProjectSelection.invalid("Nao consegui identificar a pasta selecionada.");
+                return ProjectSelection.invalid(context.getString(R.string.cl_saf_identify));
             }
 
             String name = queryDisplayName(context, treeUri, rootId);
             return ProjectSelection.valid(rootId,
-                name == null ? "Projeto externo" : name);
+                name == null ? context.getString(R.string.cl_fallback_project) : name);
         } catch (SecurityException e) {
             return ProjectSelection.invalid(
-                "O Android nao permitiu acessar a pasta selecionada. Selecione-a novamente.");
+                context.getString(R.string.cl_saf_access));
         } catch (Exception e) {
             return ProjectSelection.invalid(
-                "Nao consegui identificar a pasta selecionada. Tente novamente.");
+                context.getString(R.string.cl_saf_identify_retry));
         }
     }
 
@@ -155,7 +155,7 @@ final class SafProjectManager {
                            String projectDocumentId, String displayName) {
         if (treeUri == null || !"content".equals(treeUri.getScheme())
             || projectDocumentId == null || projectDocumentId.isEmpty()) {
-            return "A pasta do projeto e invalida.";
+            return activity.getString(R.string.cl_saf_invalid_project);
         }
 
         int requiredFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -166,16 +166,16 @@ final class SafProjectManager {
 
         if (!hadPermission) {
             if (persistableFlags != requiredFlags) {
-                return "Essa pasta nao concedeu permissao de leitura e escrita.";
+                return activity.getString(R.string.cl_saf_permission);
             }
             try {
                 activity.getContentResolver().takePersistableUriPermission(
                     treeUri, persistableFlags);
             } catch (SecurityException e) {
-                return "O Android nao permitiu guardar o acesso permanente a essa pasta.";
+                return activity.getString(R.string.cl_saf_persist);
             }
             if (!hasPersistedReadWritePermission(activity, treeUri)) {
-                return "O Android nao confirmou a autorizacao persistente dessa pasta.";
+                return activity.getString(R.string.cl_saf_persist_verify);
             }
         }
 
@@ -190,13 +190,13 @@ final class SafProjectManager {
             JSONObject entry = new JSONObject();
             entry.put("uri", treeUri.toString());
             entry.put("projectDocumentId", projectDocumentId);
-            entry.put("name", displayName == null ? "Projeto externo" : displayName);
+            entry.put("name", displayName == null ? activity.getString(R.string.cl_fallback_project) : displayName);
             entry.put("flags", persistableFlags);
             projects.put(entry);
 
             if (!helper.saveProjects(projects.toString())) {
                 if (!hadPermission) releasePermission(activity, treeUri, persistableFlags);
-                return "O acesso foi concedido, mas nao consegui salvar o registro do projeto.";
+                return activity.getString(R.string.cl_saf_register_save);
             }
 
             // O CodeLove trabalha com um projeto externo ativo por vez.
@@ -219,7 +219,7 @@ final class SafProjectManager {
             }
         } catch (Exception e) {
             if (!hadPermission) releasePermission(activity, treeUri, persistableFlags);
-            return "Nao consegui registrar essa pasta no CodeLove.";
+            return activity.getString(R.string.cl_saf_register_failure);
         }
 
         return null;
@@ -237,7 +237,7 @@ final class SafProjectManager {
             if (item != null) {
                 String uri = item.optString("uri", "");
                 String documentId = item.optString("projectDocumentId", "");
-                String name = item.optString("name", "Projeto externo");
+                String name = item.optString("name", context.getString(R.string.cl_fallback_project));
                 if (!uri.isEmpty() && !documentId.isEmpty()) {
                     Uri treeUri = Uri.parse(uri);
                     if (hasPersistedReadWritePermission(context, treeUri)) {

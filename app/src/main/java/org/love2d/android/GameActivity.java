@@ -234,7 +234,8 @@ public class GameActivity extends SDLActivity {
         background.setColor(Workspace.COLOR_PANEL);
         background.setCornerRadius(12 * density);
         close.setBackground(background);
-        close.setContentDescription("Voltar ao CodeLove");
+        close.setContentDescription(
+            CodeLoveLocale.wrap(this).getString(R.string.cl_back_to_codelove));
         close.setOnClickListener(v -> returnToEditor());
         android.widget.RelativeLayout.LayoutParams params =
             new android.widget.RelativeLayout.LayoutParams(size, size);
