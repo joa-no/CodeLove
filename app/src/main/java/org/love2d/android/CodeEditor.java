@@ -108,24 +108,6 @@ final class CodeEditor {
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
 
-    // Evita recalcular todo o destaque Lua dentro de cada evento do teclado.
-    // Uma pausa curta permite agrupar insercoes, exclusoes e pares automaticos.
-    private static final long HIGHLIGHT_IDLE_DELAY_MS = 180L;
-    private final Runnable pendingHighlight = this::applyPendingHighlight;
-
-    private void scheduleHighlight() {
-        input.removeCallbacks(pendingHighlight);
-        if (file != null && highlightLua) {
-            input.postDelayed(pendingHighlight, HIGHLIGHT_IDLE_DELAY_MS);
-        }
-    }
-
-    private void applyPendingHighlight() {
-        if (file != null && highlightLua) {
-            applyHighlight(input.getText());
-        }
-    }
-
     // Diagnostico temporario para medir somente o custo da digitacao.
     // Coleta numeros em memoria e atualiza a tela quando o usuario para de digitar.
     private long typingBeforeNs;
@@ -372,7 +354,7 @@ final class CodeEditor {
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
                 long t0 = SystemClock.elapsedRealtimeNanos();
-                scheduleHighlight();
+                applyHighlight(s);
                 long t1 = SystemClock.elapsedRealtimeNanos();
                 refreshGutter(s, false);
                 long t2 = SystemClock.elapsedRealtimeNanos();
@@ -518,7 +500,6 @@ final class CodeEditor {
             return false;
         }
 
-        input.removeCallbacks(pendingHighlight);
         file = target;
         originalText = text;
         highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
@@ -547,7 +528,6 @@ final class CodeEditor {
         dismissAutocompleteSuggestion();
         dismissParameterHint();
         resetTypingStats();
-        input.removeCallbacks(pendingHighlight);
         file = null;
         originalText = null;
         loading = true;
@@ -869,7 +849,7 @@ final class CodeEditor {
                             try {
                                 current.delete(position, position + 1);
                                 input.setSelection(position + 1);
-                                scheduleHighlight();
+                                applyHighlight(current);
                             } finally {
                                 applyingAutoIndent = false;
                             }
@@ -890,7 +870,7 @@ final class CodeEditor {
             try {
                 current.insert(position, String.valueOf(closer));
                 input.setSelection(position);
-                scheduleHighlight();
+                applyHighlight(current);
             } finally {
                 applyingAutoIndent = false;
             }
@@ -912,7 +892,7 @@ final class CodeEditor {
             applyingAutoIndent = true;
             try {
                 current.delete(position, position + 1);
-                scheduleHighlight();
+                applyHighlight(current);
             } finally {
                 applyingAutoIndent = false;
             }
@@ -944,7 +924,7 @@ final class CodeEditor {
             try {
                 current.insert(expectedCursor, innerIndent + "\n" + baseIndent);
                 input.setSelection(expectedCursor + innerIndent.length());
-                scheduleHighlight();
+                applyHighlight(current);
                 refreshGutter(current, false);
             } finally {
                 applyingAutoIndent = false;
