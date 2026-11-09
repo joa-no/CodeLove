@@ -10,6 +10,9 @@
 
 package org.love2d.android;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
@@ -30,6 +33,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.DecelerateInterpolator;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.inputmethod.EditorInfo;
@@ -109,10 +113,16 @@ public final class Workspace {
     private View editorView;
     private View drawerScrim;
     private boolean fileDrawerOpen;
+    // 0 = fora da tela; 1 = totalmente aberto. Independente de fileDrawerOpen
+    // enquanto o usuario arrasta o painel ou a animacao termina.
+    private float drawerProgress;
+    private ValueAnimator drawerAnimator;
     private boolean swipeCandidate;
     private boolean swipeCaptured;
     private float swipeDownX;
     private float swipeDownY;
+    private float swipeStartProgress;
+    private long swipeDownTime;
     private LinearLayout panel;
     private View movePanelButton;
     private LinearLayout placeholder;
@@ -503,7 +513,9 @@ public final class Workspace {
 
             @Override
             public void onClosed() {
+                cancelDrawerAnimation();
                 fileDrawerOpen = false;
+                drawerProgress = 0f;
                 applyLayout();
                 renderTree();
                 saveState();
@@ -920,21 +932,77 @@ public final class Workspace {
     // Posicao do painel, do botao e da area do jogo
     // ------------------------------------------------------------------
 
-    /** Usa o mesmo estado para menu, toque externo e gestos. */
+    /** Animacao unica para o menu, o toque externo e os gestos. */
     private void setDrawerOpen(boolean opened) {
-        if (fileDrawerOpen == opened) return;
-        fileDrawerOpen = opened;
-        if (opened) {
+        if (opened && !fileDrawerOpen) {
             InputMethodManager imm = (InputMethodManager)
                 activity.getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
         }
-        applyLayout();
+        fileDrawerOpen = opened;
+        animateDrawerTo(opened ? 1f : 0f);
+    }
+
+    private void cancelDrawerAnimation() {
+        if (drawerAnimator != null) {
+            ValueAnimator old = drawerAnimator;
+            drawerAnimator = null;
+            old.cancel();
+        }
+    }
+
+    private float clampDrawer(float progress) {
+        return Math.max(0f, Math.min(1f, progress));
+    }
+
+    private int currentDrawerWidth() {
+        ViewGroup.LayoutParams params = panel.getLayoutParams();
+        if (params != null && params.width > 0) return params.width;
+        float width = root.getWidth() - insetLeft - insetRight;
+        return Math.max(1, Math.min((int) (width * 0.86f), dp(340)));
+    }
+
+    /** Desloca o painel sem recalcular o layout nem interromper a rolagem. */
+    private void updateDrawerProgress(float progress) {
+        drawerProgress = clampDrawer(progress);
+        if (root.getHeight() <= root.getWidth() || surface != null || fullscreen) return;
+        int width = currentDrawerWidth();
+        boolean visible = drawerProgress > 0.0001f;
+        panel.setVisibility(visible ? View.VISIBLE : View.GONE);
+        panel.setTranslationX((drawerProgress - 1f) * width);
+        drawerScrim.setAlpha(drawerProgress);
+        drawerScrim.setVisibility(visible ? View.VISIBLE : View.GONE);
+    }
+
+    private void animateDrawerTo(float target) {
+        cancelDrawerAnimation();
+        target = clampDrawer(target);
+        if (Math.abs(drawerProgress - target) < 0.001f) {
+            updateDrawerProgress(target);
+            return;
+        }
+        final float destination = target;
+        ValueAnimator animation = ValueAnimator.ofFloat(drawerProgress, destination);
+        drawerAnimator = animation;
+        animation.setInterpolator(new DecelerateInterpolator());
+        animation.setDuration(Math.max(120L,
+            Math.round(260f * Math.abs(drawerProgress - destination))));
+        animation.addUpdateListener(a -> updateDrawerProgress((Float) a.getAnimatedValue()));
+        animation.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (drawerAnimator == animation) {
+                    drawerAnimator = null;
+                    updateDrawerProgress(destination);
+                }
+            }
+        });
+        animation.start();
     }
 
     /**
-     * 0 = toque normal, 1 = deslize detectado (cancelar toque filho),
-     * 2 = restante do gesto ja detectado. Somente Activity de edicao.
+     * 0 = toque normal, 1 = gesto capturado (cancelar toque filho),
+     * 2 = continuar consumindo ate levantar. Apenas editor vertical.
      */
     static int handleEditorSwipe(Activity activity, MotionEvent event) {
         Workspace w = currentInstance;
@@ -950,40 +1018,63 @@ public final class Workspace {
             swipeCaptured = false;
             swipeDownX = event.getX();
             swipeDownY = event.getY();
+            swipeDownTime = event.getEventTime();
+            swipeStartProgress = drawerProgress;
             float left = insetLeft;
-            float width = Math.min(root.getWidth() * 0.86f, dp(340));
-            swipeCandidate = fileDrawerOpen
-                ? swipeDownX >= left && swipeDownX <= left + width
+            float width = currentDrawerWidth();
+            swipeCandidate = fileDrawerOpen || drawerProgress > 0.001f
+                ? swipeDownX >= left && swipeDownX <= left + width * drawerProgress
                 : swipeDownX >= left && swipeDownX <= left + dp(44);
             return 0;
         }
         if (action == MotionEvent.ACTION_POINTER_DOWN) {
+            if (swipeCaptured) {
+                swipeCaptured = false;
+                swipeCandidate = false;
+                setDrawerOpen(drawerProgress >= 0.5f);
+                return 2;
+            }
             swipeCandidate = false;
-            return swipeCaptured ? 2 : 0;
+            return 0;
         }
         if (action == MotionEvent.ACTION_MOVE) {
-            if (swipeCaptured) return 2;
-            if (!swipeCandidate || event.getPointerCount() != 1) return 0;
+            if (!swipeCandidate && !swipeCaptured) return 0;
+            if (event.getPointerCount() != 1) return swipeCaptured ? 2 : 0;
             float dx = event.getX() - swipeDownX;
             float dy = event.getY() - swipeDownY;
-            if (Math.abs(dy) > dp(15) && Math.abs(dy) >= Math.abs(dx)) {
-                swipeCandidate = false;
-                return 0;
-            }
-            if (Math.abs(dx) >= dp(55)
-                    && Math.abs(dx) > Math.abs(dy) * 1.35f) {
-                if ((!fileDrawerOpen && dx > 0) || (fileDrawerOpen && dx < 0)) {
-                    swipeCaptured = true;
+            boolean justCaptured = !swipeCaptured;
+            if (!swipeCaptured) {
+                // Nao capturar rolagem vertical na arvore nem no editor.
+                if (Math.abs(dy) > dp(12) && Math.abs(dy) >= Math.abs(dx)) {
                     swipeCandidate = false;
-                    setDrawerOpen(!fileDrawerOpen);
-                    return 1;
+                    return 0;
                 }
-                swipeCandidate = false;
+                if (Math.abs(dx) < dp(12)
+                    || Math.abs(dx) < Math.abs(dy) * 1.4f) return 0;
+                if ((!fileDrawerOpen && dx <= 0) || (fileDrawerOpen && dx >= 0)) {
+                    swipeCandidate = false;
+                    return 0;
+                }
+                cancelDrawerAnimation();
+                swipeCaptured = true;
+                swipeStartProgress = fileDrawerOpen ? 1f : 0f;
             }
-            return 0;
+            updateDrawerProgress(swipeStartProgress + dx / currentDrawerWidth());
+            return justCaptured ? 1 : 2;
         }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             boolean consumed = swipeCaptured;
+            if (consumed) {
+                float dx = event.getX() - swipeDownX;
+                long elapsed = Math.max(1L, event.getEventTime() - swipeDownTime);
+                float speed = Math.abs(dx) * 1000f / elapsed;
+                boolean fling = action != MotionEvent.ACTION_CANCEL
+                    && Math.abs(dx) >= dp(45) && speed >= dp(550);
+                boolean open = action == MotionEvent.ACTION_CANCEL
+                    ? fileDrawerOpen
+                    : fling ? dx > 0 : drawerProgress >= 0.5f;
+                setDrawerOpen(open);
+            }
             swipeCaptured = false;
             swipeCandidate = false;
             return consumed ? 2 : 0;
@@ -1003,7 +1094,13 @@ public final class Workspace {
         boolean blankPortrait = verticalMode && surface == null && !fullscreen;
         boolean editorScreenVisible = editorOpen || blankPortrait;
         if (editor != null) editor.setPortraitTabs(verticalMode && surface == null);
-        if (!verticalMode) fileDrawerOpen = false;
+        if (!verticalMode) {
+            fileDrawerOpen = false;
+            cancelDrawerAnimation();
+            drawerProgress = 0f;
+            swipeCandidate = false;
+            swipeCaptured = false;
+        }
         boolean panelShown = !fullscreen && (!verticalMode
             || (surface == null ? fileDrawerOpen : (!editorOpen && !playing)));
         if (movePanelButton != null) {
@@ -1098,7 +1195,7 @@ public final class Workspace {
         placeholder.setLayoutParams(placeholderLp);
 
         if (verticalMode) {
-            int drawerWidth = editorScreenVisible && fileDrawerOpen
+            int drawerWidth = surface == null && !fullscreen
                 ? Math.max(0, Math.min((int) (baseW * 0.86f), dp(340)))
                 : Math.max(0, (int) baseW);
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
@@ -1123,7 +1220,12 @@ public final class Workspace {
             }
             panel.setLayoutParams(panelLp);
         }
-        panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
+        // O painel da Activity de edicao vertical e posicionado por translacao.
+        // Nao alternar a visibilidade aqui durante o arraste.
+        if (!verticalMode || surface != null || fullscreen) {
+            panel.setTranslationX(0f);
+            panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
+        }
         RelativeLayout.LayoutParams scrimLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         scrimLp.leftMargin = insetLeft;
@@ -1131,8 +1233,12 @@ public final class Workspace {
         scrimLp.topMargin = insetTop;
         scrimLp.bottomMargin = insetBottomIme;
         drawerScrim.setLayoutParams(scrimLp);
-        drawerScrim.setVisibility(verticalMode && editorScreenVisible && fileDrawerOpen
-            ? View.VISIBLE : View.GONE);
+        if (verticalMode && surface == null && !fullscreen) {
+            updateDrawerProgress(drawerProgress);
+        } else {
+            drawerScrim.setAlpha(1f);
+            drawerScrim.setVisibility(View.GONE);
+        }
 
         RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
             editorWidth, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -2112,7 +2218,7 @@ public final class Workspace {
         editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
             ? activeSafStorage : null);
         if (editor.open(file)) {
-            fileDrawerOpen = false;
+            setDrawerOpen(false);
             if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
             applyLayout();
             renderTree();
