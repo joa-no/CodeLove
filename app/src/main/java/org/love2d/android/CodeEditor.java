@@ -110,6 +110,8 @@ final class CodeEditor {
     private boolean highlightLua;
     private boolean diagnosticColorsDisabled;
     private boolean diagnosticAssistsDisabled;
+    private static final long DELETION_ASSIST_IDLE_DELAY_MS = 220L;
+    private final Runnable pendingDeletionAssistance = this::runPendingDeletionAssistance;
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
 
@@ -136,7 +138,28 @@ final class CodeEditor {
         }
     }
 
+    // Durante Backspace continuo, evita recalcular e movimentar popups
+    // a cada caractere. Os auxilios voltam apos uma pausa curta.
+    private void runPendingDeletionAssistance() {
+        if (file != null && highlightLua && !diagnosticAssistsDisabled) {
+            updateAutocompleteSuggestion(input.getText());
+            updateParameterHint(input.getText());
+        }
+    }
+
+    private void scheduleDeletionAssistance() {
+        dismissAutocompleteSuggestion();
+        dismissParameterHint();
+        input.removeCallbacks(pendingDeletionAssistance);
+        input.postDelayed(pendingDeletionAssistance, DELETION_ASSIST_IDLE_DELAY_MS);
+    }
+
+    private void cancelDeletionAssistance() {
+        input.removeCallbacks(pendingDeletionAssistance);
+    }
+
     private void toggleDiagnosticAssists() {
+        cancelDeletionAssistance();
         if (file == null || !highlightLua) return;
         diagnosticAssistsDisabled = !diagnosticAssistsDisabled;
         dismissAutocompleteSuggestion();
@@ -487,11 +510,20 @@ final class CodeEditor {
                 long t1 = SystemClock.elapsedRealtimeNanos();
                 refreshGutter(s, false);
                 long t2 = SystemClock.elapsedRealtimeNanos();
-                if (!diagnosticAssistsDisabled) {
+                // A exclusao continua usando o EditText normal, mas as
+                // janelas de ajuda nao sao reposicionadas a cada Backspace.
+                boolean continuousDelete = highlightLua
+                    && changeBefore > 0 && changeAfter == 0;
+                if (diagnosticAssistsDisabled) {
+                    cancelDeletionAssistance();
+                } else if (continuousDelete) {
+                    scheduleDeletionAssistance();
+                } else {
+                    cancelDeletionAssistance();
                     updateAutocompleteSuggestion(s);
                 }
                 long t3 = SystemClock.elapsedRealtimeNanos();
-                if (!diagnosticAssistsDisabled) {
+                if (!diagnosticAssistsDisabled && !continuousDelete) {
                     updateParameterHint(s);
                 }
                 long t4 = SystemClock.elapsedRealtimeNanos();
@@ -634,6 +666,7 @@ final class CodeEditor {
         }
 
         input.removeCallbacks(pendingHighlight);
+        cancelDeletionAssistance();
         file = target;
         originalText = text;
         highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
@@ -671,6 +704,7 @@ final class CodeEditor {
         dismissParameterHint();
         resetTypingStats();
         input.removeCallbacks(pendingHighlight);
+        cancelDeletionAssistance();
         diagnosticColorsDisabled = false;
         diagnosticAssistsDisabled = false;
         highlightDiagnosticToggle.setVisibility(View.GONE);
