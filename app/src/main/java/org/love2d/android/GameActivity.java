@@ -38,6 +38,7 @@ import android.os.Vibrator;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.DisplayCutout;
+import android.view.View;
 import android.view.WindowManager;
 
 import androidx.annotation.Keep;
@@ -126,6 +127,7 @@ public class GameActivity extends SDLActivity {
 
         // Aplica a preferencia salva sem depender da rotacao automatica do Android.
         Workspace.applySavedOrientation(this);
+        if (standaloneRuntime) hideStandaloneStatusBar();
 
         if (mBrokenLibraries) {
             return;
@@ -151,6 +153,46 @@ public class GameActivity extends SDLActivity {
         }
     }
 
+    /**
+     * A GameActivity e executada em processo SDL proprio, pois o encerramento
+     * nativo do LOVE pode finalizar o processo da Activity.
+     * Reordena a Activity de desenvolvimento existente antes de encerrar.
+     */
+    private void returnToEditor() {
+        if (!standaloneRuntime) return;
+        Intent editorIntent = new Intent(this, EditorActivity.class);
+        editorIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(editorIntent);
+        finish();
+    }
+
+    /** Esconde apenas a barra de status; mantem a navegacao do sistema. */
+    private void hideStandaloneStatusBar() {
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        View decor = getWindow().getDecorView();
+        decor.setSystemUiVisibility(
+            decor.getSystemUiVisibility()
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            android.view.WindowInsetsController controller =
+                getWindow().getInsetsController();
+            if (controller != null) {
+                controller.hide(android.view.WindowInsets.Type.statusBars());
+            }
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (standaloneRuntime && hasFocus) hideStandaloneStatusBar();
+    }
+
     private void showStandaloneExit() {
         android.widget.TextView close = new android.widget.TextView(this);
         close.setText("\u2715");
@@ -166,7 +208,7 @@ public class GameActivity extends SDLActivity {
         background.setCornerRadius(12 * density);
         close.setBackground(background);
         close.setContentDescription("Voltar ao CodeLove");
-        close.setOnClickListener(v -> finish());
+        close.setOnClickListener(v -> returnToEditor());
         android.widget.RelativeLayout.LayoutParams params =
             new android.widget.RelativeLayout.LayoutParams(size, size);
         params.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
@@ -179,7 +221,7 @@ public class GameActivity extends SDLActivity {
     @Override
     public void onBackPressed() {
         if (standaloneRuntime) {
-            finish();
+            returnToEditor();
             return;
         }
         super.onBackPressed();
