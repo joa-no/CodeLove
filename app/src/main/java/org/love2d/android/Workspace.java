@@ -504,7 +504,7 @@ public final class Workspace {
             applyLayout();
             saveState();
         });
-        setButtonHint(movePanelButton, "Mover painel para o outro lado");
+        setButtonHint(movePanelButton, activity.getString(R.string.cl_move_panel));
         footer.addView(movePanelButton, footerButtonParams(false));
         panel.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
@@ -569,7 +569,7 @@ public final class Workspace {
         closePlaybackButton.setBackground(box(COLOR_PANEL, 22, true));
         closePlaybackButton.addView(new IconView(activity, IconView.CLOSE, COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(closePlaybackButton, "Sair da visualizacao e voltar aos arquivos");
+        setButtonHint(closePlaybackButton, activity.getString(R.string.cl_exit_visual));
         closePlaybackButton.setOnClickListener(v -> exitPlaybackToFiles());
         closePlaybackButton.setVisibility(View.GONE);
 
@@ -588,7 +588,7 @@ public final class Workspace {
         saveButton.setGravity(Gravity.CENTER);
         saveButton.setBackground(box(COLOR_FIELD, 22, false));
         saveButton.addView(saveIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(saveButton, "Salvar alterações no CodeLove");
+        setButtonHint(saveButton, activity.getString(R.string.cl_save_codelove));
         saveButton.setOnClickListener(v -> saveCurrentFile());
 
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
@@ -707,7 +707,7 @@ public final class Workspace {
         settingsButton.setBackground(box(COLOR_FIELD, 10, false));
         settingsButton.addView(new IconView(activity, IconView.SETTINGS, COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(settingsButton, "Configurações");
+        setButtonHint(settingsButton, activity.getString(R.string.cl_settings));
         settingsButton.setClickable(true);
         settingsButton.setFocusable(true);
         settingsButton.setOnClickListener(v -> showSettings());
@@ -743,7 +743,7 @@ public final class Workspace {
         content.addView(heading, headingLp);
 
         TextView title = new TextView(activity);
-        title.setText("Configurações");
+        title.setText(activity.getString(R.string.cl_settings));
         title.setTextSize(20);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(COLOR_TEXT);
@@ -755,13 +755,13 @@ public final class Workspace {
         close.setBackground(box(COLOR_FIELD, 10, false));
         close.addView(new IconView(activity, IconView.CLOSE, COLOR_MUTED),
             new LinearLayout.LayoutParams(dp(18), dp(18)));
-        setButtonHint(close, "Fechar configurações");
+        setButtonHint(close, activity.getString(R.string.cl_settings_close));
         close.setClickable(true);
         close.setFocusable(true);
         heading.addView(close, new LinearLayout.LayoutParams(dp(40), dp(40)));
 
         TextView explanation = new TextView(activity);
-        explanation.setText("Preferências e informações do aplicativo");
+        explanation.setText(activity.getString(R.string.cl_settings_desc));
         explanation.setTextColor(COLOR_MUTED);
         explanation.setTextSize(13);
         LinearLayout.LayoutParams explanationLp = new LinearLayout.LayoutParams(
@@ -810,8 +810,8 @@ public final class Workspace {
         content.addView(languageDivider, languageDividerLp);
 
         content.addView(buildSettingsRow(
-            IconView.ORIENTATION, "Orientação da tela",
-            "Escolher entre vertical e horizontal", v -> {
+            IconView.ORIENTATION, activity.getString(R.string.cl_orientation),
+            activity.getString(R.string.cl_orientation_desc), v -> {
                 if (settingsDialog != null) settingsDialog.dismiss();
                 showOrientationChooser(true);
             }));
@@ -824,8 +824,8 @@ public final class Workspace {
         content.addView(divider, dividerLp);
 
         content.addView(buildSettingsRow(
-            IconView.INFO, "Sobre o CodeLove",
-            "Créditos, informações e licenças", v -> {
+            IconView.INFO, activity.getString(R.string.cl_about),
+            activity.getString(R.string.cl_about_desc), v -> {
                 if (settingsDialog != null) settingsDialog.dismiss();
                 showAbout();
             }));
@@ -927,11 +927,13 @@ public final class Workspace {
         String current = prefs.getString(PREF_APPEARANCE, "dark");
         Dialog dialog = new Dialog(activity);
         String[] values = {"auto", "dark", "light"};
-        String[] names = {"Automático", "Escuro", "Claro"};
+        String[] names = {activity.getString(R.string.cl_theme_auto),
+            activity.getString(R.string.cl_theme_dark),
+            activity.getString(R.string.cl_theme_light)};
         String[] descriptions = {
-            "Acompanha o tema do Android",
-            "Aparência escura do CodeLove",
-            "Aparência clara do CodeLove"
+            activity.getString(R.string.cl_theme_auto_desc),
+            activity.getString(R.string.cl_theme_dark_desc),
+            activity.getString(R.string.cl_theme_light_desc)
         };
         for (int i = 0; i < values.length; i++) {
             final String value = values[i];
@@ -963,7 +965,7 @@ public final class Workspace {
             }
             row.setClickable(true);
             row.setFocusable(true);
-            row.setContentDescription(names[i] + (selected ? ", selecionado" : ""));
+            row.setContentDescription(names[i] + (selected ? activity.getString(R.string.cl_selected) : ""));
             row.setOnClickListener(v -> {
                 dialog.dismiss();
                 changeAppearance(value);
@@ -975,7 +977,7 @@ public final class Workspace {
         }
 
         TextView cancel = new TextView(activity);
-        cancel.setText("Cancelar");
+        cancel.setText(activity.getString(R.string.cl_cancel));
         cancel.setTextColor(COLOR_MUTED);
         cancel.setTextSize(13);
         cancel.setGravity(Gravity.CENTER);
@@ -1120,7 +1122,7 @@ public final class Workspace {
 
         // Nao recriar o editor caso alguma aba ainda tenha texto nao salvo.
         if (editor != null && editor.hasUnsavedTabs()) {
-            toast("Salve as alterações de todas as abas antes de mudar o tema.");
+            toast(activity.getString(R.string.cl_save_tabs_theme));
             return;
         }
         if (surface == null) {
@@ -1162,7 +1164,7 @@ public final class Workspace {
         content.addView(brand);
 
         TextView title = new TextView(activity);
-        title.setText("Orientação da tela");
+        title.setText(activity.getString(R.string.cl_orientation));
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(20);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1172,7 +1174,7 @@ public final class Workspace {
         content.addView(title, titleParams);
 
         TextView explanation = new TextView(activity);
-        explanation.setText("Escolha o formato mais adequado ao tamanho da sua tela.");
+        explanation.setText(activity.getString(R.string.cl_orientation_explanation));
         explanation.setTextColor(COLOR_MUTED);
         explanation.setTextSize(13);
         explanation.setPadding(0, 0, 0, dp(16));
@@ -1197,7 +1199,7 @@ public final class Workspace {
         TextView cancel = null;
         if (allowDismiss) {
             cancel = new TextView(activity);
-            cancel.setText("Cancelar");
+            cancel.setText(activity.getString(R.string.cl_cancel));
             cancel.setTextColor(COLOR_MUTED);
             cancel.setTextSize(13);
             cancel.setGravity(Gravity.CENTER);
@@ -1260,7 +1262,7 @@ public final class Workspace {
         LinearLayout labels = new LinearLayout(activity);
         labels.setOrientation(LinearLayout.VERTICAL);
         TextView title = new TextView(activity);
-        title.setText(portrait ? "Vertical" : "Horizontal");
+        title.setText(portrait ? activity.getString(R.string.cl_portrait) : activity.getString(R.string.cl_landscape));
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(16);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -1268,8 +1270,8 @@ public final class Workspace {
 
         TextView description = new TextView(activity);
         description.setText(portrait
-            ? "Esse formato é ideal para celulares. Não recomendado para telas grandes, como tablets."
-            : "Esse formato é ideal para telas maiores, como tablets. Não recomendado para telas pequenas, como celulares.");
+            ? activity.getString(R.string.cl_portrait_desc)
+            : activity.getString(R.string.cl_landscape_desc));
         description.setTextColor(COLOR_MUTED);
         description.setTextSize(12);
         LinearLayout.LayoutParams descriptionParams = new LinearLayout.LayoutParams(
@@ -1351,21 +1353,9 @@ public final class Workspace {
         return lp;
     }
 
-    private static final String CREDITS =
-        "O CodeLove \u00E9 um projeto derivado (fork) do L\u00D6VE para Android, modificado para "
-        + "trazer um ambiente de trabalho completo dentro do pr\u00F3prio app: pastas e arquivos, "
-        + "editor de c\u00F3digo, jogo ao vivo e console.\n\n"
-        + "Todo o motor que executa os jogos \u00E9 o L\u00D6VE (love2d.org), um framework livre para "
-        + "jogos 2D feito e mantido pela equipe LOVE Development Team e por muitos colaboradores. "
-        + "O CodeLove s\u00F3 existe gra\u00E7as a esse trabalho. Muito obrigado!\n\n"
-        + "O CodeLove \u00E9 uma vers\u00E3o modificada e n\u00E3o \u00E9 o L\u00D6VE original. "
-        + "Ele n\u00E3o \u00E9 afiliado nem endossado pelo projeto L\u00D6VE.\n\n"
-        + "O L\u00D6VE \u00E9 distribu\u00EDdo sob a licen\u00E7a zlib, e o app usa outras "
-        + "bibliotecas livres, cada uma com a sua licen\u00E7a. Toque em \"Licen\u00E7as\" para ler "
-        + "todos os avisos.";
-
     private void showAbout() {
-        ui.showAbout("joa-no", CREDITS, readAssetText("codelove-licenses.txt"));
+        ui.showAbout("joa-no", activity.getString(R.string.cl_credits_full),
+            readAssetText("codelove-licenses.txt"));
     }
 
     /** Le um arquivo de texto de dentro do app (assets). */
@@ -1379,9 +1369,7 @@ public final class Workspace {
             }
             return new String(out.toByteArray(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            return "O arquivo de licencas (" + name + ") nao foi encontrado neste app.\n\n"
-                + "Licenca do LOVE: zlib. Copyright (c) 2006-2024 LOVE Development Team. "
-                + "Veja love2d.org.";
+            return activity.getString(R.string.cl_license_fallback, name);
         }
     }
 
@@ -1397,7 +1385,7 @@ public final class Workspace {
 
     private View buildSearch() {
         search = new EditText(activity);
-        search.setHint("Buscar arquivos...");
+        search.setHint(activity.getString(R.string.cl_search_files));
         search.setHintTextColor(COLOR_MUTED);
         search.setTextColor(COLOR_TEXT);
         search.setTextSize(14);
@@ -1866,7 +1854,7 @@ public final class Workspace {
 
         if (treeRoot == null) {
             TextView note = new TextView(activity);
-            note.setText("Pasta de projetos indisponivel.");
+            note.setText(activity.getString(R.string.cl_folder_unavailable));
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -1880,7 +1868,7 @@ public final class Workspace {
 
         if (rows.isEmpty()) {
             TextView note = new TextView(activity);
-            note.setText(query.isEmpty() ? "Nenhum arquivo ainda." : "Nada encontrado.");
+            note.setText(query.isEmpty() ? activity.getString(R.string.cl_no_files) : activity.getString(R.string.cl_no_results));
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -1928,7 +1916,7 @@ public final class Workspace {
                 }
                 return any;
             } catch (IOException e) {
-                showProjectNotice("Nao consegui listar essa pasta. O acesso do Android pode ter sido alterado ou removido.");
+                showProjectNotice(activity.getString(R.string.cl_access_lost));
                 return false;
             }
         }
@@ -2093,7 +2081,7 @@ public final class Workspace {
      * ultrapassa a altura disponivel do painel.
      */
     private void showProjectNotice(String message) {
-        showNotice("Nao foi possivel adicionar o projeto", message);
+        showNotice(activity.getString(R.string.cl_project_add_failure), message);
     }
 
     private void showNotice(String titleText, String message) {
@@ -2120,7 +2108,7 @@ public final class Workspace {
         messageScroll.setFillViewport(false);
         messageScroll.setVerticalScrollBarEnabled(true);
         TextView body = new TextView(activity);
-        body.setText(message == null ? "Ocorreu um erro inesperado." : message);
+        body.setText(message == null ? activity.getString(R.string.cl_unexpected_error) : message);
         body.setTextColor(COLOR_MUTED);
         body.setTextSize(13);
         body.setLineSpacing(dp(2), 1.0f);
@@ -2144,7 +2132,7 @@ public final class Workspace {
         actions.setPadding(0, dp(10), 0, 0);
 
         TextView retry = new TextView(activity);
-        retry.setText("Selecionar novamente");
+        retry.setText(activity.getString(R.string.cl_select_again));
         retry.setTextColor(COLOR_ACCENT_TEXT);
         retry.setTextSize(13);
         retry.setGravity(Gravity.CENTER);
@@ -2232,9 +2220,9 @@ public final class Workspace {
 
         List<String> labels = new ArrayList<String>();
         List<Runnable> actions = new ArrayList<Runnable>();
-        labels.add("Novo arquivo em " + folder.getName());
+        labels.add(activity.getString(R.string.cl_add_file_in, folder.getName()));
         actions.add(() -> newFile(folder));
-        labels.add("Nova pasta em " + folder.getName());
+        labels.add(activity.getString(R.string.cl_add_folder_in, folder.getName()));
         actions.add(() -> newFolder(folder));
         ui.showMenu(anchor, labels, actions);
     }
@@ -2248,7 +2236,7 @@ public final class Workspace {
         try {
             activity.startActivityForResult(intent, REQUEST_ADD_PROJECT_TREE);
         } catch (Exception e) {
-            toast("Nao foi possivel abrir o seletor de pastas do Android.");
+            toast(activity.getString(R.string.cl_choose_folder_failure));
             Log.e(TAG, "Falha ao abrir o seletor SAF", e);
         }
     }
@@ -2286,11 +2274,11 @@ public final class Workspace {
                 activity, treeUri, selection.documentId, selection.displayName);
             workspace.selectDirectProject(storage);
             workspace.dismissProjectNotice();
-            workspace.toast("Pasta selecionada com sucesso.");
+            workspace.toast(activity.getString(R.string.cl_folder_selected));
         } catch (RuntimeException e) {
             Log.e(TAG, "Falha inesperada ao processar a pasta selecionada pelo SAF", e);
             workspace.showProjectNotice(
-                "O Android encontrou um erro inesperado ao processar essa pasta. Tente novamente.");
+                activity.getString(R.string.cl_android_folder_error));
         }
     }
 
@@ -2303,19 +2291,19 @@ public final class Workspace {
             && activeSafStorage != null
             && sameFile(file, activeProject);
         if (row.dir) {
-            labels.add("Novo arquivo aqui");
+            labels.add(activity.getString(R.string.cl_add_file_here));
             actions.add(() -> newFile(file));
-            labels.add("Nova pasta aqui");
+            labels.add(activity.getString(R.string.cl_add_folder_here));
             actions.add(() -> newFolder(file));
         }
         // A raiz do projeto aberto nao pode ser renomeada/apagada pelo menu.
         if (!externalProjectRoot) {
-            labels.add("Renomear");
+            labels.add(activity.getString(R.string.cl_rename));
             actions.add(() -> rename(file));
-            labels.add("Excluir");
+            labels.add(activity.getString(R.string.cl_delete));
             actions.add(() -> delete(file));
             if (activeProject != null && isInside(file, activeProject)) {
-                labels.add("Mover para");
+                labels.add(activity.getString(R.string.cl_move_to));
                 actions.add(() -> showMoveDestinationMenu(file));
             }
         }
@@ -2332,7 +2320,7 @@ public final class Workspace {
         collectMoveFolders(activeProject, target, destinations);
 
         if (destinations.isEmpty()) {
-            toast("Nao existem outras pastas para mover este item.");
+            toast(activity.getString(R.string.cl_no_move_targets));
             return;
         }
 
@@ -2345,7 +2333,7 @@ public final class Workspace {
             }
             String label;
             if (sameFile(destination, activeProject)) {
-                label = "Raiz do projeto";
+                label = activity.getString(R.string.cl_project_root);
             } else {
                 int depth = relativeDepth(destination, activeProject);
                 StringBuilder prefix = new StringBuilder();
@@ -2357,11 +2345,11 @@ public final class Workspace {
         }
 
         if (labels.isEmpty()) {
-            toast("Nao existem outras pastas para mover este item.");
+            toast(activity.getString(R.string.cl_no_move_targets));
             return;
         }
 
-        ui.showScrollableMenu(null, "Mover para", labels, actions);
+        ui.showScrollableMenu(null, activity.getString(R.string.cl_move_to), labels, actions);
     }
 
     private void collectMoveFolders(File directory, File target, List<File> out) {
@@ -2419,13 +2407,13 @@ public final class Workspace {
             || sameFile(target, activeProject) || sameFile(target, destination)
             || !isInside(target, activeProject) || !isInside(destination, activeProject)
             || isInside(destination, target)) {
-            toast("Destino invalido.");
+            toast(activity.getString(R.string.cl_invalid_destination));
             return;
         }
 
         final File targetParent = target.getParentFile();
         if (targetParent != null && sameFile(targetParent, destination)) {
-            toast("O item ja esta nessa pasta.");
+            toast(activity.getString(R.string.cl_already_there));
             return;
         }
 
@@ -2449,7 +2437,7 @@ public final class Workspace {
             }
 
             if (moved == null) {
-                toast("Nao consegui mover o item.");
+                toast(activity.getString(R.string.cl_cannot_move));
                 return;
             }
 
@@ -2486,7 +2474,7 @@ public final class Workspace {
             saveState();
             toast("Item movido.");
         } catch (IOException e) {
-            toast(e.getMessage() == null ? "Nao consegui mover o item." : e.getMessage());
+            toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_move) : e.getMessage());
             renderTree();
         }
     }
@@ -2510,11 +2498,12 @@ public final class Workspace {
     }
 
     private void newFile(final File folder) {
-        ui.askText("Novo arquivo em " + folder.getName(), "", "Criar",
+        ui.askText(activity.getString(R.string.cl_add_file_in, folder.getName()),
+            "", activity.getString(R.string.cl_create),
             text -> {
                 String name = FileOps.withDefaultExtension(text);
                 if (activeSafStorage != null && activeSafStorage.contains(folder)) {
-                    return isSafeName(name) ? null : "Nome de arquivo invalido.";
+                    return isSafeName(name) ? null : activity.getString(R.string.cl_invalid_file_name);
                 }
                 return FileOps.checkName(folder, name);
             },
@@ -2525,14 +2514,14 @@ public final class Workspace {
                     try {
                         file = activeSafStorage.createFile(folder, name).file;
                     } catch (IOException e) {
-                        toast(e.getMessage() == null ? "Nao consegui criar o arquivo." : e.getMessage());
+                        toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_create_file) : e.getMessage());
                         return;
                     }
                 } else {
                     file = FileOps.createFile(folder, name);
                 }
                 if (file == null) {
-                    toast("Nao consegui criar o arquivo.");
+                    toast(activity.getString(R.string.cl_cannot_create_file));
                     return;
                 }
                 enterProjectOf(file);
@@ -2544,12 +2533,13 @@ public final class Workspace {
     }
 
     private void newFolder(final File parent) {
-        ui.askText("Nova pasta em " + parent.getName(), "", "Criar",
+        ui.askText(activity.getString(R.string.cl_add_folder_in, parent.getName()),
+            "", activity.getString(R.string.cl_create),
             text -> {
                 if (activeSafStorage != null && activeSafStorage.contains(parent)) {
-                    return isSafeName(text) ? null : "Nome de pasta invalido.";
+                    return isSafeName(text) ? null : activity.getString(R.string.cl_invalid_folder_name);
                 }
-                return FileOps.checkName(parent, text);
+                return translatedNameError(FileOps.checkName(parent, text));
             },
             text -> {
                 File folder;
@@ -2557,14 +2547,14 @@ public final class Workspace {
                     try {
                         folder = activeSafStorage.createDirectory(parent, text).file;
                     } catch (IOException e) {
-                        toast(e.getMessage() == null ? "Nao consegui criar a pasta." : e.getMessage());
+                        toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_create_folder) : e.getMessage());
                         return;
                     }
                 } else {
                     folder = FileOps.createFolder(parent, text);
                 }
                 if (folder == null) {
-                    toast("Nao consegui criar a pasta.");
+                    toast(activity.getString(R.string.cl_cannot_create_folder));
                     return;
                 }
                 enterProjectOf(folder);
@@ -2582,13 +2572,33 @@ public final class Workspace {
         }
     }
 
+    /** FileOps e Java puro; apenas os textos mostrados sao traduzidos. */
+    private String translatedNameError(String error) {
+        if (error == null) return null;
+        if (error.startsWith("Nome muito longo (maximo "))
+            return activity.getString(R.string.cl_fileops_long);
+        if (error.startsWith("O nome nao pode ter "))
+            return activity.getString(R.string.cl_fileops_chars);
+        if (error.equals("Digite um nome."))
+            return activity.getString(R.string.cl_fileops_enter);
+        if (error.equals("Esse nome nao e permitido."))
+            return activity.getString(R.string.cl_fileops_disallowed);
+        if (error.equals("O nome nao pode terminar com ponto ou espaco."))
+            return activity.getString(R.string.cl_fileops_ending);
+        if (error.equals("Nomes terminados em .tmp sao reservados."))
+            return activity.getString(R.string.cl_fileops_reserved);
+        if (error.equals("Ja existe um item com esse nome."))
+            return activity.getString(R.string.cl_fileops_exists);
+        return error;
+    }
+
     private void rename(final File target) {
         final File parent = target.getParentFile();
-        ui.askText("Renomear", target.getName(), "Renomear",
+        ui.askText(activity.getString(R.string.cl_rename), target.getName(), activity.getString(R.string.cl_rename),
             text -> text.equals(target.getName()) ? null
                 : ((activeSafStorage != null && activeSafStorage.contains(target))
-                    ? (isSafeName(text) ? null : "Nome invalido.")
-                    : FileOps.checkName(parent, text)),
+                    ? (isSafeName(text) ? null : activity.getString(R.string.cl_invalid_name))
+                    : translatedNameError(FileOps.checkName(parent, text))),
             text -> {
                 if (text.equals(target.getName())) return;
                 if (activeSafStorage != null && activeSafStorage.contains(target)) {
@@ -2628,7 +2638,7 @@ public final class Workspace {
             if (editedFile != null && sameFile(editedFile, target)) openInEditor(dest);
             saveState();
         } catch (IOException e) {
-            toast(e.getMessage() == null ? "Nao consegui renomear." : e.getMessage());
+            toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_rename) : e.getMessage());
         }
     }
 
@@ -2639,7 +2649,7 @@ public final class Workspace {
         if (isActiveProject) sendCommand("close", "");
 
         if (!target.renameTo(dest)) {
-            toast("Nao consegui renomear.");
+            toast(activity.getString(R.string.cl_cannot_rename));
             if (isActiveProject) sendCommand("open", target.getAbsolutePath());
             renderTree();
             return;
@@ -2682,9 +2692,9 @@ public final class Workspace {
             ? activeSafStorage.isDirectory(target)
             : target.isDirectory();
         String message = targetIsDirectory
-            ? "Excluir a pasta " + what + " e tudo que esta dentro dela? Isso nao pode ser desfeito."
-            : "Excluir o arquivo " + what + "? Isso nao pode ser desfeito.";
-        ui.confirm(message, "Excluir", () -> doDelete(target));
+            ? activity.getString(R.string.cl_confirm_delete_folder, what)
+            : activity.getString(R.string.cl_confirm_delete_file, what);
+        ui.confirm(message, activity.getString(R.string.cl_delete), () -> doDelete(target));
     }
 
     private void doDelete(File target) {
@@ -2699,7 +2709,7 @@ public final class Workspace {
             ok = FileOps.deleteRecursive(target);
         }
         if (!ok) {
-            toast("Nao consegui apagar tudo.");
+            toast(activity.getString(R.string.cl_cannot_delete));
             return;
         }
 
@@ -2740,7 +2750,7 @@ public final class Workspace {
             renderTree();
             saveState();
         } else if (!editor.hasUnsavedChanges()) {
-            Toast.makeText(activity, "Esse arquivo nao abre no editor (binario ou grande demais).",
+            Toast.makeText(activity, activity.getString(R.string.cl_file_unopenable),
                 Toast.LENGTH_SHORT).show();
         }
     }
@@ -2827,7 +2837,7 @@ public final class Workspace {
     private void openStandalonePlayback(File project, String displayName) {
         if (project == null || !project.isDirectory()) return;
         if (editor != null && editor.hasUnsavedTabs()) {
-            toast("Salve as abas com alteracoes antes de executar o jogo.");
+            toast(activity.getString(R.string.cl_save_before_play));
             return;
         }
         Intent intent = new Intent(activity, GameActivity.class);
@@ -2842,7 +2852,7 @@ public final class Workspace {
     private void launchStandalonePlayback() {
         if (activeProject == null || (editor != null && !editor.saveNow())) return;
         if (editor != null && editor.hasUnsavedTabs()) {
-            toast("Salve as abas com alteracoes antes de executar o jogo.");
+            toast(activity.getString(R.string.cl_save_before_play));
             return;
         }
         if (activeSafStorage != null) {
@@ -3108,14 +3118,14 @@ public final class Workspace {
         header.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView title = new TextView(activity);
-        title.setText("Console");
+        title.setText(activity.getString(R.string.cl_console));
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(14);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView clear = new TextView(activity);
-        clear.setText("Limpar");
+        clear.setText(activity.getString(R.string.cl_clear));
         clear.setTextColor(COLOR_TEXT);
         clear.setTextSize(13);
         clear.setGravity(Gravity.CENTER);
@@ -3134,7 +3144,7 @@ public final class Workspace {
         reload.setBackground(box(COLOR_FIELD, 10, false));
         reload.addView(new IconView(activity, IconView.RELOAD, COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(18), dp(18)));
-        setButtonHint(reload, "Recarregar o projeto");
+        setButtonHint(reload, activity.getString(R.string.cl_reload_project));
         reload.setOnClickListener(v -> reloadProject());
         LinearLayout.LayoutParams reloadLp = new LinearLayout.LayoutParams(dp(30), dp(30));
         reloadLp.setMargins(dp(6), 0, 0, 0);
@@ -3183,9 +3193,7 @@ public final class Workspace {
     private void updateConsole() {
         String text = readTail(new File(channelDir, "console.txt"), 32768);
         if (text == null) {
-            text = "O console ainda nao recebeu nada do executor.\n"
-                + "Se isto continuar depois de abrir um projeto, o arquivo\n"
-                + "app/src/normal/assets/main.lua nao e a versao 2.";
+            text = activity.getString(R.string.cl_console_waiting);
         }
         if (!text.equals(lastConsole)) {
             lastConsole = text;
@@ -3322,14 +3330,14 @@ public final class Workspace {
         box.setVisibility(activeProject == null ? View.VISIBLE : View.GONE);
 
         TextView title = new TextView(activity);
-        title.setText("Nenhum arquivo selecionado");
+        title.setText(activity.getString(R.string.cl_none_selected));
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(18);
         title.setGravity(Gravity.CENTER);
         box.addView(title);
 
         TextView hint = new TextView(activity);
-        hint.setText("Escolha um projeto no painel para ver o jogo aqui.");
+        hint.setText(activity.getString(R.string.cl_select_project_hint));
         hint.setTextColor(COLOR_MUTED);
         hint.setTextSize(14);
         hint.setGravity(Gravity.CENTER);
