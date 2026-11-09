@@ -131,6 +131,31 @@ final class CodeEditor {
         }
     }
 
+    /** Copia temporaria dos textos/cursores, sem referencia a Activity ou SAF antigo. */
+    static final class ThemeTab {
+        final File file;
+        final String text;
+        final String original;
+        final int selection;
+        final int scrollY;
+        ThemeTab(TabState tab) {
+            file = tab.file;
+            text = tab.text;
+            original = tab.original;
+            selection = tab.selection;
+            scrollY = tab.scrollY;
+        }
+    }
+
+    static final class ThemeTabs {
+        final ArrayList<ThemeTab> tabs;
+        final File activeFile;
+        ThemeTabs(ArrayList<ThemeTab> tabs, File activeFile) {
+            this.tabs = tabs;
+            this.activeFile = activeFile;
+        }
+    }
+
     private File file;           // arquivo aberto (nulo se nenhum)
     private String originalText; // conteudo lido na abertura, usado para detectar conflito externo
     private boolean dirty;       // tem alteracao ainda nao gravada no arquivo original
@@ -526,11 +551,34 @@ final class CodeEditor {
         return file;
     }
 
-    /** Lista estavel de abas, para recriar a interface apos mudar a aparencia. */
-    ArrayList<File> getOpenTabFiles() {
-        ArrayList<File> files = new ArrayList<>();
-        for (TabState tab : openTabs.values()) files.add(tab.file);
-        return files;
+    /** Preserva o texto JA VISIVEL em cada aba, sem reler arquivos na troca de tema. */
+    ThemeTabs captureThemeTabs() {
+        snapshotActiveTab();
+        ArrayList<ThemeTab> tabs = new ArrayList<>();
+        for (TabState tab : openTabs.values()) {
+            tabs.add(new ThemeTab(tab));
+        }
+        return new ThemeTabs(tabs, file);
+    }
+
+    /** Restaura as abas limpas na interface nova, mantendo foco e rolagem. */
+    void restoreThemeTabs(ThemeTabs state, Storage newStorage) {
+        if (state == null) return;
+        openTabs.clear();
+        for (ThemeTab saved : state.tabs) {
+            TabState tab = new TabState(saved.file, newStorage, saved.text);
+            tab.original = saved.original;
+            tab.selection = saved.selection;
+            tab.scrollY = saved.scrollY;
+            openTabs.put(saved.file.getAbsolutePath(), tab);
+        }
+        TabState active = state.activeFile == null ? null
+            : openTabs.get(state.activeFile.getAbsolutePath());
+        if (active == null && !openTabs.isEmpty()) {
+            for (TabState tab : openTabs.values()) active = tab;
+        }
+        if (active != null) showTab(active);
+        else renderTabStrip();
     }
 
     void setStorage(Storage storage) {

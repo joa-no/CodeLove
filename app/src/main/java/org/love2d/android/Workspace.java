@@ -69,15 +69,13 @@ public final class Workspace {
     /** Apenas caminhos: nenhuma Activity ou view e guardada na recriacao de tema. */
     private static final class ThemeSession {
         final String projectPath;
-        final ArrayList<File> files;
-        final File activeFile;
+        final CodeEditor.ThemeTabs tabs;
         final boolean drawerOpen;
 
-        ThemeSession(String projectPath, ArrayList<File> files,
-                File activeFile, boolean drawerOpen) {
+        ThemeSession(String projectPath, CodeEditor.ThemeTabs tabs,
+                boolean drawerOpen) {
             this.projectPath = projectPath;
-            this.files = files;
-            this.activeFile = activeFile;
+            this.tabs = tabs;
             this.drawerOpen = drawerOpen;
         }
     }
@@ -303,32 +301,25 @@ public final class Workspace {
         }, "CodeLove-SAF-RuntimeRestore").start();
     }
 
-    /** Restaura abas limpas apos alternar o tema; preserva a pasta e o arquivo ativo. */
+    /** Restaura visual e abas na mesma posicao, sem animar a gaveta nem reler codigo. */
     private void restoreThemeSession() {
         if (surface != null || pendingThemeSession == null) return;
         ThemeSession session = pendingThemeSession;
         pendingThemeSession = null;
-        if (session.projectPath == null || activeProject == null
-            || !session.projectPath.equals(activeProject.getAbsolutePath())) return;
-        for (File file : session.files) {
-            editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
-                ? activeSafStorage : null);
-            editor.open(file);
-        }
-        if (session.activeFile != null) {
-            editor.setStorage(activeSafStorage != null
-                && activeSafStorage.contains(session.activeFile)
-                ? activeSafStorage : null);
-            editor.open(session.activeFile);
+        String projectPath = activeProject == null ? null : activeProject.getAbsolutePath();
+        if (!java.util.Objects.equals(session.projectPath, projectPath)) return;
+
+        // Ao recriar o layout, nao simular um clique no menu: mostrar diretamente
+        // o painel na posicao final evita o efeito de fechar/abrir que o usuario viu.
+        cancelDrawerAnimation();
+        fileDrawerOpen = session.drawerOpen;
+        drawerProgress = session.drawerOpen ? 1f : 0f;
+
+        if (editor != null) {
+            editor.restoreThemeTabs(session.tabs, activeSafStorage);
         }
         applyLayout();
         renderTree();
-        if (session.drawerOpen) {
-            root.post(() -> {
-                if (!disposed && activity != null && currentInstance == this
-                    && root.getHeight() > root.getWidth()) setDrawerOpen(true);
-            });
-        }
         saveState();
     }
 
@@ -997,10 +988,13 @@ public final class Workspace {
         if (surface == null) {
             pendingThemeSession = new ThemeSession(
                 activeProject == null ? null : activeProject.getAbsolutePath(),
-                editor == null ? new ArrayList<File>() : editor.getOpenTabFiles(),
-                editor == null ? null : editor.getFile(), fileDrawerOpen);
+                editor == null ? null : editor.captureThemeTabs(),
+                fileDrawerOpen);
         }
         prefs.edit().putString(PREF_APPEARANCE, selected).apply();
+        // Recria somente a Activity (a engine de jogo permanece isolada).
+        // Sem animacao de janela adicional durante a mudanca de aparencia.
+        if (activity.getWindow() != null) activity.getWindow().setWindowAnimations(0);
         activity.recreate();
     }
 
@@ -1456,7 +1450,18 @@ public final class Workspace {
     }
 
     private void applyLayout() {
-        boolean verticalMode = root.getHeight() > root.getWidth();
+        // Antes do primeiro layout, 0x0 nao pode ser interpretado como horizontal:
+        // isso fechava a gaveta restaurada e ocultava momentaneamente o editor.
+        boolean verticalMode;
+        if (root.getWidth() > 0 && root.getHeight() > 0) {
+            verticalMode = root.getHeight() > root.getWidth();
+        } else {
+            String choice = prefs.getString(PREF_WORKSPACE_ORIENTATION, "");
+            verticalMode = "portrait".equals(choice)
+                || (!"landscape".equals(choice)
+                    && activity.getResources().getConfiguration().orientation
+                        == Configuration.ORIENTATION_PORTRAIT);
+        }
         boolean keyboardVisible = insetBottomIme > insetBottom + dp(80);
         if (verticalMode && keyboardVisible) {
             // O editor tem prioridade: o console nunca disputa espaco com o teclado.
