@@ -85,7 +85,10 @@ final class CodeEditor {
     private final Listener listener;
     private Storage storage;
     private final LinearLayout view;
+    private final LinearLayout header;
     private final TextView title;
+    private final LinearLayout emptyState;
+    private final View footerDivider;
     private final TextView filesMenuButton;
     private final HorizontalScrollView tabsScroller;
     private final LinearLayout tabsRow;
@@ -186,7 +189,7 @@ final class CodeEditor {
         view.setPadding(dp(12), dp(12), dp(12), dp(12));
 
         // ---- cabecalho: nome do arquivo, marca de "nao salvo" e botao de fechar ----
-        LinearLayout header = new LinearLayout(activity);
+        header = new LinearLayout(activity);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
@@ -446,8 +449,34 @@ final class CodeEditor {
         view.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
+        // Tela inicial do modo vertical, sem criar nenhum arquivo ficticio.
+        emptyState = new LinearLayout(activity);
+        emptyState.setOrientation(LinearLayout.VERTICAL);
+        emptyState.setGravity(Gravity.CENTER);
+        emptyState.setPadding(dp(24), dp(24), dp(24), dp(24));
+        TextView emptyTitle = new TextView(activity);
+        emptyTitle.setText("Nenhum arquivo aberto");
+        emptyTitle.setTextColor(Workspace.COLOR_TEXT);
+        emptyTitle.setTextSize(18);
+        emptyTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        emptyTitle.setGravity(Gravity.CENTER);
+        emptyState.addView(emptyTitle, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView emptyHint = new TextView(activity);
+        emptyHint.setText("Toque em \u2630 para acessar suas pastas e abrir um arquivo.");
+        emptyHint.setTextColor(Workspace.COLOR_MUTED);
+        emptyHint.setTextSize(13);
+        emptyHint.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams emptyHintLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        emptyHintLp.topMargin = dp(10);
+        emptyState.addView(emptyHint, emptyHintLp);
+        emptyState.setVisibility(View.GONE);
+        view.addView(emptyState, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
         // Rodape (expandir / fechar), logo acima do teclado quando ele esta aberto.
-        View footerDivider = new View(activity);
+        footerDivider = new View(activity);
         footerDivider.setBackgroundColor(Workspace.COLOR_BORDER);
         LinearLayout.LayoutParams footerDividerLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
@@ -498,7 +527,34 @@ final class CodeEditor {
         if (portraitTabs == enabled) return;
         portraitTabs = enabled;
         filesMenuButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
+
+        // Ordem no vertical: menu, titulo do arquivo, indicador de alteracao.
+        // No horizontal, mantem a posicao e as medidas anteriores.
+        header.removeView(dirtyMark);
+        if (enabled) {
+            title.setMaxWidth(dp(210));
+            title.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+            header.addView(dirtyMark, header.indexOfChild(title) + 1);
+        } else {
+            title.setMaxWidth(Integer.MAX_VALUE);
+            title.setLayoutParams(new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            header.addView(dirtyMark, 0);
+        }
+        updateEmptyState();
         renderTabStrip();
+    }
+
+    /** Somente a apresentacao muda; o editor real continua fechado sem arquivo. */
+    private void updateEmptyState() {
+        boolean noFile = portraitTabs && file == null;
+        emptyState.setVisibility(noFile ? View.VISIBLE : View.GONE);
+        scroll.setVisibility(noFile ? View.GONE : View.VISIBLE);
+        footerDivider.setVisibility(noFile ? View.GONE : View.VISIBLE);
+        footer.setVisibility(noFile ? View.GONE : View.VISIBLE);
+        if (noFile) title.setText("CodeLove");
     }
 
     private void snapshotActiveTab() {
@@ -532,6 +588,7 @@ final class CodeEditor {
         saveFailureNotified = false;
         refreshDirtyMark();
         title.setText(file.getName());
+        updateEmptyState();
         applyHighlight(input.getText());
         refreshGutter(input.getText(), true);
         followUntil = 0;
@@ -545,8 +602,8 @@ final class CodeEditor {
     }
 
     private void renderTabStrip() {
-        tabsScroller.setVisibility(portraitTabs && file != null
-            ? View.VISIBLE : View.GONE);
+        // A faixa de abas permanece presente no estado vazio do vertical.
+        tabsScroller.setVisibility(portraitTabs ? View.VISIBLE : View.GONE);
         if (!portraitTabs) return;
         tabsRow.removeAllViews();
         for (TabState tab : openTabs.values()) {
@@ -559,6 +616,15 @@ final class CodeEditor {
             cell.setPadding(dp(9), 0, dp(7), 0);
             cell.setBackground(box(active ? Workspace.COLOR_FIELD : Workspace.COLOR_PANEL,
                 8, active));
+
+            // Icone da linguagem antes do nome, independente da pasta aberta.
+            LanguageTabIcon icon = new LanguageTabIcon(activity, tab.file.getName());
+            LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(
+                dp(18), dp(18));
+            iconLp.rightMargin = dp(7);
+            cell.addView(icon, iconLp);
+            cell.setOnClickListener(v -> open(tab.file));
+
             TextView name = new TextView(activity);
             name.setText(tab.file.getName() + (unsaved ? " \u2022" : ""));
             name.setTextSize(12);
@@ -623,6 +689,7 @@ final class CodeEditor {
         try { input.setText(""); }
         finally { loading = false; }
         title.setText("");
+        updateEmptyState();
         renderTabStrip();
         listener.onClosed();
     }

@@ -519,7 +519,7 @@ public final class Workspace {
 
             @Override
             public void onFilesRequested() {
-                if (root.getHeight() <= root.getWidth() || !editor.isOpen()) return;
+                if (root.getHeight() <= root.getWidth() || fullscreen) return;
                 fileDrawerOpen = !fileDrawerOpen;
                 if (fileDrawerOpen) {
                     android.view.inputmethod.InputMethodManager imm =
@@ -947,10 +947,12 @@ public final class Workspace {
         }
 
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
+        boolean blankPortrait = verticalMode && surface == null && !fullscreen;
+        boolean editorScreenVisible = editorOpen || blankPortrait;
         if (editor != null) editor.setPortraitTabs(verticalMode && surface == null);
         if (!verticalMode) fileDrawerOpen = false;
         boolean panelShown = !fullscreen && (!verticalMode
-            || !editorOpen || fileDrawerOpen);
+            || (surface == null ? fileDrawerOpen : (!editorOpen && !playing)));
         if (movePanelButton != null) {
             movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
         }
@@ -977,7 +979,7 @@ public final class Workspace {
         }
 
         int editorWidth = ViewGroup.LayoutParams.MATCH_PARENT;
-        if (editorOpen) {
+        if (editorScreenVisible) {
             if (verticalMode) {
                 editorOffset = 0;
                 editorWidth = baseW > 0f
@@ -1043,7 +1045,7 @@ public final class Workspace {
         placeholder.setLayoutParams(placeholderLp);
 
         if (verticalMode) {
-            int drawerWidth = editorOpen && fileDrawerOpen
+            int drawerWidth = editorScreenVisible && fileDrawerOpen
                 ? Math.max(0, Math.min((int) (baseW * 0.86f), dp(340)))
                 : Math.max(0, (int) baseW);
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
@@ -1076,7 +1078,7 @@ public final class Workspace {
         scrimLp.topMargin = insetTop;
         scrimLp.bottomMargin = insetBottomIme;
         drawerScrim.setLayoutParams(scrimLp);
-        drawerScrim.setVisibility(verticalMode && editorOpen && fileDrawerOpen
+        drawerScrim.setVisibility(verticalMode && editorScreenVisible && fileDrawerOpen
             ? View.VISIBLE : View.GONE);
 
         RelativeLayout.LayoutParams editorLp = new RelativeLayout.LayoutParams(
@@ -1091,7 +1093,7 @@ public final class Workspace {
             editorLp.rightMargin = editorOffset;
         }
         editorView.setLayoutParams(editorLp);
-        editorView.setVisibility(editorOpen ? View.VISIBLE : View.GONE);
+        editorView.setVisibility(editorScreenVisible ? View.VISIBLE : View.GONE);
 
         int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
         int buttonCount = surface == null ? 1 : 3;
