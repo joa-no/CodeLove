@@ -12,6 +12,7 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -124,7 +125,12 @@ final class CodeEditor {
 
     private void applyPendingHighlight() {
         if (file != null && highlightLua && !diagnosticColorsDisabled) {
+            long t0 = SystemClock.elapsedRealtimeNanos();
             applyHighlight(input.getText());
+            long dt = Math.max(0, SystemClock.elapsedRealtimeNanos() - t0);
+            delayedHighlightCalls++;
+            delayedHighlightTotalNs += dt;
+            delayedHighlightPeakNs = Math.max(delayedHighlightPeakNs, dt);
         }
     }
 
@@ -144,6 +150,8 @@ final class CodeEditor {
         }
         highlightDiagnosticToggle.setText(
             diagnosticColorsDisabled ? "Cores OFF" : "Cores ON");
+        // O relatorio anterior nao e comparavel ao novo modo.
+        resetTypingStats();
     }
 
     // Diagnostico temporario para medir somente o custo da digitacao.
@@ -161,6 +169,19 @@ final class CodeEditor {
     private long typingAutocompleteNs;
     private long typingHintsNs;
     private long typingOtherNs;
+    // Tempo do recolorimento agendado: ocorre fora do TextWatcher.
+    private int delayedHighlightCalls;
+    private long delayedHighlightTotalNs;
+    private long delayedHighlightPeakNs;
+
+    // Tempo aproximado do callback ate o primeiro onDraw do editor.
+    // Nao inclui a latencia do teclado antes de chegar ao EditText,
+    // nem a apresentacao final do frame pela GPU.
+    private boolean waitingForTypingDraw;
+    private long typingDrawStartNs;
+    private int typingDrawSamples;
+    private long typingDrawTotalNs;
+    private long typingDrawPeakNs;
 
     private final Runnable showTypingStats = () -> {
         if (file == null || typingSamples == 0) return;
@@ -169,15 +190,21 @@ final class CodeEditor {
             : typingInsertNs / (1_000_000.0 * typingInsertSamples);
         double deleteAvg = typingDeleteSamples == 0 ? 0
             : typingDeleteNs / (1_000_000.0 * typingDeleteSamples);
+        double drawAvg = typingDrawSamples == 0 ? 0
+            : typingDrawTotalNs / (1_000_000.0 * typingDrawSamples);
+        double delayedAvg = delayedHighlightCalls == 0 ? 0
+            : delayedHighlightTotalNs / (1_000_000.0 * delayedHighlightCalls);
         typingStats.setText(String.format(Locale.ROOT,
-            "Eventos %d | total %.1fms | pico %.1fms\n"
+            "Eventos %d | callback %.1fms | pico %.1fms\n"
             + "Digitar %d: %.1fms | apagar %d: %.1fms\n"
-            + "Cores %.1fms | linhas %.1fms | auto %.1fms | dicas %.1fms | outros %.1fms",
+            + "Agendar cores %.1fms | linhas %.1fms | auto %.1fms | dicas %.1fms\n"
+            + "Desenho %d: media %.1fms | pico %.1fms | recolor %d: %.1fms (pico %.1fms)",
             typingSamples, typingTotalNs / divisor, typingPeakNs / 1_000_000.0,
             typingInsertSamples, insertAvg, typingDeleteSamples, deleteAvg,
             typingHighlightNs / divisor, typingGutterNs / divisor,
             typingAutocompleteNs / divisor, typingHintsNs / divisor,
-            typingOtherNs / divisor));
+            typingDrawSamples, drawAvg, typingDrawPeakNs / 1_000_000.0,
+            delayedHighlightCalls, delayedAvg, delayedHighlightPeakNs / 1_000_000.0));
         typingStats.setVisibility(View.VISIBLE);
     };
 
@@ -196,6 +223,14 @@ final class CodeEditor {
         typingAutocompleteNs = 0L;
         typingHintsNs = 0L;
         typingOtherNs = 0L;
+        delayedHighlightCalls = 0;
+        delayedHighlightTotalNs = 0L;
+        delayedHighlightPeakNs = 0L;
+        waitingForTypingDraw = false;
+        typingDrawStartNs = 0L;
+        typingDrawSamples = 0;
+        typingDrawTotalNs = 0L;
+        typingDrawPeakNs = 0L;
         typingStats.setVisibility(View.GONE);
     }
 
@@ -292,6 +327,18 @@ final class CodeEditor {
         gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
             @Override
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                if (waitingForTypingDraw) {
+                    long dt = Math.max(0, SystemClock.elapsedRealtimeNanos() - typingDrawStartNs);
+                    waitingForTypingDraw = false;
+                    typingDrawSamples++;
+                    typingDrawTotalNs += dt;
+                    typingDrawPeakNs = Math.max(typingDrawPeakNs, dt);
+                }
+            }
+
+            @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
                 InputConnection target = super.onCreateInputConnection(outAttrs);
                 if (target == null) return null;
@@ -355,6 +402,10 @@ final class CodeEditor {
                     return;
                 }
                 long afterStartNs = SystemClock.elapsedRealtimeNanos();
+                if (!waitingForTypingDraw) {
+                    waitingForTypingDraw = true;
+                    typingDrawStartNs = afterStartNs;
+                }
 
                 // Ao inserir uma quebra de linha, preserva a indentacao atual
                 // e avanca um nivel quando a linha anterior abre um bloco Lua.
