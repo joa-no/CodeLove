@@ -31,6 +31,7 @@
         -->
         <activity
             android:name="org.love2d.android.GameActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:exported="false"
             android:launchMode="standard"
             android:process=":codelove_runtime"

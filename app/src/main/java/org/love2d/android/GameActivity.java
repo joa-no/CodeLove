@@ -170,21 +170,23 @@ public class GameActivity extends SDLActivity {
         finish();
     }
 
-    /** Esconde apenas a barra de status; mantem a navegacao do sistema. */
+    /** Oculta a barra de status em modo de execucao; a navegacao permanece. */
     private void hideStandaloneStatusBar() {
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         View decor = getWindow().getDecorView();
         decor.setSystemUiVisibility(
             decor.getSystemUiVisibility()
                 | View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         if (android.os.Build.VERSION.SDK_INT >= 30) {
             android.view.WindowInsetsController controller =
                 getWindow().getInsetsController();
             if (controller != null) {
+                controller.setSystemBarsBehavior(
+                    android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                 controller.hide(android.view.WindowInsets.Type.statusBars());
             }
         }
@@ -301,6 +303,10 @@ public class GameActivity extends SDLActivity {
         // O SDL/Android pode restaurar a orientacao do sistema durante a retomada.
         Workspace.applySavedOrientation(this);
         Workspace.onHostResume(this);
+        if (standaloneRuntime) {
+            hideStandaloneStatusBar();
+            getWindow().getDecorView().post(this::hideStandaloneStatusBar);
+        }
     }
 
     @Override

@@ -12,7 +12,6 @@ package org.love2d.android;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
-import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -82,9 +81,6 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final TextView title;
-    private final TextView highlightDiagnosticToggle;
-    private final TextView assistDiagnosticToggle;
-    private TextView typingStats;
     private final TextView dirtyMark;
     private final TextView gutter;
     private final EditText input;
@@ -108,8 +104,6 @@ final class CodeEditor {
     private int changeAfter;
     private String changeRemoved = "";
     private boolean highlightLua;
-    private boolean diagnosticColorsDisabled;
-    private boolean diagnosticAssistsDisabled;
     private static final long DELETION_ASSIST_IDLE_DELAY_MS = 220L;
     private final Runnable pendingDeletionAssistance = this::runPendingDeletionAssistance;
     private int lineCount;
@@ -122,26 +116,21 @@ final class CodeEditor {
 
     private void scheduleHighlight() {
         input.removeCallbacks(pendingHighlight);
-        if (file != null && highlightLua && !diagnosticColorsDisabled) {
+        if (file != null && highlightLua) {
             input.postDelayed(pendingHighlight, HIGHLIGHT_IDLE_DELAY_MS);
         }
     }
 
     private void applyPendingHighlight() {
-        if (file != null && highlightLua && !diagnosticColorsDisabled) {
-            long t0 = SystemClock.elapsedRealtimeNanos();
+        if (file != null && highlightLua) {
             applyHighlight(input.getText());
-            long dt = Math.max(0, SystemClock.elapsedRealtimeNanos() - t0);
-            delayedHighlightCalls++;
-            delayedHighlightTotalNs += dt;
-            delayedHighlightPeakNs = Math.max(delayedHighlightPeakNs, dt);
         }
     }
 
     // Durante Backspace continuo, evita recalcular e movimentar popups
     // a cada caractere. Os auxilios voltam apos uma pausa curta.
     private void runPendingDeletionAssistance() {
-        if (file != null && highlightLua && !diagnosticAssistsDisabled) {
+        if (file != null && highlightLua) {
             updateAutocompleteSuggestion(input.getText());
             updateParameterHint(input.getText());
         }
@@ -156,121 +145,6 @@ final class CodeEditor {
 
     private void cancelDeletionAssistance() {
         input.removeCallbacks(pendingDeletionAssistance);
-    }
-
-    private void toggleDiagnosticAssists() {
-        cancelDeletionAssistance();
-        if (file == null || !highlightLua) return;
-        diagnosticAssistsDisabled = !diagnosticAssistsDisabled;
-        dismissAutocompleteSuggestion();
-        dismissParameterHint();
-        assistDiagnosticToggle.setText(
-            diagnosticAssistsDisabled ? "Ajuda OFF" : "Ajuda ON");
-        resetTypingStats();
-        if (!diagnosticAssistsDisabled) {
-            updateAutocompleteSuggestion(input.getText());
-            updateParameterHint(input.getText());
-        }
-    }
-
-    private void toggleDiagnosticColors() {
-        if (file == null || !highlightLua) return;
-        diagnosticColorsDisabled = !diagnosticColorsDisabled;
-        input.removeCallbacks(pendingHighlight);
-        if (diagnosticColorsDisabled) {
-            Editable text = input.getText();
-            ForegroundColorSpan[] spans = text.getSpans(
-                0, text.length(), ForegroundColorSpan.class);
-            for (ForegroundColorSpan span : spans) {
-                text.removeSpan(span);
-            }
-        } else {
-            applyHighlight(input.getText());
-        }
-        highlightDiagnosticToggle.setText(
-            diagnosticColorsDisabled ? "Cores OFF" : "Cores ON");
-        // O relatorio anterior nao e comparavel ao novo modo.
-        resetTypingStats();
-    }
-
-    // Diagnostico temporario para medir somente o custo da digitacao.
-    // Coleta numeros em memoria e atualiza a tela quando o usuario para de digitar.
-    private long typingBeforeNs;
-    private int typingSamples;
-    private int typingInsertSamples;
-    private int typingDeleteSamples;
-    private long typingTotalNs;
-    private long typingPeakNs;
-    private long typingInsertNs;
-    private long typingDeleteNs;
-    private long typingHighlightNs;
-    private long typingGutterNs;
-    private long typingAutocompleteNs;
-    private long typingHintsNs;
-    private long typingOtherNs;
-    // Tempo do recolorimento agendado: ocorre fora do TextWatcher.
-    private int delayedHighlightCalls;
-    private long delayedHighlightTotalNs;
-    private long delayedHighlightPeakNs;
-
-    // Tempo aproximado do callback ate o primeiro onDraw do editor.
-    // Nao inclui a latencia do teclado antes de chegar ao EditText,
-    // nem a apresentacao final do frame pela GPU.
-    private boolean waitingForTypingDraw;
-    private long typingDrawStartNs;
-    private int typingDrawSamples;
-    private long typingDrawTotalNs;
-    private long typingDrawPeakNs;
-
-    private final Runnable showTypingStats = () -> {
-        if (file == null || typingSamples == 0) return;
-        double divisor = 1_000_000.0 * typingSamples;
-        double insertAvg = typingInsertSamples == 0 ? 0
-            : typingInsertNs / (1_000_000.0 * typingInsertSamples);
-        double deleteAvg = typingDeleteSamples == 0 ? 0
-            : typingDeleteNs / (1_000_000.0 * typingDeleteSamples);
-        double drawAvg = typingDrawSamples == 0 ? 0
-            : typingDrawTotalNs / (1_000_000.0 * typingDrawSamples);
-        double delayedAvg = delayedHighlightCalls == 0 ? 0
-            : delayedHighlightTotalNs / (1_000_000.0 * delayedHighlightCalls);
-        typingStats.setText(String.format(Locale.ROOT,
-            "Eventos %d | callback %.1fms | pico %.1fms\n"
-            + "Digitar %d: %.1fms | apagar %d: %.1fms\n"
-            + "Agendar cores %.1fms | linhas %.1fms | auto %.1fms | dicas %.1fms\n"
-            + "Desenho %d: media %.1fms | pico %.1fms | recolor %d: %.1fms (pico %.1fms)",
-            typingSamples, typingTotalNs / divisor, typingPeakNs / 1_000_000.0,
-            typingInsertSamples, insertAvg, typingDeleteSamples, deleteAvg,
-            typingHighlightNs / divisor, typingGutterNs / divisor,
-            typingAutocompleteNs / divisor, typingHintsNs / divisor,
-            typingDrawSamples, drawAvg, typingDrawPeakNs / 1_000_000.0,
-            delayedHighlightCalls, delayedAvg, delayedHighlightPeakNs / 1_000_000.0));
-        typingStats.setVisibility(View.VISIBLE);
-    };
-
-    private void resetTypingStats() {
-        input.removeCallbacks(showTypingStats);
-        typingBeforeNs = 0L;
-        typingSamples = 0;
-        typingInsertSamples = 0;
-        typingDeleteSamples = 0;
-        typingTotalNs = 0L;
-        typingPeakNs = 0L;
-        typingInsertNs = 0L;
-        typingDeleteNs = 0L;
-        typingHighlightNs = 0L;
-        typingGutterNs = 0L;
-        typingAutocompleteNs = 0L;
-        typingHintsNs = 0L;
-        typingOtherNs = 0L;
-        delayedHighlightCalls = 0;
-        delayedHighlightTotalNs = 0L;
-        delayedHighlightPeakNs = 0L;
-        waitingForTypingDraw = false;
-        typingDrawStartNs = 0L;
-        typingDrawSamples = 0;
-        typingDrawTotalNs = 0L;
-        typingDrawPeakNs = 0L;
-        typingStats.setVisibility(View.GONE);
     }
 
     CodeEditor(Activity activity, Listener listener) {
@@ -305,37 +179,6 @@ final class CodeEditor {
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        // Controle exclusivo de diagnóstico: permite comparar o mesmo Lua
-        // com spans coloridos ou sem spans, sem desativar recursos Lua.
-        highlightDiagnosticToggle = new TextView(activity);
-        highlightDiagnosticToggle.setText("Cores ON");
-        highlightDiagnosticToggle.setTextSize(11);
-        highlightDiagnosticToggle.setTextColor(Workspace.COLOR_MUTED);
-        highlightDiagnosticToggle.setGravity(Gravity.CENTER);
-        highlightDiagnosticToggle.setPadding(dp(8), dp(6), dp(8), dp(6));
-        highlightDiagnosticToggle.setVisibility(View.GONE);
-        highlightDiagnosticToggle.setOnClickListener(v -> toggleDiagnosticColors());
-        header.addView(highlightDiagnosticToggle);
-
-        // Diagnostico temporario: isola autocomplete e dicas de parametros
-        // sem afetar a colorizacao, a indentacao ou a rolagem.
-        assistDiagnosticToggle = new TextView(activity);
-        assistDiagnosticToggle.setText("Ajuda ON");
-        assistDiagnosticToggle.setTextSize(11);
-        assistDiagnosticToggle.setTextColor(Workspace.COLOR_MUTED);
-        assistDiagnosticToggle.setGravity(Gravity.CENTER);
-        assistDiagnosticToggle.setPadding(dp(8), dp(6), dp(8), dp(6));
-        assistDiagnosticToggle.setVisibility(View.GONE);
-        assistDiagnosticToggle.setOnClickListener(v -> toggleDiagnosticAssists());
-        header.addView(assistDiagnosticToggle);
-
-        typingStats = new TextView(activity);
-        typingStats.setTextSize(9);
-        typingStats.setTypeface(Typeface.MONOSPACE);
-        typingStats.setTextColor(Workspace.COLOR_MUTED);
-        typingStats.setPadding(dp(4), dp(3), 0, dp(3));
-        typingStats.setVisibility(View.GONE);
-
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
         footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
@@ -357,9 +200,6 @@ final class CodeEditor {
 
         view.addView(header, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        view.addView(typingStats, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
         View divider = new View(activity);
         divider.setBackgroundColor(Workspace.COLOR_BORDER);
         LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
@@ -377,18 +217,6 @@ final class CodeEditor {
         gutter.setPadding(dp(2), dp(4), dp(10), dp(4));
         gutter.setMinWidth(dp(34));
         input = new EditText(activity) {
-            @Override
-            protected void onDraw(Canvas canvas) {
-                super.onDraw(canvas);
-                if (waitingForTypingDraw) {
-                    long dt = Math.max(0, SystemClock.elapsedRealtimeNanos() - typingDrawStartNs);
-                    waitingForTypingDraw = false;
-                    typingDrawSamples++;
-                    typingDrawTotalNs += dt;
-                    typingDrawPeakNs = Math.max(typingDrawPeakNs, dt);
-                }
-            }
-
             @Override
             public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
                 InputConnection target = super.onCreateInputConnection(outAttrs);
@@ -438,9 +266,6 @@ final class CodeEditor {
                 changeBefore = count;
                 changeAfter = after;
                 changeRemoved = count > 0 ? s.subSequence(start, start + count).toString() : "";
-                if (!loading && !applyingAutoIndent) {
-                    typingBeforeNs = SystemClock.elapsedRealtimeNanos();
-                }
             }
 
             @Override
@@ -452,12 +277,6 @@ final class CodeEditor {
                 if (loading || applyingAutoIndent) {
                     return;
                 }
-                long afterStartNs = SystemClock.elapsedRealtimeNanos();
-                if (!waitingForTypingDraw) {
-                    waitingForTypingDraw = true;
-                    typingDrawStartNs = afterStartNs;
-                }
-
                 // Ao inserir uma quebra de linha, preserva a indentacao atual
                 // e avanca um nivel quando a linha anterior abre um bloco Lua.
                 // Colagens de varias linhas continuam intactas.
@@ -505,48 +324,18 @@ final class CodeEditor {
                 saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
-                long t0 = SystemClock.elapsedRealtimeNanos();
                 scheduleHighlight();
-                long t1 = SystemClock.elapsedRealtimeNanos();
                 refreshGutter(s, false);
-                long t2 = SystemClock.elapsedRealtimeNanos();
-                // A exclusao continua usando o EditText normal, mas as
-                // janelas de ajuda nao sao reposicionadas a cada Backspace.
+                // Popups de ajuda nao sao reposicionados por Backspace continuo.
                 boolean continuousDelete = highlightLua
                     && changeBefore > 0 && changeAfter == 0;
-                if (diagnosticAssistsDisabled) {
-                    cancelDeletionAssistance();
-                } else if (continuousDelete) {
+                if (continuousDelete) {
                     scheduleDeletionAssistance();
                 } else {
                     cancelDeletionAssistance();
                     updateAutocompleteSuggestion(s);
-                }
-                long t3 = SystemClock.elapsedRealtimeNanos();
-                if (!diagnosticAssistsDisabled && !continuousDelete) {
                     updateParameterHint(s);
                 }
-                long t4 = SystemClock.elapsedRealtimeNanos();
-
-                long beginNs = typingBeforeNs > 0 ? typingBeforeNs : afterStartNs;
-                long elapsedNs = Math.max(0, t4 - beginNs);
-                typingSamples++;
-                typingTotalNs += elapsedNs;
-                typingPeakNs = Math.max(typingPeakNs, elapsedNs);
-                if (changeBefore > changeAfter) {
-                    typingDeleteSamples++;
-                    typingDeleteNs += elapsedNs;
-                } else if (changeAfter > changeBefore) {
-                    typingInsertSamples++;
-                    typingInsertNs += elapsedNs;
-                }
-                typingHighlightNs += t1 - t0;
-                typingGutterNs += t2 - t1;
-                typingAutocompleteNs += t3 - t2;
-                typingHintsNs += t4 - t3;
-                typingOtherNs += Math.max(0, t0 - beginNs);
-                input.removeCallbacks(showTypingStats);
-                input.postDelayed(showTypingStats, 1100);
             }
         });
         input.setOnEditorActionListener((textView, actionId, event) -> {
@@ -670,15 +459,6 @@ final class CodeEditor {
         file = target;
         originalText = text;
         highlightLua = target.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
-        diagnosticColorsDisabled = false;
-        diagnosticAssistsDisabled = false;
-        highlightDiagnosticToggle.setText("Cores ON");
-        highlightDiagnosticToggle.setVisibility(
-            highlightLua ? View.VISIBLE : View.GONE);
-        assistDiagnosticToggle.setText("Ajuda ON");
-        assistDiagnosticToggle.setVisibility(
-            highlightLua ? View.VISIBLE : View.GONE);
-
         loading = true;
         input.setText(text);
         input.setSelection(0);
@@ -690,7 +470,6 @@ final class CodeEditor {
         applyHighlight(input.getText());
         refreshGutter(input.getText(), true);
         scroll.scrollTo(0, 0);
-        resetTypingStats();
         return true;
     }
 
@@ -702,13 +481,8 @@ final class CodeEditor {
         }
         dismissAutocompleteSuggestion();
         dismissParameterHint();
-        resetTypingStats();
         input.removeCallbacks(pendingHighlight);
         cancelDeletionAssistance();
-        diagnosticColorsDisabled = false;
-        diagnosticAssistsDisabled = false;
-        highlightDiagnosticToggle.setVisibility(View.GONE);
-        assistDiagnosticToggle.setVisibility(View.GONE);
         file = null;
         originalText = null;
         loading = true;
@@ -1404,7 +1178,7 @@ final class CodeEditor {
         for (ForegroundColorSpan span : old) {
             text.removeSpan(span);
         }
-        if (!highlightLua || diagnosticColorsDisabled) {
+        if (!highlightLua) {
             return;
         }
         List<int[]> parts = LuaSyntax.scan(text.toString());
