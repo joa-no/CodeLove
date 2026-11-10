@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -50,6 +51,9 @@ final class DirectSafStorage implements CodeEditor.Storage {
 
     private static final int MAX_DEPTH = 32;
     private static final int MAX_ENTRIES = 10000;
+    // Mesmo limite do CodeEditor. A copia anterior existe SOMENTE na RAM
+    // enquanto o usuario aperta Salvar; nenhum arquivo extra e criado.
+    private static final long MAX_EDITOR_TEXT_BYTES = 512L * 1024L;
 
     private final Context context;
     private final ContentResolver resolver;
@@ -137,21 +141,81 @@ final class DirectSafStorage implements CodeEditor.Storage {
         }
     }
 
+    /**
+     * Grava DIRETAMENTE no documento SAF original, sem arquivos auxiliares.
+     *
+     * Uma copia dos bytes anteriores e mantida somente em RAM durante o Save,
+     * para tentar recuperacao se o DocumentsProvider falhar ou confirmar dados
+     * diferentes dos enviados. O SAF nao garante operacao atomica em todos os
+     * provedores e esta protecao nao cobre a morte abrupta do processo.
+     */
     public synchronized boolean writeText(File file, String text) {
+        if (file == null || text == null) return false;
+        final byte[] replacement = text.getBytes(StandardCharsets.UTF_8);
+        if (replacement.length > MAX_EDITOR_TEXT_BYTES) {
+            android.util.Log.w("CodeLove", "Arquivo editado excede o limite SAF: " + file);
+            return false;
+        }
+
+        final Uri uri;
+        final byte[] original;
         try {
-            Uri uri = requireUri(file);
-            OutputStream out = resolver.openOutputStream(uri, "wt");
-            if (out == null) return false;
-            try {
-                out.write(text.getBytes(StandardCharsets.UTF_8));
-                out.flush();
-            } finally {
-                out.close();
+            uri = requireUri(file);
+            // Nunca abrir o documento para truncamento sem antes conseguir
+            // ler integralmente o conteudo atual.
+            original = readDocumentBytes(uri);
+        } catch (Exception e) {
+            android.util.Log.w("CodeLove", "Falha ao proteger arquivo SAF antes do Save: "
+                + file, e);
+            return false;
+        }
+
+        try {
+            writeDocumentBytes(uri, replacement);
+            if (!Arrays.equals(replacement, readDocumentBytes(uri))) {
+                throw new IOException("O provedor SAF nao confirmou o conteudo salvo.");
             }
             return true;
-        } catch (Exception e) {
-            android.util.Log.w("CodeLove", "Falha ao salvar arquivo SAF: " + file, e);
+        } catch (Exception writeError) {
+            android.util.Log.w("CodeLove", "Falha ao salvar arquivo SAF: " + file,
+                writeError);
+            // O arquivo original pode ter sido truncado ou parcialmente escrito.
+            // Tenta restaurar os bytes anteriores apenas se houver diferenca.
+            try {
+                if (!Arrays.equals(original, readDocumentBytes(uri))) {
+                    writeDocumentBytes(uri, original);
+                    if (!Arrays.equals(original, readDocumentBytes(uri))) {
+                        throw new IOException("O provedor SAF nao confirmou a restauracao.");
+                    }
+                }
+            } catch (Exception recoveryError) {
+                android.util.Log.e("CodeLove",
+                    "ATENCAO: falha ao recuperar arquivo SAF apos erro de Save: " + file,
+                    recoveryError);
+                // O editor mantem as alteracoes pendentes porque o Save retorna false.
+            }
             return false;
+        }
+    }
+
+    private byte[] readDocumentBytes(Uri uri) throws IOException {
+        InputStream in = resolver.openInputStream(uri);
+        if (in == null) throw new IOException("O provedor SAF nao abriu o documento para leitura.");
+        try (InputStream opened = in) {
+            return readAll(opened, MAX_EDITOR_TEXT_BYTES);
+        }
+    }
+
+    private void writeDocumentBytes(Uri uri, byte[] bytes) throws IOException {
+        OutputStream out = resolver.openOutputStream(uri, "wt");
+        if (out == null) {
+            throw new IOException("O provedor SAF nao abriu o documento para escrita.");
+        }
+        // O fechamento e parte da transacao do provedor; excecoes ao fechar
+        // tambem precisam ser tratadas como falha de salvamento.
+        try (OutputStream opened = out) {
+            opened.write(bytes);
+            opened.flush();
         }
     }
 
