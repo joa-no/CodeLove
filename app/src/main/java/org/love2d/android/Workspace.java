@@ -167,12 +167,6 @@ public final class Workspace {
 
     private OverlayUi ui;
     private SharedPreferences prefs;
-    private LinearLayout consolePanel;
-    private TextView consoleText;
-    private ScrollView consoleScroll;
-    private LinearLayout consoleButton;
-    private boolean consoleOpen = false;
-    private String lastConsole = "";
     private File lastFolder = null; // ultima pasta tocada no projeto aberto
     private CodeEditor editor;
     private View editorView;
@@ -324,36 +318,28 @@ public final class Workspace {
         saveState();
     }
 
-    /** Sincroniza o polling da interface com o ciclo de vida da Activity SDL. */
+    /** Restaura o estado do editor ao voltar da execucao SDL. */
     public static void onHostResume(Activity activity) {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity && !workspace.disposed) {
-            workspace.hostResumed = true;
             if (workspace.surface == null && workspace.playing) {
                 workspace.playing = false;
                 workspace.updatePlayButton();
                 workspace.applyLayout();
-                workspace.updateConsole();
             }
             workspace.renderTree();
-            workspace.startConsolePolling();
         }
     }
 
+    /** Mantido para preservar o contrato de ciclo de vida com as Activities. */
     public static void onHostPause(Activity activity) {
-        Workspace workspace = currentInstance;
-        if (workspace != null && workspace.activity == activity) {
-            workspace.hostResumed = false;
-            workspace.stopConsolePolling();
-        }
+        // O console agora pertence exclusivamente a GameActivity.
     }
 
     public static void onHostDestroy(Activity activity) {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity) {
-            workspace.hostResumed = false;
             workspace.disposed = true;
-            workspace.stopConsolePolling();
             workspace.deleteRuntimeProject();
             currentInstance = null;
         }
@@ -518,21 +504,6 @@ public final class Workspace {
         playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         playButton.setOnClickListener(v -> togglePlayback());
 
-        // Console: o botao sera inserido no rodape do editor.
-        consoleButton = new LinearLayout(activity);
-        consoleButton.setGravity(Gravity.CENTER);
-        consoleButton.setBackground(box(COLOR_FIELD, 22, false));
-        consoleButton.addView(new IconView(activity, IconView.CONSOLE, COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(20), dp(20)));
-        consoleButton.setOnClickListener(v -> {
-            consoleOpen = !consoleOpen;
-            applyLayout();
-            if (consoleOpen) {
-                updateConsole();
-            }
-        });
-        consolePanel = buildConsolePanel();
-
         // Reset: mantem a acao tanto na barra flutuante quanto no rodape do editor.
         resetButton = new TextView(activity);
         resetButton.setText("\u21BA");
@@ -627,7 +598,6 @@ public final class Workspace {
         });
         editor.addFooterControl(saveButton, CONTROL_BUTTON_DP, 0);
         editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
-        editor.addFooterControl(consoleButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editorView = editor.getView();
         editorView.setVisibility(View.GONE);
 
@@ -639,22 +609,8 @@ public final class Workspace {
         drawerScrim.setOnClickListener(v -> setDrawerOpen(false));
         root.addView(drawerScrim);
         root.addView(panel);
-        root.addView(consolePanel);
         root.addView(controlsBar);
         root.addView(closePlaybackButton);
-
-        root.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-            @Override
-            public void onViewAttachedToWindow(View v) {
-                startConsolePolling();
-            }
-
-            @Override
-            public void onViewDetachedFromWindow(View v) {
-                // Encerrar/recriar uma Activity nao autoriza gravar o codigo.
-                stopConsolePolling();
-            }
-        });
 
         // Acompanha as barras do sistema (relogio no topo, gestos embaixo).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -1588,12 +1544,6 @@ public final class Workspace {
                     && activity.getResources().getConfiguration().orientation
                         == Configuration.ORIENTATION_PORTRAIT);
         }
-        boolean keyboardVisible = insetBottomIme > insetBottom + dp(80);
-        if (verticalMode && keyboardVisible) {
-            // O editor tem prioridade: o console nunca disputa espaco com o teclado.
-            consoleOpen = false;
-        }
-
         boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
         // EditorActivity nao possui superficie de jogo: o editor ocupa sempre
         // a area de trabalho, inclusive quando nenhum arquivo esta selecionado.
@@ -1650,19 +1600,6 @@ public final class Workspace {
                         (int) baseW - (editorOffset - sideInset));
                 }
             }
-        }
-
-        int editorVisibleHeight = Math.max(0, root.getHeight()
-            - insetTop - insetBottomIme - 2 * margin);
-        int consoleFooterSpace = dp(71);
-        int consoleAvailableHeight = Math.max(0, editorVisibleHeight - consoleFooterSpace);
-        int consoleHeight;
-        if (verticalMode) {
-            consoleHeight = Math.min(dp(240),
-                Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
-        } else {
-            consoleHeight = Math.min(dp(220),
-                Math.min((int) (editorVisibleHeight * 0.38f), consoleAvailableHeight));
         }
 
         // O runtime continua com a mesma resolucao logica. No modo vertical,
@@ -1794,39 +1731,6 @@ public final class Workspace {
         closeLp.bottomMargin = insetBottom + margin;
         closeLp.rightMargin = insetRight + margin;
         closePlaybackButton.setLayoutParams(closeLp);
-
-        RelativeLayout.LayoutParams consoleLp;
-        if (verticalMode) {
-            consoleLp = new RelativeLayout.LayoutParams(
-                Math.max(0, (int) baseW - 2 * margin), consoleHeight);
-            consoleLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-            // Sem esta regra, o RelativeLayout ignora o bottomMargin como ancora
-            // e posiciona o console no topo. No vertical, ele deve ficar no rodape.
-            consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-            consoleLp.leftMargin = insetLeft + margin;
-            consoleLp.rightMargin = insetRight + margin;
-            consoleLp.bottomMargin = insetBottomIme + margin + consoleFooterSpace;
-        } else {
-            consoleLp = new RelativeLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, consoleHeight);
-            // No horizontal, ancora o console no rodape, acima dos controles do editor.
-            consoleLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-            consoleLp.addRule(onLeft
-                ? RelativeLayout.ALIGN_PARENT_LEFT : RelativeLayout.ALIGN_PARENT_RIGHT);
-            int consoleInset = dp(12);
-            if (onLeft) {
-                consoleLp.leftMargin = editorOffset + consoleInset;
-                consoleLp.rightMargin = insetRight + margin + consoleInset;
-            } else {
-                consoleLp.rightMargin = editorOffset + consoleInset;
-                consoleLp.leftMargin = insetLeft + margin + consoleInset;
-            }
-            consoleLp.bottomMargin = insetBottomIme + margin + consoleFooterSpace;
-        }
-        consolePanel.setLayoutParams(consoleLp);
-        consolePanel.setVisibility((consoleOpen && editorOpen
-            && consoleHeight > 0 && !(verticalMode && keyboardVisible))
-            ? View.VISIBLE : View.GONE);
 
         updateControlsVisibility();
     }
@@ -2935,39 +2839,6 @@ public final class Workspace {
         renderTree();
     }
 
-    private void reloadProject() {
-        if (activeProject == null) return;
-        if (!editorChangesAreSaved(R.string.cl_save_before_reload)) return;
-
-        if (activeSafStorage != null) {
-            final DirectSafStorage storage = activeSafStorage;
-            final File project = activeProject;
-            new Thread(() -> {
-                if (storage != activeSafStorage || activeProject == null
-                    || !sameFile(activeProject, project) || disposed) return;
-                if (!prepareRuntimeProject(false)) return;
-                activity.runOnUiThread(() -> {
-                    if (currentInstance != this || disposed
-                        || storage != activeSafStorage
-                        || activeProject == null || !sameFile(activeProject, project)
-                        || runtimeProject == null) return;
-                    String runtimeName = storage.getDisplayName()
-                        .replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
-                    sendCommand("reload", runtimeProject.getAbsolutePath() + "\t" + runtimeName);
-                    lastConsole = "";
-                    if (consoleText != null) consoleText.setText("");
-                });
-            }, "CodeLove-SAF-Reload").start();
-            return;
-        }
-
-        String runtimeName = projectDisplayName(activeProject)
-            .replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
-        sendCommand("reload", activeProject.getAbsolutePath() + "\t" + runtimeName);
-        lastConsole = "";
-        if (consoleText != null) consoleText.setText("");
-    }
-
     private void resetScene() {
         if (activeProject == null) return;
         if (!editorChangesAreSaved(R.string.cl_save_before_restart)) return;
@@ -3070,10 +2941,6 @@ public final class Workspace {
             closePlaybackButton.setVisibility(
                 playing && verticalMode ? View.VISIBLE : View.GONE);
         }
-        if (consolePanel != null) {
-            consolePanel.setVisibility(
-                (consoleOpen && editorVisible) ? View.VISIBLE : View.GONE);
-        }
     }
 
     /**
@@ -3111,41 +2978,7 @@ public final class Workspace {
         commandSequence = next;
     }
 
-    /** Painel compartilhado com a tela visual, preservando Limpar e Reload. */
-    private LinearLayout buildConsolePanel() {
-        CodeLoveConsolePanel console = new CodeLoveConsolePanel(activity,
-            () -> {
-                consoleOpen = false;
-                applyLayout();
-            },
-            () -> {
-                sendCommand("clearlog", "");
-                lastConsole = "";
-                consoleText.setText("");
-            },
-            this::reloadProject);
-        consoleText = console.output();
-        consoleScroll = console.scrolling();
-        console.setVisibility(View.GONE);
-        return console;
-    }
-
-    /** Le o console.txt (escrito pelo executor) e rola para o fim se mudou. */
-    private void updateConsole() {
-        String text = readTail(new File(channelDir, "console.txt"), 32768);
-        if (text == null) {
-            text = activity.getString(R.string.cl_console_waiting);
-        }
-        if (!text.equals(lastConsole)) {
-            lastConsole = text;
-            consoleText.setText(text);
-            // Rola ate o fim SEM usar fullScroll: ele tambem muda o foco e tirava o
-            // cursor (e o teclado) do editor sempre que chegava uma linha nova.
-            consoleScroll.post(() -> consoleScroll.scrollTo(0,
-                Math.max(0, consoleText.getHeight() - consoleScroll.getHeight())));
-        }
-    }
-
+    /** Le a saida do runtime; utilizado pelo console da GameActivity. */
     /** Le so o final do arquivo (ate maxBytes), sem a primeira linha se foi cortada. */
     static String readTail(File file, int maxBytes) {
         if (!file.isFile()) {
@@ -3222,44 +3055,7 @@ public final class Workspace {
         }
     }
 
-    /** Atualiza o console periodicamente, sem indicadores antigos do executor. */
-    private boolean hostResumed = false;
     private boolean disposed = false;
-
-    private boolean canPollStatus() {
-        return hostResumed && !disposed && currentInstance == this
-            && root.isAttachedToWindow() && !activity.isFinishing()
-            && (android.os.Build.VERSION.SDK_INT < 17 || !activity.isDestroyed());
-    }
-
-    private void startConsolePolling() {
-        if (!canPollStatus()) return;
-        root.removeCallbacks(consolePoller);
-        root.postDelayed(consolePoller, 700);
-    }
-
-    private void stopConsolePolling() {
-        root.removeCallbacks(consolePoller);
-    }
-
-    private final Runnable consolePoller = new Runnable() {
-        @Override
-        public void run() {
-            if (!canPollStatus()) return;
-
-            try {
-                if (consoleOpen) {
-                    updateConsole();
-                }
-            } catch (RuntimeException e) {
-                Log.e(TAG, "Falha ao atualizar o status/console do CodeLove", e);
-            }
-
-            if (canPollStatus()) {
-                root.postDelayed(this, 700);
-            }
-        }
-    };
 
     /** Aviso que cobre a area do jogo enquanto nenhum projeto estiver aberto. */
     private LinearLayout buildPlaceholder() {
