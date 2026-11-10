@@ -64,6 +64,17 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
+    private CodeLoveConsolePanel standaloneConsole;
+    private boolean standaloneConsoleOpen;
+    private String lastStandaloneConsole;
+    private final Runnable standaloneConsolePoller = new Runnable() {
+        @Override public void run() {
+            if (!standaloneRuntime || !standaloneConsoleOpen
+                || standaloneConsole == null || isFinishing() || isDestroyed()) return;
+            updateStandaloneConsole();
+            standaloneConsole.postDelayed(this, 700L);
+        }
+    };
 
     private static native void nativeSetDefaultStreamValues(int sampleRate, int framesPerBurst);
 
@@ -220,30 +231,93 @@ public class GameActivity extends SDLActivity {
         if (standaloneRuntime && hasFocus) hideStandaloneStatusBar();
     }
 
+    /** Controles da visualizacao: console ao lado do X, sem sair do jogo. */
     private void showStandaloneExit() {
-        android.widget.TextView close = new android.widget.TextView(this);
-        close.setText("\u2715");
-        close.setTextColor(Workspace.COLOR_TEXT);
-        close.setTextSize(19);
-        close.setGravity(android.view.Gravity.CENTER);
+        android.content.Context localized = CodeLoveLocale.wrap(this);
         float density = getResources().getDisplayMetrics().density;
-        int size = (int) (44 * density + 0.5f);
-        int margin = (int) (12 * density + 0.5f);
-        android.graphics.drawable.GradientDrawable background =
-            new android.graphics.drawable.GradientDrawable();
-        background.setColor(Workspace.COLOR_PANEL);
-        background.setCornerRadius(12 * density);
-        close.setBackground(background);
-        close.setContentDescription(
-            CodeLoveLocale.wrap(this).getString(R.string.cl_back_to_codelove));
-        close.setOnClickListener(v -> returnToEditor());
-        android.widget.RelativeLayout.LayoutParams params =
-            new android.widget.RelativeLayout.LayoutParams(size, size);
-        params.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
-        params.addRule(android.widget.RelativeLayout.ALIGN_PARENT_RIGHT);
-        params.topMargin = margin;
-        params.rightMargin = margin;
-        mLayout.addView(close, params);
+        int size = Math.round(44 * density);
+        int margin = Math.round(12 * density);
+        int gap = Math.round(8 * density);
+
+        android.widget.LinearLayout actions = new android.widget.LinearLayout(this);
+        actions.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        android.widget.LinearLayout consoleButton = CodeLoveConsolePanel.iconButton(this,
+            Workspace.IconView.CONSOLE, Workspace.COLOR_FOLDER,
+            () -> setStandaloneConsoleOpen(!standaloneConsoleOpen),
+            localized.getString(R.string.cl_toggle_console), 44);
+        actions.addView(consoleButton, new android.widget.LinearLayout.LayoutParams(size, size));
+
+        android.widget.LinearLayout close = CodeLoveConsolePanel.iconButton(this,
+            Workspace.IconView.CLOSE, Workspace.COLOR_TEXT,
+            this::returnToEditor, localized.getString(R.string.cl_back_to_codelove), 44);
+        android.widget.LinearLayout.LayoutParams closeLp =
+            new android.widget.LinearLayout.LayoutParams(size, size);
+        closeLp.leftMargin = gap;
+        actions.addView(close, closeLp);
+
+        android.widget.RelativeLayout.LayoutParams buttonsLp =
+            new android.widget.RelativeLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT, size);
+        buttonsLp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
+        buttonsLp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_RIGHT);
+        buttonsLp.topMargin = margin;
+        buttonsLp.rightMargin = margin;
+        mLayout.addView(actions, buttonsLp);
+
+        standaloneConsole = new CodeLoveConsolePanel(this,
+            () -> setStandaloneConsoleOpen(false), null, null);
+        standaloneConsole.setVisibility(View.GONE);
+        android.widget.RelativeLayout.LayoutParams consoleLp =
+            new android.widget.RelativeLayout.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                Math.round(220 * density));
+        consoleLp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_BOTTOM);
+        consoleLp.leftMargin = margin;
+        consoleLp.rightMargin = margin;
+        consoleLp.bottomMargin = margin;
+        mLayout.addView(standaloneConsole, consoleLp);
+
+        // Em celular horizontal o painel deve ser mais baixo; em tablet, ate 240dp.
+        mLayout.addOnLayoutChangeListener((v, left, top, right, bottom,
+                                            oldLeft, oldTop, oldRight, oldBottom) -> {
+            int height = bottom - top;
+            if (height <= 0 || standaloneConsole == null) return;
+            int panelHeight = Math.min(Math.round(240 * density),
+                Math.max(Math.round(90 * density), Math.round(height * 0.38f)));
+            android.widget.RelativeLayout.LayoutParams lp =
+                (android.widget.RelativeLayout.LayoutParams) standaloneConsole.getLayoutParams();
+            if (lp.height != panelHeight) {
+                lp.height = panelHeight;
+                standaloneConsole.setLayoutParams(lp);
+            }
+        });
+    }
+
+    private void setStandaloneConsoleOpen(boolean visible) {
+        if (!standaloneRuntime || standaloneConsole == null) return;
+        standaloneConsoleOpen = visible;
+        standaloneConsole.setVisibility(visible ? View.VISIBLE : View.GONE);
+        standaloneConsole.removeCallbacks(standaloneConsolePoller);
+        if (visible) {
+            updateStandaloneConsole();
+            standaloneConsole.postDelayed(standaloneConsolePoller, 700L);
+        }
+    }
+
+    /** O editor e a tela visual leem exatamente o mesmo canal do executor. */
+    private void updateStandaloneConsole() {
+        if (standaloneConsole == null) return;
+        String value = Workspace.readTail(
+            new java.io.File(Workspace.channelDir(this), "console.txt"), 32768);
+        if (value == null) {
+            value = CodeLoveLocale.wrap(this).getString(R.string.cl_console_waiting);
+        }
+        if (!value.equals(lastStandaloneConsole)) {
+            lastStandaloneConsole = value;
+            standaloneConsole.setOutput(value);
+        }
     }
 
     @Override
@@ -269,6 +343,9 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onDestroy() {
+        if (standaloneConsole != null) {
+            standaloneConsole.removeCallbacks(standaloneConsolePoller);
+        }
         Workspace.onHostDestroy(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
@@ -280,6 +357,9 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onPause() {
+        if (standaloneConsole != null) {
+            standaloneConsole.removeCallbacks(standaloneConsolePoller);
+        }
         Workspace.onHostPause(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
@@ -326,6 +406,11 @@ public class GameActivity extends SDLActivity {
         // O SDL/Android pode restaurar a orientacao do sistema durante a retomada.
         Workspace.applySavedOrientation(this);
         Workspace.onHostResume(this);
+        if (standaloneRuntime && standaloneConsoleOpen && standaloneConsole != null) {
+            standaloneConsole.removeCallbacks(standaloneConsolePoller);
+            updateStandaloneConsole();
+            standaloneConsole.postDelayed(standaloneConsolePoller, 700L);
+        }
         if (standaloneRuntime) {
             hideStandaloneStatusBar();
             getWindow().getDecorView().post(this::hideStandaloneStatusBar);

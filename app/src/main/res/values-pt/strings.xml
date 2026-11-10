@@ -118,4 +118,6 @@
     <string name="cl_empty_hint_horizontal">Selecione um arquivo no painel de arquivos para começar a editar.</string>
     <string name="cl_save_before_reload">Salve as alterações de todas as abas antes de recarregar o projeto.</string>
     <string name="cl_save_before_restart">Salve as alterações de todas as abas antes de reiniciar o jogo.</string>
+    <string name="cl_collapse_console">Recolher console</string>
+    <string name="cl_toggle_console">Abrir ou fechar console</string>
 </resources>

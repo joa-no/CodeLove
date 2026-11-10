@@ -3111,97 +3111,23 @@ public final class Workspace {
         commandSequence = next;
     }
 
-    /** Painel do console: titulo, botao de limpar, botao de fechar e o texto. */
+    /** Painel compartilhado com a tela visual, preservando Limpar e Reload. */
     private LinearLayout buildConsolePanel() {
-        LinearLayout panelBox = new LinearLayout(activity);
-        panelBox.setOrientation(LinearLayout.VERTICAL);
-        // Os cantos superiores arredondados identificam o console; a base reta
-        // faz a transicao visual com o rodape do editor, sem parecer uma janela solta.
-        GradientDrawable consoleBackground = new GradientDrawable();
-        consoleBackground.setColor(COLOR_PANEL);
-        consoleBackground.setCornerRadii(new float[] {
-            dp(14), dp(14), dp(14), dp(14), 0, 0, 0, 0
-        });
-        consoleBackground.setStroke(Math.max(1, dp(1)), COLOR_BORDER);
-        panelBox.setBackground(consoleBackground);
-        panelBox.setPadding(dp(12), dp(10), dp(12), dp(10));
-        panelBox.setClickable(true); // nao deixa o toque passar para o jogo
-        panelBox.setVisibility(View.GONE);
-
-        LinearLayout header = new LinearLayout(activity);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-
-        TextView title = new TextView(activity);
-        title.setText(activity.getString(R.string.cl_console));
-        title.setTextColor(COLOR_TEXT);
-        title.setTextSize(14);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        TextView clear = new TextView(activity);
-        clear.setText(activity.getString(R.string.cl_clear));
-        clear.setTextColor(COLOR_TEXT);
-        clear.setTextSize(13);
-        clear.setGravity(Gravity.CENTER);
-        clear.setPadding(dp(12), 0, dp(12), 0);
-        clear.setBackground(box(COLOR_FIELD, 10, false));
-        clear.setOnClickListener(v -> {
-            sendCommand("clearlog", "");
-            lastConsole = "";
-            consoleText.setText("");
-        });
-        header.addView(clear, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(30)));
-
-        LinearLayout reload = new LinearLayout(activity);
-        reload.setGravity(Gravity.CENTER);
-        reload.setBackground(box(COLOR_FIELD, 10, false));
-        reload.addView(new IconView(activity, IconView.RELOAD, COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(18), dp(18)));
-        setButtonHint(reload, activity.getString(R.string.cl_reload_project));
-        reload.setOnClickListener(v -> reloadProject());
-        LinearLayout.LayoutParams reloadLp = new LinearLayout.LayoutParams(dp(30), dp(30));
-        reloadLp.setMargins(dp(6), 0, 0, 0);
-        header.addView(reload, reloadLp);
-
-        TextView close = new TextView(activity);
-        close.setText("\u00D7");
-        close.setTextColor(COLOR_MUTED);
-        close.setTextSize(20);
-        close.setGravity(Gravity.CENTER);
-        close.setBackground(box(COLOR_FIELD, 10, false));
-        close.setOnClickListener(v -> {
-            consoleOpen = false;
-            applyLayout();
-        });
-        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(30), dp(30));
-        closeLp.setMargins(dp(6), 0, 0, 0);
-        header.addView(close, closeLp);
-
-        panelBox.addView(header, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        View divider = new View(activity);
-        divider.setBackgroundColor(COLOR_BORDER);
-        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
-        dividerLp.setMargins(0, dp(8), 0, dp(6));
-        panelBox.addView(divider, dividerLp);
-
-        consoleText = new TextView(activity);
-        consoleText.setTypeface(Typeface.MONOSPACE);
-        consoleText.setTextSize(12);
-        consoleText.setTextColor(COLOR_TEXT);
-        consoleText.setTextIsSelectable(true); // segure para copiar uma mensagem
-        consoleText.setPadding(dp(2), dp(2), dp(2), dp(2));
-
-        consoleScroll = new ScrollView(activity);
-        consoleScroll.addView(consoleText, new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        panelBox.addView(consoleScroll, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        return panelBox;
+        CodeLoveConsolePanel console = new CodeLoveConsolePanel(activity,
+            () -> {
+                consoleOpen = false;
+                applyLayout();
+            },
+            () -> {
+                sendCommand("clearlog", "");
+                lastConsole = "";
+                consoleText.setText("");
+            },
+            this::reloadProject);
+        consoleText = console.output();
+        consoleScroll = console.scrolling();
+        console.setVisibility(View.GONE);
+        return console;
     }
 
     /** Le o console.txt (escrito pelo executor) e rola para o fim se mudou. */
@@ -3221,7 +3147,7 @@ public final class Workspace {
     }
 
     /** Le so o final do arquivo (ate maxBytes), sem a primeira linha se foi cortada. */
-    private static String readTail(File file, int maxBytes) {
+    static String readTail(File file, int maxBytes) {
         if (!file.isFile()) {
             return null;
         }

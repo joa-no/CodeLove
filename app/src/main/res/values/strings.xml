@@ -118,4 +118,6 @@
     <string name="cl_empty_hint_horizontal">Select a file in the file explorer to start editing.</string>
     <string name="cl_save_before_reload">Save changes in all tabs before reloading the project.</string>
     <string name="cl_save_before_restart">Save changes in all tabs before restarting the game.</string>
+    <string name="cl_collapse_console">Collapse console</string>
+    <string name="cl_toggle_console">Open or close console</string>
 </resources>

@@ -118,4 +118,6 @@
     <string name="cl_empty_hint_horizontal">Selecciona un archivo en el explorador para comenzar a editar.</string>
     <string name="cl_save_before_reload">Guarda los cambios de todas las pestañas antes de recargar el proyecto.</string>
     <string name="cl_save_before_restart">Guarda los cambios de todas las pestañas antes de reiniciar el juego.</string>
+    <string name="cl_collapse_console">Contraer consola</string>
+    <string name="cl_toggle_console">Abrir o cerrar consola</string>
 </resources>
