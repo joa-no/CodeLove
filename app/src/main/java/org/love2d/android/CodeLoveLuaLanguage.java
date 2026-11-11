@@ -6,6 +6,8 @@
  */
 package org.love2d.android;
 
+import android.os.Bundle;
+
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -13,6 +15,11 @@ import java.util.TreeMap;
 import io.github.rosemoe.sora.lang.EmptyLanguage;
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.lang.analysis.SimpleAnalyzeManager;
+import io.github.rosemoe.sora.lang.completion.CompletionHelper;
+import io.github.rosemoe.sora.lang.completion.CompletionPublisher;
+import io.github.rosemoe.sora.lang.completion.SimpleCompletionItem;
+import io.github.rosemoe.sora.text.CharPosition;
+import io.github.rosemoe.sora.text.ContentReference;
 import io.github.rosemoe.sora.lang.styling.MappedSpans;
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.lang.styling.Styles;
@@ -30,6 +37,29 @@ final class CodeLoveLuaLanguage extends EmptyLanguage {
     @Override
     public AnalyzeManager getAnalyzeManager() {
         return analyzer;
+    }
+
+    /**
+     * O autocomplete usa a thread de completions propria do Sora, sem
+     * percorrer o documento ou criar popups no TextWatcher da UI.
+     * Preserva o catalogo Lua + LOVE usado anteriormente no CodeLove.
+     */
+    @Override
+    public void requireAutoComplete(ContentReference content, CharPosition position,
+                                    CompletionPublisher publisher, Bundle extraArguments) {
+        if (position.column <= 0) return;
+        String prefix = CompletionHelper.computePrefix(content, position,
+            ch -> Character.isLetterOrDigit(ch) || ch == '_' || ch == '.');
+        if (prefix.isEmpty()) return;
+
+        final int maxResults = 24;
+        int count = 0;
+        for (String candidate : LoveApiCatalog.SUGGESTIONS) {
+            publisher.checkCancelled();
+            if (!candidate.startsWith(prefix) || candidate.equals(prefix)) continue;
+            publisher.addItem(new SimpleCompletionItem(candidate, prefix.length(), candidate));
+            if (++count >= maxResults) break;
+        }
     }
 
     private static int colorIdFor(int kind) {
