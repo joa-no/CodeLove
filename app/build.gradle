@@ -13,7 +13,7 @@ android {
         versionCode project.properties["app.version_code"].toInteger()
         versionName project.properties["app.version_name"]
         minSdk 23
-        compileSdk = 35
+        compileSdk = 37
         targetSdk 35
 
         externalNativeBuild {
