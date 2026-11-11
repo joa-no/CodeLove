@@ -176,17 +176,22 @@ final class CodeEditor {
 
     // Evita recalcular todo o destaque Lua dentro de cada evento do teclado.
     // Uma pausa curta permite agrupar insercoes, exclusoes e pares automaticos.
-    private static final long HIGHLIGHT_IDLE_DELAY_MS = 180L;
+    private static final long HIGHLIGHT_IDLE_DELAY_MS = 650L;
     private final Runnable pendingHighlight = this::applyPendingHighlight;
+    private boolean fullHighlightScheduled;
 
+    // O arquivo todo so precisa ser recalculado apos mudancas estruturais.
+    // Durante a digitacao normal, o realce e restrito a uma unica linha.
     private void scheduleHighlight() {
         input.removeCallbacks(pendingHighlight);
-        if (file != null && highlightLua) {
+        fullHighlightScheduled = file != null && highlightLua;
+        if (fullHighlightScheduled) {
             input.postDelayed(pendingHighlight, HIGHLIGHT_IDLE_DELAY_MS);
         }
     }
 
     private void applyPendingHighlight() {
+        fullHighlightScheduled = false;
         if (file != null && highlightLua) {
             applyHighlight(input.getText());
         }
@@ -419,8 +424,8 @@ final class CodeEditor {
                 saveFailureNotified = false;
                 followUntil = SystemClock.uptimeMillis() + 500; // digitando: pode seguir o cursor
                 refreshDirtyMark();
-                scheduleHighlight();
-                refreshGutter(s, false);
+                updateSyntaxAfterEdit(s);
+                refreshGutterAfterEdit(s);
                 // Popups de ajuda nao sao reposicionados por Backspace continuo.
                 boolean continuousDelete = highlightLua
                     && changeBefore > 0 && changeAfter == 0;
@@ -646,6 +651,7 @@ final class CodeEditor {
         dismissAutocompleteSuggestion();
         dismissParameterHint();
         input.removeCallbacks(pendingHighlight);
+        fullHighlightScheduled = false;
         cancelDeletionAssistance();
         file = tab.file;
         storage = tab.storage;
@@ -1525,15 +1531,31 @@ final class CodeEditor {
         }
     }
 
-    private void refreshGutter(CharSequence text, boolean force) {
-        int lines = 1;
-        for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) == '\n') lines++;
+    private static int countNewlines(CharSequence text, int start, int end) {
+        int count = 0;
+        int upper = Math.min(text.length(), end);
+        for (int i = Math.max(0, start); i < upper; i++) {
+            if (text.charAt(i) == '\n') count++;
         }
-        if (!force && lines == lineCount) return;
-        lineCount = lines;
+        return count;
+    }
 
-        StringBuilder numbers = new StringBuilder();
+    // O gutter so precisa mudar se o numero de linhas mudar.
+    private void refreshGutterAfterEdit(Editable text) {
+        if (lineCount <= 0) {
+            refreshGutter(text, true);
+            return;
+        }
+        int added = countNewlines(text, changeStart, changeStart + changeAfter);
+        int removed = countNewlines(changeRemoved, 0, changeRemoved.length());
+        int count = Math.max(1, lineCount + added - removed);
+        if (count == lineCount) return;
+        lineCount = count;
+        updateGutterNumbers(count);
+    }
+
+    private void updateGutterNumbers(int lines) {
+        StringBuilder numbers = new StringBuilder(lines * 4);
         for (int i = 0; i < lines; i++) {
             if (i > 0) numbers.append("\n");
             numbers.append(i + 1);
@@ -1541,18 +1563,82 @@ final class CodeEditor {
         gutter.setText(numbers.toString());
     }
 
-    private void applyHighlight(Editable text) {
-        ForegroundColorSpan[] old = text.getSpans(0, text.length(), ForegroundColorSpan.class);
-        for (ForegroundColorSpan span : old) {
-            text.removeSpan(span);
+    private void refreshGutter(CharSequence text, boolean force) {
+        int lines = 1 + countNewlines(text, 0, text.length());
+        if (!force && lines == lineCount) return;
+        lineCount = lines;
+        updateGutterNumbers(lines);
+    }
+
+    private static final class SyntaxColorSpan extends ForegroundColorSpan {
+        SyntaxColorSpan(int color) {
+            super(color);
         }
-        if (!highlightLua) {
+    }
+
+    /** Reconhece delimitadores Lua longos como [[, [=[, ]], ]=]. */
+    private static boolean mightContainLongBracket(CharSequence text) {
+        for (int i = 0; i < text.length(); i++) {
+            char marker = text.charAt(i);
+            if (marker != '[' && marker != ']') continue;
+            int next = i + 1;
+            while (next < text.length() && text.charAt(next) == '=') next++;
+            if (next < text.length() && text.charAt(next) == marker) return true;
+        }
+        return false;
+    }
+
+    /** Mantem realce correto em comentarios ou strings que cruzam linhas. */
+    private void updateSyntaxAfterEdit(Editable text) {
+        if (file == null || !highlightLua) return;
+        if (fullHighlightScheduled) {
+            scheduleHighlight();
             return;
         }
+        if (countNewlines(changeRemoved, 0, changeRemoved.length()) > 0
+            || countNewlines(text, changeStart, changeStart + changeAfter) > 0) {
+            scheduleHighlight();
+            return;
+        }
+
+        int lineStart = Math.min(changeStart, text.length());
+        while (lineStart > 0 && text.charAt(lineStart - 1) != '\n') lineStart--;
+        int lineEnd = Math.min(text.length(), changeStart + changeAfter);
+        while (lineEnd < text.length() && text.charAt(lineEnd) != '\n') lineEnd++;
+
+        CharSequence line = text.subSequence(lineStart, lineEnd);
+        // Delimitadores longos podem alterar a cor de diversas linhas.
+        if (mightContainLongBracket(line) || mightContainLongBracket(changeRemoved)) {
+            scheduleHighlight();
+            return;
+        }
+        SyntaxColorSpan[] spans = text.getSpans(lineStart, lineEnd, SyntaxColorSpan.class);
+        for (SyntaxColorSpan span : spans) {
+            if (text.getSpanStart(span) < lineStart || text.getSpanEnd(span) > lineEnd) {
+                scheduleHighlight();
+                return;
+            }
+        }
+        for (SyntaxColorSpan span : spans) text.removeSpan(span);
+        for (int[] part : LuaSyntax.scan(line.toString())) {
+            if (part[1] > part[0]) {
+                text.setSpan(new SyntaxColorSpan(colorFor(part[2])),
+                    lineStart + part[0], lineStart + part[1],
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+        }
+    }
+
+    private void applyHighlight(Editable text) {
+        SyntaxColorSpan[] spans = text.getSpans(0, text.length(), SyntaxColorSpan.class);
+        for (SyntaxColorSpan span : spans) text.removeSpan(span);
+        if (!highlightLua) return;
         List<int[]> parts = LuaSyntax.scan(text.toString());
         for (int[] part : parts) {
-            text.setSpan(new ForegroundColorSpan(colorFor(part[2])),
-                part[0], part[1], Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (part[1] > part[0]) {
+                text.setSpan(new SyntaxColorSpan(colorFor(part[2])),
+                    part[0], part[1], Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
         }
     }
 
