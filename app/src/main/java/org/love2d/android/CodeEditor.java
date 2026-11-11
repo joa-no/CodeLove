@@ -174,9 +174,9 @@ final class CodeEditor {
     private int lineCount;
     private long followUntil;    // ate quando o editor pode seguir o cursor
 
-    // Evita recalcular todo o destaque Lua dentro de cada evento do teclado.
-    // Uma pausa curta permite agrupar insercoes, exclusoes e pares automaticos.
-    private static final long HIGHLIGHT_IDLE_DELAY_MS = 180L;
+    // Os spans de cor ficam restritos a linha visiveis. Mesmo em arquivos
+    // grandes, o EditText nao deve carregar centenas de spans em cada tecla.
+    private static final long HIGHLIGHT_IDLE_DELAY_MS = 240L;
     private final Runnable pendingHighlight = this::applyPendingHighlight;
 
     private void scheduleHighlight() {
@@ -480,6 +480,10 @@ final class CodeEditor {
         scroll = new CaretGuardScrollView(activity);
         scroll.addView(row, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Recolorir apos o gesto, sem interferir nos frames de rolagem.
+        scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
+            if (file != null && highlightLua && y != oldY) scheduleHighlight();
+        });
 
         view.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -527,6 +531,9 @@ final class CodeEditor {
             if (height <= 0) return;
             if (input.getMinHeight() != height) input.setMinHeight(height);
             if (gutter.getMinHeight() != height) gutter.setMinHeight(height);
+            if (file != null && highlightLua && (b - t != oldB - oldT)) {
+                scheduleHighlight();
+            }
         });
     }
 
@@ -663,7 +670,9 @@ final class CodeEditor {
         refreshDirtyMark();
         title.setText(file.getName());
         updateEmptyState();
-        applyHighlight(input.getText());
+        // Espera o Android criar o Layout e posicionar o cursor/restaurar a rolagem.
+        // O realce ficara apenas na regiao visivel, e nao no arquivo todo.
+        scheduleHighlight();
         refreshGutter(input.getText(), true);
         followUntil = 0;
         int restoreY = tab.scrollY;
@@ -1541,18 +1550,58 @@ final class CodeEditor {
         gutter.setText(numbers.toString());
     }
 
+    /**
+     * Mantem cores somente nos trechos visiveis mais uma margem de linhas.
+     *
+     * Com milhares de spans no Editable, ate inserir UM caractere exige
+     * atualizar posicoes e intervalos em toda a estrutura do Android.
+     * Aqui a edicao mantem dezenas de spans, independente do tamanho do arquivo.
+     *
+     * O scanner ainda considera o prefixo do arquivo, para reconhecer
+     * comentarios e strings Lua que comecam antes da janela visivel.
+     */
     private void applyHighlight(Editable text) {
-        ForegroundColorSpan[] old = text.getSpans(0, text.length(), ForegroundColorSpan.class);
+        if (!highlightLua || file == null) return;
+
+        android.text.Layout layout = input.getLayout();
+        int visibleHeight = scroll.getHeight();
+        if (layout == null || visibleHeight <= 0 || layout.getLineCount() <= 0) {
+            return;
+        }
+
+        int[] inputPosition = new int[2];
+        int[] scrollPosition = new int[2];
+        input.getLocationOnScreen(inputPosition);
+        scroll.getLocationOnScreen(scrollPosition);
+
+        int top = Math.max(0, scrollPosition[1] - inputPosition[1]
+            - input.getTotalPaddingTop());
+        int bottom = Math.max(top, scrollPosition[1] + visibleHeight
+            - inputPosition[1] - input.getTotalPaddingTop());
+
+        int maxLine = layout.getLineCount() - 1;
+        int firstLine = Math.max(0, layout.getLineForVertical(top) - 12);
+        int lastLine = Math.min(maxLine, layout.getLineForVertical(bottom) + 12);
+        int from = layout.getLineStart(firstLine);
+        int to = Math.min(text.length(), layout.getLineEnd(lastLine));
+        if (to < from) return;
+
+        ForegroundColorSpan[] old =
+            text.getSpans(0, text.length(), ForegroundColorSpan.class);
         for (ForegroundColorSpan span : old) {
             text.removeSpan(span);
         }
-        if (!highlightLua) {
-            return;
-        }
-        List<int[]> parts = LuaSyntax.scan(text.toString());
+
+        // O prefixo preserva o estado sintatico antes da janela visivel.
+        // Nenhum span e criado fora de [from, to).
+        List<int[]> parts = LuaSyntax.scan(text.subSequence(0, to).toString());
         for (int[] part : parts) {
-            text.setSpan(new ForegroundColorSpan(colorFor(part[2])),
-                part[0], part[1], Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            int start = Math.max(from, part[0]);
+            int end = Math.min(to, part[1]);
+            if (end > start) {
+                text.setSpan(new ForegroundColorSpan(colorFor(part[2])),
+                    start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
         }
     }
 
