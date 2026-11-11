@@ -106,7 +106,8 @@ final class CodeEditor {
     private final TextView emptyHint;
     private final TextView dirtyMark;
     private final TextView gutter;
-    private final EditText input;
+    private final EditText input; // mantido sem uso visual para preservar a base antiga
+    private final io.github.rosemoe.sora.widget.CodeEditor soraInput;
     private PopupWindow autocompletePopup;
     private TextView autocompleteText;
     private String autocompleteCandidate;
@@ -481,7 +482,55 @@ final class CodeEditor {
         scroll.addView(row, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        view.addView(scroll, new LinearLayout.LayoutParams(
+        // Primeira integracao real do Sora: usa sua propria View de texto e
+        // rolagem. O EditText legado permanece fora da arvore visual.
+        soraInput = new io.github.rosemoe.sora.widget.CodeEditor(activity);
+        soraInput.setTypefaceText(Typeface.MONOSPACE);
+        soraInput.setTextSize(13f);
+        soraInput.setTabWidth(4);
+        soraInput.setWordwrap(false);
+        soraInput.setLineNumberEnabled(true);
+        soraInput.setInputType(InputType.TYPE_CLASS_TEXT
+            | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        io.github.rosemoe.sora.widget.schemes.EditorColorScheme soraColors =
+            new io.github.rosemoe.sora.widget.schemes.EditorColorScheme();
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.WHOLE_BACKGROUND,
+            Workspace.COLOR_PANEL);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER_BACKGROUND,
+            Workspace.COLOR_PANEL);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_NORMAL,
+            Workspace.COLOR_TEXT);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER,
+            Workspace.COLOR_MUTED);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER_CURRENT,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTION_INSERT,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTED_TEXT_BACKGROUND,
+            0x665D74D5);
+        soraInput.setColorScheme(soraColors);
+        soraInput.subscribeAlways(io.github.rosemoe.sora.event.ContentChangeEvent.class,
+            event -> {
+                if (loading || file == null || event.getAction()
+                    == io.github.rosemoe.sora.event.ContentChangeEvent.ACTION_SET_NEW_TEXT) {
+                    return;
+                }
+                boolean firstDirty = !dirty;
+                dirty = true;
+                saveFailureNotified = false;
+                if (firstDirty && portraitTabs) renderTabStrip();
+                refreshDirtyMark();
+                listener.onEdited();
+            });
+        view.addView(soraInput, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         // Tela inicial do modo vertical, sem criar nenhum arquivo ficticio.
@@ -625,7 +674,7 @@ final class CodeEditor {
         emptyHint.setText(activity.getString(portraitTabs
             ? R.string.cl_empty_hint : R.string.cl_empty_hint_horizontal));
         emptyState.setVisibility(noFile ? View.VISIBLE : View.GONE);
-        scroll.setVisibility(noFile ? View.GONE : View.VISIBLE);
+        soraInput.setVisibility(noFile ? View.GONE : View.VISIBLE);
         footerDivider.setVisibility(noFile ? View.GONE : View.VISIBLE);
         footer.setVisibility(noFile ? View.GONE : View.VISIBLE);
         if (noFile) title.setText("CodeLove");
@@ -635,11 +684,11 @@ final class CodeEditor {
         if (file == null) return;
         TabState tab = openTabs.get(file.getAbsolutePath());
         if (tab == null) return;
-        tab.text = input.getText().toString();
+        tab.text = soraInput.getText().toString();
         tab.original = originalText;
         tab.dirty = dirty;
-        tab.selection = Math.max(0, input.getSelectionStart());
-        tab.scrollY = scroll.getScrollY();
+        tab.selection = Math.max(0, soraInput.getCursor().getLeft());
+        tab.scrollY = soraInput.getOffsetY();
     }
 
     private void showTab(TabState tab) {
@@ -653,8 +702,11 @@ final class CodeEditor {
         highlightLua = file.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
         loading = true;
         try {
-            input.setText(tab.text);
-            input.setSelection(Math.min(Math.max(0, tab.selection), input.length()));
+            soraInput.setText(tab.text);
+            int position = Math.min(Math.max(0, tab.selection), soraInput.getText().length());
+            io.github.rosemoe.sora.text.CharPosition cursor =
+                soraInput.getText().getIndexer().getCharPosition(position);
+            soraInput.setSelection(cursor.line, cursor.column, false);
         } finally {
             loading = false;
         }
@@ -663,14 +715,9 @@ final class CodeEditor {
         refreshDirtyMark();
         title.setText(file.getName());
         updateEmptyState();
-        applyHighlight(input.getText());
-        refreshGutter(input.getText(), true);
         followUntil = 0;
-        int restoreY = tab.scrollY;
-        scroll.scrollTo(0, restoreY);
-        scroll.post(() -> {
-            if (file != null && file.equals(tab.file)) scroll.scrollTo(0, restoreY);
-        });
+        // A posicao do cursor ja esta restaurada pelo indice do documento.
+        // O novo motor cuida de desenhar e rolar o texto.
         renderTabStrip();
         listener.onActiveTabChanged();
     }
@@ -762,7 +809,7 @@ final class CodeEditor {
         originalText = null;
         dirty = false;
         loading = true;
-        try { input.setText(""); }
+        try { soraInput.setText(""); }
         finally { loading = false; }
         title.setText("");
         updateEmptyState();
@@ -865,7 +912,7 @@ final class CodeEditor {
             return true;
         }
 
-        final String text = input.getText().toString();
+        final String text = soraInput.getText().toString();
         final String current;
         try {
             current = storage != null ? storage.readText(file, MAX_BYTES) : readText(file);
