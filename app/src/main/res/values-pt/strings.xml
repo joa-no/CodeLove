@@ -64,6 +64,10 @@
     <string name="cl_unexpected_error">Ocorreu um erro inesperado.</string>
     <string name="cl_select_again">Selecionar novamente</string>
     <string name="cl_add_file_in">Novo arquivo em %1$s</string>
+    <string name="cl_change_main_folder">Trocar pasta principal</string>
+    <string name="cl_main_folder">Pasta principal</string>
+    <string name="cl_main_folder_active">Atual: %1$s. Toque para trocar.</string>
+    <string name="cl_main_folder_choose">Selecionar pasta no Android</string>
     <string name="cl_add_folder_in">Nova pasta em %1$s</string>
     <string name="cl_add_file_here">Novo arquivo aqui</string>
     <string name="cl_add_folder_here">Nova pasta aqui</string>

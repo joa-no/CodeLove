@@ -779,6 +779,25 @@ public final class Workspace {
         dividerLp.setMargins(0, dp(10), 0, dp(10));
         content.addView(divider, dividerLp);
 
+        String currentFolderName = activeSafStorage != null
+            ? activeSafStorage.getDisplayName() : null;
+        content.addView(buildSettingsRow(
+            IconView.FOLDER, activity.getString(R.string.cl_main_folder),
+            currentFolderName == null
+                ? activity.getString(R.string.cl_main_folder_choose)
+                : activity.getString(R.string.cl_main_folder_active, currentFolderName),
+            v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                addExistingProject();
+            }));
+
+        View folderDivider = new View(activity);
+        folderDivider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams folderDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        folderDividerLp.setMargins(0, dp(10), 0, dp(10));
+        content.addView(folderDivider, folderDividerLp);
+
         content.addView(buildSettingsRow(
             IconView.INFO, activity.getString(R.string.cl_about),
             activity.getString(R.string.cl_about_desc), v -> {
@@ -2132,6 +2151,8 @@ public final class Workspace {
         actions.add(() -> newFile(folder));
         labels.add(activity.getString(R.string.cl_add_folder_in, folder.getName()));
         actions.add(() -> newFolder(folder));
+        labels.add(activity.getString(R.string.cl_change_main_folder));
+        actions.add(this::addExistingProject);
         ui.showMenu(anchor, labels, actions);
     }
 
@@ -2168,6 +2189,13 @@ public final class Workspace {
                 SafProjectManager.inspectProject(activity, treeUri);
             if (!selection.isValid()) {
                 workspace.showProjectNotice(selection.error);
+                return;
+            }
+
+            // Nao substituir a pasta persistida se houver edicoes ainda nao salvas.
+            // closeAllTabs apenas exibe o aviso existente, sem descartar alteracoes.
+            if (workspace.editor != null && workspace.editor.hasUnsavedTabs()) {
+                workspace.editor.closeAllTabs();
                 return;
             }
 

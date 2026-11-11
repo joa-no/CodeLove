@@ -64,6 +64,10 @@
     <string name="cl_unexpected_error">An unexpected error occurred.</string>
     <string name="cl_select_again">Select again</string>
     <string name="cl_add_file_in">New file in %1$s</string>
+    <string name="cl_change_main_folder">Change main folder</string>
+    <string name="cl_main_folder">Main folder</string>
+    <string name="cl_main_folder_active">Current: %1$s. Tap to change.</string>
+    <string name="cl_main_folder_choose">Choose an Android folder</string>
     <string name="cl_add_folder_in">New folder in %1$s</string>
     <string name="cl_add_file_here">New file here</string>
     <string name="cl_add_folder_here">New folder here</string>
