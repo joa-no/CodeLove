@@ -516,6 +516,10 @@ final class CodeEditor {
         soraColors.setColor(
             io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTED_TEXT_BACKGROUND,
             0x665D74D5);
+        soraColors.setColor(CodeLoveLuaLanguage.KEYWORD_COLOR_ID, COLOR_KEYWORD);
+        soraColors.setColor(CodeLoveLuaLanguage.NUMBER_COLOR_ID, COLOR_NUMBER);
+        soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
+        soraColors.setColor(CodeLoveLuaLanguage.COMMENT_COLOR_ID, COLOR_COMMENT);
         soraInput.setColorScheme(soraColors);
         soraInput.subscribeAlways(io.github.rosemoe.sora.event.ContentChangeEvent.class,
             event -> {
@@ -700,6 +704,9 @@ final class CodeEditor {
         storage = tab.storage;
         originalText = tab.original;
         highlightLua = file.getName().toLowerCase(Locale.ROOT).endsWith(".lua");
+        // O novo analisador Sora substitui a recoloracao de spans do EditText.
+        // Arquivos de outras extensoes usam linguagem vazia.
+        soraInput.setEditorLanguage(highlightLua ? new CodeLoveLuaLanguage() : null);
         loading = true;
         try {
             soraInput.setText(tab.text);
