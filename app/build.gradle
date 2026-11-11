@@ -170,8 +170,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     buildFeatures {
         viewBinding true
@@ -201,6 +201,8 @@ android {
 
 dependencies {
     implementation 'androidx.core:core:1.15.0'
+    // Sora Editor: somente o motor nativo de edição nesta primeira etapa.
+    implementation 'io.github.rosemoe:editor:0.24.7'
     implementation 'com.google.oboe:oboe:1.9.3'
 }
 
