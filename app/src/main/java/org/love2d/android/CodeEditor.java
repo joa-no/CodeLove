@@ -337,14 +337,12 @@ final class CodeEditor {
         // Reutiliza o painel de selecao do Sora: mesmos comandos e gestos,
         // somente a superficie e os botoes sao tematizados.
         io.github.rosemoe.sora.widget.component.EditorTextActionWindow selectionWindow =
-            new io.github.rosemoe.sora.widget.component.EditorTextActionWindow(soraInput);
+            soraInput.getComponent(
+                io.github.rosemoe.sora.widget.component.EditorTextActionWindow.class);
         GradientDrawable selectionBackground = box(Workspace.COLOR_FIELD, 14, true);
         selectionWindow.getView().setBackground(selectionBackground);
         selectionWindow.getView().setElevation(dp(7));
         styleSelectionActions(selectionWindow.getView());
-        soraInput.replaceComponent(
-            io.github.rosemoe.sora.widget.component.EditorTextActionWindow.class,
-            selectionWindow);
         // Restaura o design compacto do autocomplete do CodeLove sobre
         // o mecanismo de sugestoes do Sora, sem acionar o EditText legado.
         soraInput.replaceComponent(
