@@ -250,6 +250,9 @@ final class CodeEditor {
         soraInput.getProps().deleteEmptyLineFast = false;
         soraInput.setWordwrap(false);
         soraInput.setLineNumberEnabled(true);
+        // O Sora desenha um divisor vertical padrao ao lado da numeracao.
+        // Remove somente essa linha, mantendo os numeros e sua coluna.
+        soraInput.setDividerWidth(0f);
         soraInput.setInputType(InputType.TYPE_CLASS_TEXT
             | InputType.TYPE_TEXT_FLAG_MULTI_LINE
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
