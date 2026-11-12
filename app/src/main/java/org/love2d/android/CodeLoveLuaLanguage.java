@@ -11,15 +11,20 @@ import android.os.Bundle;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.regex.Pattern;
 
 import io.github.rosemoe.sora.lang.EmptyLanguage;
 import io.github.rosemoe.sora.lang.analysis.AnalyzeManager;
 import io.github.rosemoe.sora.lang.analysis.SimpleAnalyzeManager;
+import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler;
+import io.github.rosemoe.sora.lang.smartEnter.NewlineHandleResult;
 import io.github.rosemoe.sora.lang.completion.CompletionHelper;
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher;
 import io.github.rosemoe.sora.lang.completion.SimpleCompletionItem;
 import io.github.rosemoe.sora.text.CharPosition;
 import io.github.rosemoe.sora.text.ContentReference;
+import io.github.rosemoe.sora.text.Content;
+import io.github.rosemoe.sora.widget.SymbolPairMatch;
 import io.github.rosemoe.sora.lang.styling.MappedSpans;
 import io.github.rosemoe.sora.lang.styling.Span;
 import io.github.rosemoe.sora.lang.styling.Styles;
@@ -32,11 +37,84 @@ final class CodeLoveLuaLanguage extends EmptyLanguage {
     static final int STRING_COLOR_ID = 203;
     static final int COMMENT_COLOR_ID = 204;
 
+    private static final Pattern BLOCK_KEYWORD = Pattern.compile(
+        "(?s).*\\b(then|do|else|repeat)\\s*$");
+    private static final Pattern FUNCTION_HEADER = Pattern.compile(
+        "(?s).*\\bfunction\\s*(?:[\\w_.:]*\\s*)?\\([^)]*\\)\\s*$");
+
     private final AnalyzeManager analyzer = new LuaAnalyzer();
+    private final SymbolPairMatch symbolPairs = new SymbolPairMatch.DefaultSymbolPairs();
+    private final NewlineHandler[] newlineHandlers =
+        new NewlineHandler[] { new EmptyTableNewlineHandler() };
 
     @Override
     public AnalyzeManager getAnalyzeManager() {
         return analyzer;
+    }
+
+    /** Usa a insercao nativa do Sora para (), [], {}, "", ''. */
+    @Override
+    public SymbolPairMatch getSymbolPairs() {
+        return symbolPairs;
+    }
+
+    /**
+     * O Sora ja preserva o recuo anterior: devolver somente o incremento.
+     * O calculo ocorre apenas quando o usuario insere Enter.
+     */
+    @Override
+    public int getIndentAdvance(ContentReference content, int line, int column) {
+        String currentLine = content.getLine(line);
+        String beforeCaret = currentLine.substring(
+            0, Math.max(0, Math.min(column, currentLine.length())));
+        int commentStart = beforeCaret.indexOf("--");
+        if (commentStart >= 0) {
+            beforeCaret = beforeCaret.substring(0, commentStart);
+        }
+        String code = beforeCaret.trim();
+        if (code.isEmpty()) return 0;
+        return (BLOCK_KEYWORD.matcher(code).matches()
+            || FUNCTION_HEADER.matcher(code).matches()
+            || code.endsWith("{")) ? 4 : 0;
+    }
+
+    @Override
+    public NewlineHandler[] getNewlineHandlers() {
+        return newlineHandlers;
+    }
+
+    /**
+     * Enter entre chaves vazias:
+     * {│} -> {
+     *          │
+     *         }
+     * Mantem a chave de fechamento alinhada ao recuo inicial.
+     */
+    private static final class EmptyTableNewlineHandler implements NewlineHandler {
+        @Override
+        public boolean matchesRequirement(Content content, CharPosition position,
+                                          Styles style) {
+            int cursor = position.index;
+            return cursor > 0 && cursor < content.length()
+                && content.charAt(cursor - 1) == '{'
+                && content.charAt(cursor) == '}';
+        }
+
+        @Override
+        public NewlineHandleResult handleNewline(Content content, CharPosition position,
+                                                 Styles style, int tabSize) {
+            String line = content.getLineString(position.line);
+            int count = 0;
+            while (count < position.column && count < line.length()) {
+                char ch = line.charAt(count);
+                if (ch != ' ' && ch != '\t') break;
+                count++;
+            }
+            String baseIndent = line.substring(0, count);
+            String insert = "\n" + baseIndent + "    " + "\n" + baseIndent;
+            // Desloca o cursor para a linha vazia, antes de "\n}".
+            return new NewlineHandleResult(insert, 1 + baseIndent.length());
+        }
     }
 
     /**

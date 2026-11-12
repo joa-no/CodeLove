@@ -489,6 +489,12 @@ final class CodeEditor {
         soraInput.setTypefaceText(Typeface.MONOSPACE);
         soraInput.setTextSize(13f);
         soraInput.setTabWidth(4);
+        // Mantem o recuo em quatro espacos e permite apagar um nivel
+        // por Backspace no inicio da linha. Sem TextWatcher legado.
+        soraInput.getProps().autoIndent = true;
+        soraInput.getProps().symbolPairAutoCompletion = true;
+        soraInput.getProps().deleteMultiSpaces = 4;
+        soraInput.getProps().deleteEmptyLineFast = false;
         soraInput.setWordwrap(false);
         soraInput.setLineNumberEnabled(true);
         soraInput.setInputType(InputType.TYPE_CLASS_TEXT
