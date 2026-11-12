@@ -241,6 +241,8 @@ final class CodeEditor {
         soraInput = new io.github.rosemoe.sora.widget.CodeEditor(activity);
         soraInput.setTypefaceText(Typeface.MONOSPACE);
         soraInput.setTextSize(13f);
+        // Desativa apenas o zoom com dois dedos; rolagens seguem nativas.
+        soraInput.setScalable(false);
         soraInput.setTabWidth(4);
         // Mantem o recuo em quatro espacos e permite apagar um nivel
         // por Backspace no inicio da linha. Sem TextWatcher legado.
