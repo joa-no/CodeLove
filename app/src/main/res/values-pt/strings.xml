@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="cl_run_project">Executar projeto</string>
     <string name="cl_settings">Configurações</string>
     <string name="cl_settings_close">Fechar configurações</string>
     <string name="cl_settings_desc">Preferências e informações do aplicativo</string>

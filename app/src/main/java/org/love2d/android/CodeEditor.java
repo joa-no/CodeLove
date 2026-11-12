@@ -80,6 +80,7 @@ final class CodeEditor {
     private Storage storage;
     private final LinearLayout view;
     private final LinearLayout header;
+    private final View headerSpacer;
     private final TextView title;
     private final LinearLayout emptyState;
     private final View footerDivider;
@@ -191,6 +192,12 @@ final class CodeEditor {
         title.setSingleLine(true);
         title.setEllipsize(TextUtils.TruncateAt.END);
         header.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        // No vertical, o titulo tem largura natural e este espaco flexivel
+        // ancora o Play no extremo direito sem deslocar o nome do arquivo.
+        headerSpacer = new View(activity);
+        headerSpacer.setVisibility(View.GONE);
+        header.addView(headerSpacer, new LinearLayout.LayoutParams(
+            0, dp(1), 1f));
 
         // ---- rodape: expandir e fechar (ficam perto dos dedos) ----
         footer = new LinearLayout(activity);
@@ -419,6 +426,14 @@ final class CodeEditor {
         return view;
     }
 
+    /** Anexa um controle ao extremo direito do cabecalho, mesmo sem arquivo. */
+    void addHeaderControl(View control, int widthDp, int gapDp) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            dp(widthDp), dp(40));
+        if (gapDp > 0) params.leftMargin = dp(gapDp);
+        header.addView(control, params);
+    }
+
     /** Adiciona um controle na barra inferior, antes do espaco e do botao de fechar. */
     void addFooterControl(View control, int widthDp, int gapDp) {
         int index = footer.indexOfChild(footerSpacer);
@@ -477,6 +492,7 @@ final class CodeEditor {
         if (portraitTabs == enabled) return;
         portraitTabs = enabled;
         filesMenuButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        headerSpacer.setVisibility(enabled ? View.VISIBLE : View.GONE);
 
         // Ordem no vertical: menu, titulo do arquivo, indicador de alteracao.
         // No horizontal, mantem a posicao e as medidas anteriores.

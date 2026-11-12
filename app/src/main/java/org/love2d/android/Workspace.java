@@ -189,7 +189,10 @@ public final class Workspace {
     private LinearLayout playButton;
     private TextView resetButton;
     private IconView playIcon;
-    private IconView footerPlayIcon;
+    private IconView headerPlayIcon;
+    private IconView panelPlayIcon;
+    private LinearLayout headerPlayButton;
+    private LinearLayout panelPlayButton;
     private LinearLayout controlsBar;
     private LinearLayout closePlaybackButton;
     private IconView fullscreenIcon;
@@ -544,13 +547,16 @@ public final class Workspace {
         closePlaybackButton.setOnClickListener(v -> exitPlaybackToFiles());
         closePlaybackButton.setVisibility(View.GONE);
 
-        // Controles equivalentes na barra inferior do editor.
-        footerPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
-        LinearLayout footerPlayButton = new LinearLayout(activity);
-        footerPlayButton.setGravity(Gravity.CENTER);
-        footerPlayButton.setBackground(box(COLOR_FIELD, 22, false));
-        footerPlayButton.addView(footerPlayIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        footerPlayButton.setOnClickListener(v -> togglePlayback());
+        // Play no topo do editor, inclusive com a area vazia e nenhum arquivo aberto.
+        // A acao e a mesma do Play original, sem salvar arquivos automaticamente.
+        headerPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
+        headerPlayButton = new LinearLayout(activity);
+        headerPlayButton.setGravity(Gravity.CENTER);
+        headerPlayButton.setBackground(box(COLOR_FIELD, 10, false));
+        headerPlayButton.addView(headerPlayIcon,
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
+        setButtonHint(headerPlayButton, activity.getString(R.string.cl_run_project));
+        headerPlayButton.setOnClickListener(v -> togglePlayback());
 
         placeholder = buildPlaceholder();
 
@@ -596,8 +602,8 @@ public final class Workspace {
                 saveState();
             }
         });
+        editor.addHeaderControl(headerPlayButton, 42, 8);
         editor.addFooterControl(saveButton, CONTROL_BUTTON_DP, 0);
-        editor.addFooterControl(footerPlayButton, CONTROL_BUTTON_DP, BAR_GAP_DP);
         editorView = editor.getView();
         editorView.setVisibility(View.GONE);
 
@@ -631,6 +637,7 @@ public final class Workspace {
 
         renderTree();
         applyLayout();
+        updatePlayButton();
         root.requestApplyInsets();
         restoreState();
     }
@@ -668,6 +675,21 @@ public final class Workspace {
         settingsButton.setFocusable(true);
         settingsButton.setOnClickListener(v -> showSettings());
         header.addView(settingsButton, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+        // No vertical, a gaveta cobre o editor. O Play tambem deve existir
+        // no painel de arquivos para executar o projeto sem abrir um arquivo.
+        panelPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
+        panelPlayButton = new LinearLayout(activity);
+        panelPlayButton.setGravity(Gravity.CENTER);
+        panelPlayButton.setBackground(box(COLOR_FIELD, 10, false));
+        panelPlayButton.addView(panelPlayIcon,
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
+        setButtonHint(panelPlayButton, activity.getString(R.string.cl_run_project));
+        panelPlayButton.setOnClickListener(v -> togglePlayback());
+        LinearLayout.LayoutParams panelPlayLp =
+            new LinearLayout.LayoutParams(dp(40), dp(40));
+        panelPlayLp.leftMargin = dp(8);
+        header.addView(panelPlayButton, panelPlayLp);
 
         return header;
     }
@@ -1582,6 +1604,12 @@ public final class Workspace {
             || (surface == null ? fileDrawerOpen : (!editorOpen && !playing)));
         if (movePanelButton != null) {
             movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
+        }
+        // Evita dois botoes Play simultaneos no modo horizontal: o Play do
+        // editor ja fica no canto superior direito da area de trabalho.
+        if (panelPlayButton != null) {
+            panelPlayButton.setVisibility(verticalMode && surface == null
+                ? View.VISIBLE : View.GONE);
         }
         int sideInset = onLeft ? insetLeft : insetRight;
         if (ui != null) {
@@ -2949,7 +2977,18 @@ public final class Workspace {
     private void updatePlayButton() {
         int kind = playing ? IconView.PAUSE : IconView.PLAY;
         if (playIcon != null) playIcon.setKind(kind);
-        if (footerPlayIcon != null) footerPlayIcon.setKind(kind);
+        if (headerPlayIcon != null) headerPlayIcon.setKind(kind);
+        if (panelPlayIcon != null) panelPlayIcon.setKind(kind);
+        // Visivel mesmo sem projeto, mas nao executavel ate selecionar um.
+        boolean canPlay = activeProject != null;
+        if (headerPlayButton != null) {
+            headerPlayButton.setEnabled(canPlay);
+            headerPlayButton.setAlpha(canPlay ? 1f : 0.5f);
+        }
+        if (panelPlayButton != null) {
+            panelPlayButton.setEnabled(canPlay);
+            panelPlayButton.setAlpha(canPlay ? 1f : 0.5f);
+        }
         updateControlsVisibility();
     }
 
