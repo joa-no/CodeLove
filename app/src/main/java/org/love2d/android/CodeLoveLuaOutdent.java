@@ -75,7 +75,7 @@ final class CodeLoveLuaOutdent {
 
             now.beginBatchEdit();
             try {
-                now.delete(line, 0, line, indent.length() - reduced.length());
+                now.delete(line, reduced.length(), line, indent.length());
             } finally {
                 now.endBatchEdit();
             }
