@@ -18,12 +18,15 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import io.github.rosemoe.sora.event.ContentChangeEvent;
+import io.github.rosemoe.sora.event.Unsubscribe;
 import io.github.rosemoe.sora.lang.completion.CompletionItem;
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion;
 import io.github.rosemoe.sora.widget.component.EditorCompletionAdapter;
 
 final class CodeLoveCompletionWindow extends EditorAutoCompletion {
     private final CodeLoveCompletionAdapter rows;
+    private int completionEditRevision;
 
     CodeLoveCompletionWindow(io.github.rosemoe.sora.widget.CodeEditor editor) {
         super(editor);
@@ -34,6 +37,65 @@ final class CodeLoveCompletionWindow extends EditorAutoCompletion {
         // No celular, manter o menu junto do cursor, nao centralizar quase
         // na largura inteira do editor.
         setCompletionWndPositionMode(WINDOW_POS_MODE_FOLLOW_CURSOR_ALWAYS);
+    }
+
+    /**
+     * O Sora so atualiza sugestoes ao apagar quando a janela ainda esta
+     * visivel. Se um erro de digitacao zerar a lista (Randomk), a exclusao
+     * seguinte deve restaurar as sugestoes do prefixo valido (Random).
+     * Nao substitui o mecanismo de busca do Sora nem interfere na insercao.
+     */
+    @Override
+    protected void onContentChange(ContentChangeEvent event, Unsubscribe unsubscribe) {
+        completionEditRevision++;
+        boolean popupWasShowing = isShowing();
+        super.onContentChange(event, unsubscribe);
+        if (event.getAction() != ContentChangeEvent.ACTION_DELETE
+                || event.isCausedByUndoManager() || !isEnabled()
+                || popupWasShowing || getEditor().hasComposingText()) {
+            return;
+        }
+        // Apenas Backspace de um caractere na mesma linha.
+        var start = event.getChangeStart();
+        var end = event.getChangeEnd();
+        if (start.line != end.line || end.column != start.column + 1) return;
+
+        final int revision = completionEditRevision;
+        final int expectedLine = start.line;
+        final int expectedColumn = start.column;
+        // O Sora possui um intervalo minimo entre buscas (cancelCompletionNs).
+        // Executar depois dele tambem deixa o teclado atualizar a posicao.
+        long delayMs = Math.max(90L,
+            getEditor().getProps().cancelCompletionNs / 1000000L + 20L);
+        getEditor().postDelayedInLifecycle(() -> {
+            if (revision != completionEditRevision || !isEnabled()
+                    || isShowing() || getEditor().hasComposingText()
+                    || getEditor().getCursor().isSelected()) {
+                return;
+            }
+            var caret = getEditor().getCursor().left();
+            if (caret.line != expectedLine || caret.column != expectedColumn
+                    || caret.column == 0) return;
+
+            String line = getEditor().getText().getLineString(caret.line);
+            int begin = Math.min(caret.column, line.length());
+            int endOfPrefix = begin;
+            while (begin > 0) {
+                char ch = line.charAt(begin - 1);
+                if (!Character.isLetterOrDigit(ch) && ch != '_' && ch != '.' && ch != ':') break;
+                begin--;
+            }
+            if (begin == endOfPrefix) return;
+
+            String prefix = line.substring(begin, endOfPrefix);
+            // Evita criar buscas em background quando nao ha sugestoes.
+            for (String candidate : LoveApiCatalog.SUGGESTIONS) {
+                if (candidate.startsWith(prefix) && !candidate.equals(prefix)) {
+                    requireCompletion();
+                    break;
+                }
+            }
+        }, delayMs);
     }
 
     @Override
