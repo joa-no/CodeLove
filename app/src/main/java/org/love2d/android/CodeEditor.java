@@ -504,10 +504,24 @@ final class CodeEditor {
         soraOutdent.setEnabled(highlightLua);
         soraPairedDeletion.setEnabled(highlightLua);
         soraClosingOvertype.setEnabled(highlightLua);
-        // A posicao do cursor ja esta restaurada pelo indice do documento.
-        // O novo motor cuida de desenhar e rolar o texto.
+        // Preserva a rolagem de cada aba independentemente da posicao do cursor.
+        // Adia o reposicionamento ate o Sora concluir o novo layout, inclusive
+        // quando o tema reconstroi toda a interface do editor.
+        final var displayedContent = soraInput.getText();
+        final int savedY = Math.max(0, tab.scrollY);
         renderTabStrip();
         listener.onActiveTabChanged();
+        soraInput.post(() -> {
+            // Evita uma restauracao antiga se o usuario ja mudou de aba.
+            if (file == null || !file.equals(tab.file)
+                || soraInput.getText() != displayedContent) return;
+            int y = Math.min(savedY, soraInput.getScrollMaxY());
+            var scroller = soraInput.getScroller();
+            scroller.forceFinished(true);
+            scroller.startScroll(0, y, 0, 0, 0);
+            scroller.abortAnimation();
+            soraInput.invalidate();
+        });
     }
 
     private void renderTabStrip() {
