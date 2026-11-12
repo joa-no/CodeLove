@@ -109,6 +109,7 @@ final class CodeEditor {
     private final EditText input; // mantido sem uso visual para preservar a base antiga
     private final io.github.rosemoe.sora.widget.CodeEditor soraInput;
     private final CodeLoveParameterHints soraParameterHints;
+    private final CodeLoveLuaOutdent soraOutdent;
     private PopupWindow autocompletePopup;
     private TextView autocompleteText;
     private String autocompleteCandidate;
@@ -558,6 +559,7 @@ final class CodeEditor {
             io.github.rosemoe.sora.widget.component.EditorAutoCompletion.class,
             new CodeLoveCompletionWindow(soraInput));
         soraParameterHints = new CodeLoveParameterHints(activity, soraInput);
+        soraOutdent = new CodeLoveLuaOutdent(soraInput);
         soraInput.subscribeAlways(io.github.rosemoe.sora.event.ContentChangeEvent.class,
             event -> {
                 if (loading || file == null || event.getAction()
@@ -736,6 +738,7 @@ final class CodeEditor {
         dismissAutocompleteSuggestion();
         dismissParameterHint();
         soraParameterHints.setEnabled(false);
+        soraOutdent.setEnabled(false);
         input.removeCallbacks(pendingHighlight);
         cancelDeletionAssistance();
         file = tab.file;
@@ -761,6 +764,7 @@ final class CodeEditor {
         title.setText(file.getName());
         updateEmptyState();
         soraParameterHints.setEnabled(highlightLua);
+        soraOutdent.setEnabled(highlightLua);
         followUntil = 0;
         // A posicao do cursor ja esta restaurada pelo indice do documento.
         // O novo motor cuida de desenhar e rolar o texto.
@@ -850,6 +854,7 @@ final class CodeEditor {
         dismissAutocompleteSuggestion();
         dismissParameterHint();
         soraParameterHints.setEnabled(false);
+        soraOutdent.setEnabled(false);
         input.removeCallbacks(pendingHighlight);
         cancelDeletionAssistance();
         file = null;
