@@ -515,7 +515,31 @@ final class CodeEditor {
             Workspace.COLOR_FOLDER);
         soraColors.setColor(
             io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTED_TEXT_BACKGROUND,
-            0x665D74D5);
+            Workspace.isLightTheme() ? 0x447751BC : 0x66A78BFA);
+        // Janela de autocomplete: reutiliza a paleta real do CodeLove,
+        // inclusive quando a aparencia estiver no tema claro/automatico.
+        // O layout padrao do Sora ja suporta bordas arredondadas (8dp).
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_BACKGROUND,
+            Workspace.COLOR_FIELD);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_CORNER,
+            Workspace.COLOR_BORDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_PRIMARY,
+            Workspace.COLOR_TEXT);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_SECONDARY,
+            Workspace.COLOR_MUTED);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_MATCHED,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_ITEM_CURRENT,
+            Workspace.isLightTheme() ? 0xFFECE4FA : 0xFF33274D);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTION_HANDLE,
+            Workspace.COLOR_FOLDER);
         soraColors.setColor(CodeLoveLuaLanguage.KEYWORD_COLOR_ID, COLOR_KEYWORD);
         soraColors.setColor(CodeLoveLuaLanguage.NUMBER_COLOR_ID, COLOR_NUMBER);
         soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
