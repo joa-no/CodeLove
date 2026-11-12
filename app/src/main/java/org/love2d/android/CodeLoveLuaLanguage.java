@@ -126,8 +126,10 @@ final class CodeLoveLuaLanguage extends EmptyLanguage {
     public void requireAutoComplete(ContentReference content, CharPosition position,
                                     CompletionPublisher publisher, Bundle extraArguments) {
         if (position.column <= 0) return;
+        // Lua usa "." para acesso a campos e ":" para chamadas de metodos.
+        // Ambos pertencem ao prefixo completo (ex.: RandomGenerator:random).
         String prefix = CompletionHelper.computePrefix(content, position,
-            ch -> Character.isLetterOrDigit(ch) || ch == '_' || ch == '.');
+            ch -> Character.isLetterOrDigit(ch) || ch == '_' || ch == '.' || ch == ':');
         if (prefix.isEmpty()) return;
 
         final int maxResults = 24;
