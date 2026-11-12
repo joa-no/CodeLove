@@ -141,6 +141,7 @@ final class CodeEditor {
     private boolean dirty;       // tem alteracao ainda nao gravada no arquivo original
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
+    private boolean highlightLua; // arquivo .lua usa linguagem e ajudas especificas
     CodeEditor(Activity activity, Listener listener) {
         this.activity = activity;
         this.listener = listener;
