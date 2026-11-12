@@ -290,6 +290,9 @@ public final class Workspace {
         projectTitle.setText(storage.getDisplayName());
         placeholder.setVisibility(View.GONE);
         if (editor != null) editor.setStorage(storage);
+        // O painel foi criado antes de recuperar o projeto salvo.
+        // Reativa e atualiza o Play assim que o projeto SAF e restaurado.
+        updatePlayButton();
         renderTree();
         final DirectSafStorage selectedStorage = storage;
         new Thread(() -> {
@@ -2823,7 +2826,10 @@ public final class Workspace {
     }
 
     private void launchStandalonePlayback() {
-        if (activeProject == null) return;
+        if (activeProject == null) {
+            toast(activity.getString(R.string.cl_select_project_hint));
+            return;
+        }
         if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
@@ -2853,7 +2859,10 @@ public final class Workspace {
             updatePlayButton();
             return;
         }
-        if (activeProject == null) return;
+        if (activeProject == null) {
+            toast(activity.getString(R.string.cl_select_project_hint));
+            return;
+        }
         if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
 
         if (activeSafStorage != null) {
@@ -2979,15 +2988,15 @@ public final class Workspace {
         if (playIcon != null) playIcon.setKind(kind);
         if (headerPlayIcon != null) headerPlayIcon.setKind(kind);
         if (panelPlayIcon != null) panelPlayIcon.setKind(kind);
-        // Visivel mesmo sem projeto, mas nao executavel ate selecionar um.
-        boolean canPlay = activeProject != null;
+        // Play sempre legivel e clicavel; sem projeto, o clique orienta
+        // o usuario em vez de ficar escuro e ignorar o toque.
         if (headerPlayButton != null) {
-            headerPlayButton.setEnabled(canPlay);
-            headerPlayButton.setAlpha(canPlay ? 1f : 0.5f);
+            headerPlayButton.setEnabled(true);
+            headerPlayButton.setAlpha(1f);
         }
         if (panelPlayButton != null) {
-            panelPlayButton.setEnabled(canPlay);
-            panelPlayButton.setAlpha(canPlay ? 1f : 0.5f);
+            panelPlayButton.setEnabled(true);
+            panelPlayButton.setAlpha(1f);
         }
         updateControlsVisibility();
     }
