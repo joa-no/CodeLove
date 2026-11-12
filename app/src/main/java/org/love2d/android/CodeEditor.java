@@ -22,6 +22,7 @@ import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
@@ -98,6 +99,56 @@ final class CodeEditor {
     private final CodeLoveClosingOvertype soraClosingOvertype;
     private final LinearLayout footer;
     private final View footerSpacer;
+
+    /**
+     * Conserva o zoom nativo do Sora (pinça, limites de escala, renderização)
+     * sem permitir que a posição entre os dedos desloque a câmera.
+     * A rolagem normal com um dedo não é alterada.
+     */
+    private static final class FixedViewportZoomEditor
+            extends io.github.rosemoe.sora.widget.CodeEditor {
+        private boolean pinchInProgress;
+        private int pinchStartX;
+        private int pinchStartY;
+
+        FixedViewportZoomEditor(Activity activity) {
+            super(activity);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            final int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_POINTER_DOWN
+                    && event.getPointerCount() >= 2 && !pinchInProgress) {
+                // Guarda a janela atual antes de o Sora calcular o foco da pinça.
+                pinchInProgress = true;
+                pinchStartX = getScroller().getCurrX();
+                pinchStartY = getScroller().getCurrY();
+            }
+
+            boolean handled = super.onTouchEvent(event);
+
+            if (pinchInProgress) {
+                // O Sora já mudou o tamanho do texto. Desfaz apenas a
+                // translação que ele aplicaria em direção aos dedos.
+                int x = Math.max(0, Math.min(pinchStartX, getScrollMaxX()));
+                int y = Math.max(0, Math.min(pinchStartY, getScrollMaxY()));
+                var scroller = getScroller();
+                if (scroller.getCurrX() != x || scroller.getCurrY() != y) {
+                    scroller.startScroll(x, y, 0, 0, 0);
+                    scroller.abortAnimation();
+                    invalidate();
+                }
+                // Mantém a posição travada até soltar todos os dedos, evitando
+                // um arrasto acidental quando o gesto termina.
+                if (action == MotionEvent.ACTION_UP
+                        || action == MotionEvent.ACTION_CANCEL) {
+                    pinchInProgress = false;
+                }
+            }
+            return handled;
+        }
+    }
 
     /** Estado de uma aba enquanto outro arquivo e editado. */
     private static final class TabState {
@@ -238,7 +289,7 @@ final class CodeEditor {
         view.addView(divider, dividerLp);
 
         // Sora gerencia a edicao, os numeros de linha, a selecao e a rolagem.
-        soraInput = new io.github.rosemoe.sora.widget.CodeEditor(activity);
+        soraInput = new FixedViewportZoomEditor(activity);
         soraInput.setTypefaceText(Typeface.MONOSPACE);
         soraInput.setTextSize(13f);
         soraInput.setTabWidth(4);
