@@ -292,7 +292,7 @@ final class OverlayUi {
         card.setClickable(true);
 
         int logoId = activity.getResources().getIdentifier(
-            "codelove_logo", "drawable", activity.getPackageName());
+            "codelove_brand_logo", "drawable", activity.getPackageName());
         if (logoId != 0) {
             ImageView logo = new ImageView(activity);
             logo.setImageResource(logoId);

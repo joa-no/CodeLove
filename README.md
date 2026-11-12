@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon-codelove.svg" width="136" alt="Ícone do CodeLove" />
+</p>
+
 # CodeLove
 
 **CodeLove** é um ambiente Android para editar código Lua e executar projetos com o mecanismo [LÖVE](https://love2d.org/).
