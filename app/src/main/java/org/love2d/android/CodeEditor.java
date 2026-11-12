@@ -13,6 +13,11 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.content.res.ColorStateList;
+import android.graphics.drawable.RippleDrawable;
+import android.widget.ImageButton;
+
 import android.text.InputType;
 import android.text.TextUtils;
 import android.util.Log;
@@ -215,7 +220,9 @@ final class CodeEditor {
         tabsRow.setGravity(Gravity.CENTER_VERTICAL);
         tabsScroller = new HorizontalScrollView(activity);
         tabsScroller.setHorizontalScrollBarEnabled(false);
-        tabsScroller.setBackgroundColor(Workspace.COLOR_OUTER);
+        // Faixa de abas integrada ao painel, sem o preto quase absoluto.
+        tabsScroller.setBackgroundColor(Workspace.isLightTheme()
+            ? Workspace.COLOR_FIELD : 0xFF1B1E2A);
         tabsScroller.addView(tabsRow, new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         tabsScroller.setVisibility(View.GONE);
@@ -297,7 +304,47 @@ final class CodeEditor {
         soraColors.setColor(CodeLoveLuaLanguage.NUMBER_COLOR_ID, COLOR_NUMBER);
         soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
         soraColors.setColor(CodeLoveLuaLanguage.COMMENT_COLOR_ID, COLOR_COMMENT);
+        // Barras de rolagem e menu de selecao seguem a mesma paleta visual.
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB,
+            Workspace.isLightTheme() ? 0xFF9C83D4 : 0xFF7864AC);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB_PRESSED,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_TRACK,
+            Workspace.isLightTheme() ? 0xFFE5E0EF : 0xFF252738);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND,
+            Workspace.COLOR_FIELD);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR,
+            Workspace.COLOR_FOLDER);
         soraInput.setColorScheme(soraColors);
+        // Mantem o scroll arrastavel do Sora, com indicador roxo arredondado.
+        StateListDrawable scrollbarThumb = new StateListDrawable();
+        scrollbarThumb.addState(new int[]{android.R.attr.state_pressed},
+            roundedScrollThumb(Workspace.COLOR_FOLDER));
+        scrollbarThumb.addState(new int[]{},
+            roundedScrollThumb(Workspace.isLightTheme() ? 0xFF9C83D4 : 0xFF7864AC));
+        soraInput.setVerticalScrollbarThumbDrawable(scrollbarThumb);
+        StateListDrawable horizontalThumb = new StateListDrawable();
+        horizontalThumb.addState(new int[]{android.R.attr.state_pressed},
+            roundedScrollThumb(Workspace.COLOR_FOLDER));
+        horizontalThumb.addState(new int[]{},
+            roundedScrollThumb(Workspace.isLightTheme() ? 0xFF9C83D4 : 0xFF7864AC));
+        soraInput.setHorizontalScrollbarThumbDrawable(horizontalThumb);
+        // Reutiliza o painel de selecao do Sora: mesmos comandos e gestos,
+        // somente a superficie e os botoes sao tematizados.
+        io.github.rosemoe.sora.widget.component.EditorTextActionWindow selectionWindow =
+            new io.github.rosemoe.sora.widget.component.EditorTextActionWindow(soraInput);
+        GradientDrawable selectionBackground = box(Workspace.COLOR_FIELD, 14, true);
+        selectionWindow.getView().setBackground(selectionBackground);
+        selectionWindow.getView().setElevation(dp(7));
+        styleSelectionActions(selectionWindow.getView());
+        soraInput.replaceComponent(
+            io.github.rosemoe.sora.widget.component.EditorTextActionWindow.class,
+            selectionWindow);
         // Restaura o design compacto do autocomplete do CodeLove sobre
         // o mecanismo de sugestoes do Sora, sem acionar o EditText legado.
         soraInput.replaceComponent(
@@ -840,6 +887,34 @@ final class CodeEditor {
             return new String(data, 0, total, StandardCharsets.UTF_8);
         } catch (IOException e) {
             return null;
+        }
+    }
+
+    /** Indicadores arredondados, sem alterar o gesto de arrastar do Sora. */
+    private GradientDrawable roundedScrollThumb(int color) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(8));
+        return drawable;
+    }
+
+    /** Tematiza os botoes existentes; nao recria suas acoes de edicao. */
+    private void styleSelectionActions(View root) {
+        if (!(root instanceof ViewGroup)) return;
+        ViewGroup group = (ViewGroup) root;
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View item = group.getChildAt(i);
+            if (item instanceof ImageButton) {
+                GradientDrawable pressed = box(
+                    Workspace.isLightTheme() ? 0xFFE4D8FA : 0xFF332848, 10, false);
+                RippleDrawable ripple = new RippleDrawable(
+                    ColorStateList.valueOf(Workspace.isLightTheme()
+                        ? 0x446E47B9 : 0x66A78BFA),
+                    box(Workspace.COLOR_FIELD, 10, false), pressed);
+                item.setBackground(ripple);
+            } else if (item instanceof ViewGroup) {
+                styleSelectionActions(item);
+            }
         }
     }
 
