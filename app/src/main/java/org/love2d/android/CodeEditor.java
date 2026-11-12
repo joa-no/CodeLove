@@ -545,6 +545,11 @@ final class CodeEditor {
         soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
         soraColors.setColor(CodeLoveLuaLanguage.COMMENT_COLOR_ID, COLOR_COMMENT);
         soraInput.setColorScheme(soraColors);
+        // Restaura o design compacto do autocomplete do CodeLove sobre
+        // o mecanismo de sugestoes do Sora, sem acionar o EditText legado.
+        soraInput.replaceComponent(
+            io.github.rosemoe.sora.widget.component.EditorAutoCompletion.class,
+            new CodeLoveCompletionWindow(soraInput));
         soraInput.subscribeAlways(io.github.rosemoe.sora.event.ContentChangeEvent.class,
             event -> {
                 if (loading || file == null || event.getAction()
