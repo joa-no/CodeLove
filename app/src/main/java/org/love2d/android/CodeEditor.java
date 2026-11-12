@@ -304,13 +304,17 @@ final class CodeEditor {
         soraColors.setColor(CodeLoveLuaLanguage.NUMBER_COLOR_ID, COLOR_NUMBER);
         soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
         soraColors.setColor(CodeLoveLuaLanguage.COMMENT_COLOR_ID, COLOR_COMMENT);
-        // Barras de rolagem e menu de selecao seguem a mesma paleta visual.
+        // Paleta neutra para controles utilitarios; roxo reservado a destaques.
+        // Cores compartilhadas entre o tema Sora e os indicadores arredondados.
+        final int scrollNormalColor = Workspace.isLightTheme() ? 0xFF747B8E : 0xFF6F6985;
+        final int scrollPressedColor = Workspace.isLightTheme() ? 0xFF5F677D : 0xFF8A7CB0;
+        final int actionIconColor = Workspace.isLightTheme() ? 0xFF596173 : 0xFFC9CEDA;
         soraColors.setColor(
             io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB,
-            Workspace.isLightTheme() ? 0xFF9C83D4 : 0xFF7864AC);
+            scrollNormalColor);
         soraColors.setColor(
             io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB_PRESSED,
-            Workspace.COLOR_FOLDER);
+            scrollPressedColor);
         soraColors.setColor(
             io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_TRACK,
             Workspace.isLightTheme() ? 0xFFE5E0EF : 0xFF252738);
@@ -319,20 +323,20 @@ final class CodeEditor {
             Workspace.COLOR_FIELD);
         soraColors.setColor(
             io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR,
-            Workspace.COLOR_FOLDER);
+            actionIconColor);
         soraInput.setColorScheme(soraColors);
-        // Mantem o scroll arrastavel do Sora, com indicador roxo arredondado.
+        // Mantem o scroll arrastavel do Sora, com indicador neutro arredondado.
         StateListDrawable scrollbarThumb = new StateListDrawable();
         scrollbarThumb.addState(new int[]{android.R.attr.state_pressed},
-            roundedScrollThumb(Workspace.COLOR_FOLDER));
+            roundedScrollThumb(scrollPressedColor));
         scrollbarThumb.addState(new int[]{},
-            roundedScrollThumb(Workspace.isLightTheme() ? 0xFF9C83D4 : 0xFF7864AC));
+            roundedScrollThumb(scrollNormalColor));
         soraInput.setVerticalScrollbarThumbDrawable(scrollbarThumb);
         StateListDrawable horizontalThumb = new StateListDrawable();
         horizontalThumb.addState(new int[]{android.R.attr.state_pressed},
-            roundedScrollThumb(Workspace.COLOR_FOLDER));
+            roundedScrollThumb(scrollPressedColor));
         horizontalThumb.addState(new int[]{},
-            roundedScrollThumb(Workspace.isLightTheme() ? 0xFF9C83D4 : 0xFF7864AC));
+            roundedScrollThumb(scrollNormalColor));
         soraInput.setHorizontalScrollbarThumbDrawable(horizontalThumb);
         // Reutiliza o painel de selecao do Sora: mesmos comandos e gestos,
         // somente a superficie e os botoes sao tematizados.
