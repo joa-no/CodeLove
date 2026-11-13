@@ -64,6 +64,8 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
+    /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
+    private final boolean exportedGame = BuildConfig.FLAVOR.startsWith("embed");
     private CodeLoveConsolePanel standaloneConsole;
     private boolean standaloneConsoleOpen;
     private String lastStandaloneConsole;
@@ -117,29 +119,32 @@ public class GameActivity extends SDLActivity {
         }
 
         Intent intent = getIntent();
-        standaloneRuntime = intent.getBooleanExtra(Workspace.EXTRA_RUNTIME_ONLY, false);
+        standaloneRuntime = !exportedGame && intent.getBooleanExtra(Workspace.EXTRA_RUNTIME_ONLY, false);
         handleIntent(intent, true);
         // Prevent SDL sending filedropped event. Let us do that instead.
         intent.setData(null);
 
         // CodeLove: prepara o canal de comandos e diz ao executor (Lua) onde ele fica.
         // Precisa vir ANTES do super.onCreate, que inicia o LOVE.
-        String channel = Workspace.prepareChannel(this);
-        if (standaloneRuntime) {
-            Workspace.queueStandaloneRuntime(this,
-                intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT),
-                intent.getStringExtra(Workspace.EXTRA_RUNTIME_NAME));
-        }
-        if (isFused) {
-            args = new String[]{channel};
+        if (!exportedGame) {
+            String channel = Workspace.prepareChannel(this);
+            if (standaloneRuntime) {
+                Workspace.queueStandaloneRuntime(this,
+                    intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT),
+                    intent.getStringExtra(Workspace.EXTRA_RUNTIME_NAME));
+            }
+            if (isFused) {
+                args = new String[]{channel};
+            }
         }
 
         super.onCreate(savedInstanceState);
         // Tema da UI do executor (botao de voltar), sem alterar o jogo SDL.
-        Workspace.configureTheme(this);
-
-        // Aplica a preferencia salva sem depender da rotacao automatica do Android.
-        Workspace.applySavedOrientation(this);
+        if (!exportedGame) {
+            Workspace.configureTheme(this);
+            // O jogo exportado usa a orientacao do seu proprio conf.lua / SDL.
+            Workspace.applySavedOrientation(this);
+        }
         if (standaloneRuntime) hideStandaloneStatusBar();
 
         if (mBrokenLibraries) {
@@ -151,7 +156,7 @@ public class GameActivity extends SDLActivity {
 
         // Editor separado: o executor SDL fica livre de paineis.
         if (standaloneRuntime) showStandaloneExit();
-        else Workspace.attach(this, mLayout, mSurface);
+        else if (!exportedGame) Workspace.attach(this, mLayout, mSurface);
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
@@ -332,7 +337,7 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        Workspace.handleActivityResult(this, requestCode, resultCode, data);
+        if (!exportedGame) Workspace.handleActivityResult(this, requestCode, resultCode, data);
     }
 
     @Override
@@ -346,7 +351,7 @@ public class GameActivity extends SDLActivity {
         if (standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
         }
-        Workspace.onHostDestroy(this);
+        if (!exportedGame) Workspace.onHostDestroy(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
             vibrator.cancel();
@@ -360,7 +365,7 @@ public class GameActivity extends SDLActivity {
         if (standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
         }
-        Workspace.onHostPause(this);
+        if (!exportedGame) Workspace.onHostPause(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
             vibrator.cancel();
@@ -375,6 +380,10 @@ public class GameActivity extends SDLActivity {
      */
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        if (exportedGame) {
+            super.setOrientationBis(w, h, resizable, hint);
+            return;
+        }
         SharedPreferences preferences = getSharedPreferences("codelove", MODE_PRIVATE);
         String saved = preferences.getString("workspace_orientation", "");
 
@@ -404,8 +413,10 @@ public class GameActivity extends SDLActivity {
         super.onResume();
         // Reaplica a orientacao escolhida apos retornar do segundo plano.
         // O SDL/Android pode restaurar a orientacao do sistema durante a retomada.
-        Workspace.applySavedOrientation(this);
-        Workspace.onHostResume(this);
+        if (!exportedGame) {
+            Workspace.applySavedOrientation(this);
+            Workspace.onHostResume(this);
+        }
         if (standaloneRuntime && standaloneConsoleOpen && standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
             updateStandaloneConsole();
