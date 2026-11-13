@@ -1593,7 +1593,9 @@ public final class Workspace {
         // a area de trabalho, inclusive quando nenhum arquivo esta selecionado.
         boolean editorScreenVisible = !fullscreen && (surface == null || editorOpen);
         if (editor != null) {
-            editor.setPortraitTabs(verticalMode && surface == null);
+            // As abas funcionam em ambas as orientacoes do editor Java;
+            // o menu hamburguer e exclusivo do vertical.
+            editor.setTabsMode(surface == null, verticalMode && surface == null);
             editor.setEmptyWorkspaceEnabled(surface == null);
         }
         if (!verticalMode) {

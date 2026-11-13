@@ -92,7 +92,8 @@ final class CodeEditor {
     private final HorizontalScrollView tabsScroller;
     private final LinearLayout tabsRow;
     private final LinkedHashMap<String, TabState> openTabs = new LinkedHashMap<>();
-    private boolean portraitTabs;
+    private boolean tabsEnabled;
+    private boolean verticalTabsLayout;
     private boolean emptyWorkspaceEnabled;
     private final TextView emptyHint;
     private final io.github.rosemoe.sora.widget.CodeEditor soraInput;
@@ -372,7 +373,7 @@ final class CodeEditor {
                 boolean firstDirty = !dirty;
                 dirty = true;
                 saveFailureNotified = false;
-                if (firstDirty && portraitTabs) renderTabStrip();
+                if (firstDirty && tabsEnabled) renderTabStrip();
                 listener.onEdited();
             });
         view.addView(soraInput, new LinearLayout.LayoutParams(
@@ -481,15 +482,16 @@ final class CodeEditor {
         this.storage = storage;
     }
 
-    /** Exibe as abas e o menu somente no layout vertical sem SDL. */
-    void setPortraitTabs(boolean enabled) {
-        if (portraitTabs == enabled) return;
-        portraitTabs = enabled;
-        filesMenuButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
-        headerSpacer.setVisibility(enabled ? View.VISIBLE : View.GONE);
+    /** Abas nos dois formatos da EditorActivity; menu de arquivos so no vertical. */
+    void setTabsMode(boolean enabled, boolean vertical) {
+        if (tabsEnabled == enabled && verticalTabsLayout == vertical) return;
+        tabsEnabled = enabled;
+        verticalTabsLayout = vertical;
+        filesMenuButton.setVisibility(vertical ? View.VISIBLE : View.GONE);
+        headerSpacer.setVisibility(vertical ? View.VISIBLE : View.GONE);
 
-        // Indicador de alteracoes somente na aba, sem ponto roxo no cabecalho.
-        if (enabled) {
+        // Conserva o cabecalho horizontal: sem menu e com o titulo flexivel.
+        if (vertical) {
             title.setMaxWidth(dp(210));
             title.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -513,7 +515,7 @@ final class CodeEditor {
     /** Somente a apresentacao muda; o editor real continua fechado sem arquivo. */
     private void updateEmptyState() {
         boolean noFile = emptyWorkspaceEnabled && file == null;
-        emptyHint.setText(activity.getString(portraitTabs
+        emptyHint.setText(activity.getString(verticalTabsLayout
             ? R.string.cl_empty_hint : R.string.cl_empty_hint_horizontal));
         emptyState.setVisibility(noFile ? View.VISIBLE : View.GONE);
         soraInput.setVisibility(noFile ? View.GONE : View.VISIBLE);
@@ -584,11 +586,11 @@ final class CodeEditor {
     }
 
     private void renderTabStrip() {
-        // No vertical, remove a faixa escura quando nao ha abas abertas.
-        // O editor vazio e o botao do explorador continuam visiveis.
-        tabsScroller.setVisibility(portraitTabs && !openTabs.isEmpty()
+        // A faixa de abas existe no vertical e no horizontal, mas desaparece
+        // inteiramente quando nenhum arquivo estiver aberto.
+        tabsScroller.setVisibility(tabsEnabled && !openTabs.isEmpty()
             ? View.VISIBLE : View.GONE);
-        if (!portraitTabs) return;
+        if (!tabsEnabled) return;
         tabsRow.removeAllViews();
         for (TabState tab : openTabs.values()) {
             String key = tab.file.getAbsolutePath();
@@ -651,8 +653,8 @@ final class CodeEditor {
         if (target == null) return false;
         String key = target.getAbsolutePath();
         if (file != null && file.getAbsolutePath().equals(key)) return true;
-        // Preserva a regra anterior no horizontal, sem abas visiveis.
-        if (!portraitTabs && dirty) {
+        // Em superficies legadas sem abas, impede perder alteracoes ao alternar.
+        if (!tabsEnabled && dirty) {
             notifyUnsavedChanges();
             return false;
         }
@@ -712,10 +714,10 @@ final class CodeEditor {
         return true;
     }
 
-    /** O X do rodape fecha a aba atual no vertical. */
+    /** O X do rodape fecha a aba atual quando as abas estao habilitadas. */
     boolean close() {
         if (file == null) return true;
-        return portraitTabs ? closeTab(file.getAbsolutePath()) : closeAllTabs();
+        return tabsEnabled ? closeTab(file.getAbsolutePath()) : closeAllTabs();
     }
 
     boolean hasUnsavedTabs() {
@@ -858,7 +860,7 @@ final class CodeEditor {
             tab.original = text;
             tab.dirty = false;
         }
-        if (portraitTabs) renderTabStrip();
+        if (tabsEnabled) renderTabStrip();
         listener.onSaved(file);
         return true;
     }
