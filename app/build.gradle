@@ -173,9 +173,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    buildFeatures {
-        viewBinding true
-    }
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')
@@ -201,7 +198,7 @@ android {
 
 dependencies {
     implementation 'androidx.core:core:1.15.0'
-    // Sora Editor: somente o motor nativo de edição nesta primeira etapa.
+    // Sora Editor: motor de edicao com suporte a Lua, abas e autocomplete.
     implementation 'io.github.rosemoe:editor:0.24.7'
     implementation 'com.google.oboe:oboe:1.9.3'
 }

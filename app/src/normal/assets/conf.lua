@@ -1,6 +1,6 @@
--- CodeLove: teste controlado para evitar o caminho Vulkan no Android.
--- O crash diagnosticado ocorreu dentro do driver Mali durante a criacao
--- de um framebuffer Vulkan. Mantemos apenas OpenGL neste build de teste.
+-- CodeLove: usa OpenGL no runtime Android por compatibilidade.
+-- O uso de Vulkan causou falha de driver Mali durante a criacao de framebuffer.
+-- Mantemos a restricao ate haver uma alternativa validada em dispositivos reais.
 
 function love.conf(t)
     t.graphics = t.graphics or {}

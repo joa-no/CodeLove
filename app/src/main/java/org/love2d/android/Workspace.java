@@ -1292,20 +1292,6 @@ public final class Workspace {
         applyLayout();
     }
 
-    private TextView mobileActionButton(String label, View.OnClickListener listener) {
-        TextView button = new TextView(activity);
-        button.setText(label);
-        button.setTextColor(COLOR_TEXT);
-        button.setTextSize(12);
-        button.setGravity(Gravity.CENTER);
-        button.setPadding(dp(6), 0, dp(6), 0);
-        // Os comandos funcionam como abas da barra, sem caixas arredondadas
-        // individuais competindo visualmente com o editor.
-        button.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-        button.setOnClickListener(listener);
-        return button;
-    }
-
     private LinearLayout footerIconButton(int kind, View.OnClickListener listener) {
         LinearLayout button = new LinearLayout(activity);
         button.setGravity(Gravity.CENTER);
@@ -3118,19 +3104,6 @@ public final class Workspace {
             return;
         }
         selectProject(project);
-    }
-
-    private static String readText(File file) {
-        if (!file.isFile()) {
-            return null;
-        }
-        try (FileInputStream in = new FileInputStream(file)) {
-            byte[] data = new byte[(int) Math.min(file.length(), 4096L)];
-            int read = in.read(data);
-            return read <= 0 ? "" : new String(data, 0, read, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     private boolean disposed = false;

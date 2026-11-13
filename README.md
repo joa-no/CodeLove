@@ -6,7 +6,7 @@
 
 **CodeLove** é um ambiente Android para editar código Lua e executar projetos com o mecanismo [LÖVE](https://love2d.org/).
 
-O projeto combina uma interface de edição própria em Java com o runtime nativo do LÖVE. O objetivo é permitir que o usuário abra uma pasta existente, trabalhe diretamente nos arquivos dela e execute o projeto no próprio dispositivo.
+O projeto combina uma interface Android em Java com o Sora Editor e o runtime nativo do LÖVE. O objetivo é permitir que o usuário abra uma pasta existente, trabalhe diretamente nos arquivos dela e execute o projeto no próprio dispositivo.
 
 ## Estado do projeto
 
@@ -25,6 +25,7 @@ O fluxo principal de trabalho já está implementado:
 
 - Android: Java.
 - Interface: Views nativas do Android.
+- Editor: Sora Editor 0.24.7, com suporte a Lua e funções LÖVE.
 - Runtime de jogos: LÖVE.
 - Código nativo: C/C++ com CMake e Android NDK.
 - Build: Gradle.
@@ -55,7 +56,7 @@ O runtime nativo é mantido por submódulos Git. Não remova nem substitua os su
 |---|---|
 | `GameActivity.java` | Integração entre Android e runtime LÖVE |
 | `Workspace.java` | Interface e coordenação do ambiente de trabalho |
-| `CodeEditor.java` | Edição de arquivos e estado de salvamento |
+| `CodeEditor.java` | Sora Editor, abas de arquivos e salvamento manual |
 | `LuaSyntax.java` | Reconhecimento léxico usado no destaque de sintaxe Lua |
 | `OverlayUi.java` | Componentes visuais do workspace |
 | `SafProjectManager.java` | Seleção e gerenciamento da pasta concedida pelo SAF |
@@ -105,7 +106,7 @@ No Windows, use `gradlew.bat` no lugar de `./gradlew`.
 
 ## Assinatura de depuração
 
-O repositório contém `app/codelove-debug.p12`, uma chave de assinatura **pública e exclusiva para builds de teste**. Ela permite que instalações de teste sucessivas mantenham a mesma identidade de assinatura.
+O repositório contém `app/codelove-debug.p12`, uma chave de assinatura **de depuração, versionada intencionalmente e exclusiva para testes**. Ela permite que instalações de teste sucessivas mantenham a mesma identidade de assinatura.
 
 Essa chave não deve ser usada para publicar o aplicativo. Uma distribuição real precisa de uma chave de release privada, armazenada fora do repositório e protegida por segredos do ambiente de build.
 

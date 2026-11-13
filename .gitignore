@@ -25,3 +25,16 @@ Thumbs.db
 # Keep the placeholder so the directory exists in a fresh checkout.
 app/src/embed/assets/*
 !app/src/embed/assets/.gitkeep
+
+# Materiais privados de assinatura e configuracoes locais.
+# A chave de debug do CodeLove e versionada propositalmente para testes.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+!app/codelove-debug.p12

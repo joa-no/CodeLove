@@ -102,36 +102,6 @@ final class SafProjectManager {
         }
     }
 
-    private static boolean hasMainLua(Context context, Uri treeUri, String documentId) {
-        Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId);
-        Cursor cursor = null;
-        try {
-            cursor = context.getContentResolver().query(childrenUri,
-                new String[]{
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE
-                }, null, null, null);
-            if (cursor == null) return false;
-
-            int nameColumn = cursor.getColumnIndex(
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME);
-            int mimeColumn = cursor.getColumnIndex(
-                DocumentsContract.Document.COLUMN_MIME_TYPE);
-            if (nameColumn < 0) return false;
-
-            while (cursor.moveToNext()) {
-                if ("main.lua".equals(cursor.getString(nameColumn))) {
-                    if (mimeColumn < 0) return true;
-                    return !DocumentsContract.Document.MIME_TYPE_DIR.equals(
-                        cursor.getString(mimeColumn));
-                }
-            }
-        } finally {
-            if (cursor != null) cursor.close();
-        }
-        return false;
-    }
-
     private static String queryDisplayName(Context context, Uri treeUri, String documentId) {
         Cursor cursor = null;
         try {
