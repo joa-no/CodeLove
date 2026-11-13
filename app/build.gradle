@@ -135,6 +135,8 @@ android {
 
     buildFeatures {
         prefab true
+        // GameActivity distingue o APK normal do jogo incorporado por BuildConfig.FLAVOR.
+        buildConfig true
     }
 
     flavorDimensions = ['mode', 'recording']
