@@ -125,4 +125,18 @@
     <string name="cl_save_before_restart">Save changes in all tabs before restarting the game.</string>
     <string name="cl_collapse_console">Collapse console</string>
     <string name="cl_toggle_console">Open or close console</string>
+    <string name="cl_export_title">Export APK</string>
+    <string name="cl_export_not_ready">Configure the game here. APK generation is not available yet.</string>
+    <string name="cl_export_name">Game name</string>
+    <string name="cl_export_package">Android package ID</string>
+    <string name="cl_export_version">Version name</string>
+    <string name="cl_export_version_code">Version code</string>
+    <string name="cl_export_icon">Choose game icon</string>
+    <string name="cl_export_icon_none">No icon selected</string>
+    <string name="cl_export_icon_selected">Icon selected</string>
+    <string name="cl_export_icon_failed">Could not select the icon.</string>
+    <string name="cl_export_save">Save configuration</string>
+    <string name="cl_export_disabled">APK generation will be enabled once the build integration is ready.</string>
+    <string name="cl_export_invalid">Check game name, package ID and version.</string>
+    <string name="cl_export_saved">Export configuration saved.</string>
 </resources>
