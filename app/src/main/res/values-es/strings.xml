@@ -125,4 +125,18 @@
     <string name="cl_save_before_restart">Guarda los cambios de todas las pestañas antes de reiniciar el juego.</string>
     <string name="cl_collapse_console">Contraer consola</string>
     <string name="cl_toggle_console">Abrir o cerrar consola</string>
+    <string name="cl_export_title">Exportar APK</string>
+    <string name="cl_export_not_ready">Configura el juego aquí. La generación del APK aún no está disponible.</string>
+    <string name="cl_export_name">Nombre del juego</string>
+    <string name="cl_export_package">Identificador del paquete</string>
+    <string name="cl_export_version">Versión</string>
+    <string name="cl_export_version_code">Código de versión</string>
+    <string name="cl_export_icon">Seleccionar icono del juego</string>
+    <string name="cl_export_icon_none">Ningún icono seleccionado</string>
+    <string name="cl_export_icon_selected">Icono seleccionado</string>
+    <string name="cl_export_icon_failed">No se pudo seleccionar el icono.</string>
+    <string name="cl_export_save">Guardar configuración</string>
+    <string name="cl_export_disabled">La generación del APK estará disponible tras integrar la compilación.</string>
+    <string name="cl_export_invalid">Revisa el nombre, paquete y versión.</string>
+    <string name="cl_export_saved">Configuración de exportación guardada.</string>
 </resources>
