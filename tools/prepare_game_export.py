@@ -8,6 +8,7 @@ import argparse
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import sys
 
@@ -76,8 +77,8 @@ def main() -> int:
         parser.error(str(exc))
     print(f"Staged {count} files ({size} bytes) into {args.assets}")
     print("Build in this isolated checkout with:")
-    print(f"./gradlew assembleEmbedNoRecordRelease -Papp.name={args.name!r} "
-          f"-Papp.application_id={args.package} -Papp.version_name={args.version_name} "
+    print(f"./gradlew assembleEmbedNoRecordRelease {shlex.quote('-Papp.name=' + args.name)} "
+          f"{shlex.quote('-Papp.application_id=' + args.package)} {shlex.quote('-Papp.version_name=' + args.version_name)} "
           f"-Papp.version_code={args.version_code}")
     print("Release signing must be configured separately; this script never signs APKs.")
     return 0
