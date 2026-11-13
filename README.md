@@ -94,7 +94,7 @@ APK de depuração:
 ./gradlew assembleNormalRecordDebug
 ```
 
-APK de release (não assinado para distribuição):
+APK de release (assinado no GitHub Actions quando os segredos de assinatura estão configurados; localmente permanece sem assinatura de distribuição se as variáveis de ambiente não forem fornecidas):
 
 ```bash
 ./gradlew assembleNormalRecordRelease
