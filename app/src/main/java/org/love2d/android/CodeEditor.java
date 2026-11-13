@@ -19,7 +19,11 @@ import android.graphics.drawable.RippleDrawable;
 import android.widget.ImageButton;
 
 import android.text.InputType;
+import android.text.SpannableString;
+import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -91,7 +95,6 @@ final class CodeEditor {
     private boolean portraitTabs;
     private boolean emptyWorkspaceEnabled;
     private final TextView emptyHint;
-    private final TextView dirtyMark;
     private final io.github.rosemoe.sora.widget.CodeEditor soraInput;
     private final CodeLoveParameterHints soraParameterHints;
     private final CodeLoveLuaOutdent soraOutdent;
@@ -159,18 +162,10 @@ final class CodeEditor {
         view.setBackground(box(Workspace.COLOR_PANEL, 0, false));
         view.setPadding(dp(12), dp(12), dp(12), dp(12));
 
-        // ---- cabecalho: nome do arquivo, marca de "nao salvo" e botao de fechar ----
+        // ---- cabecalho: nome do arquivo e controle de arquivos ----
         header = new LinearLayout(activity);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-
-        dirtyMark = new TextView(activity);
-        dirtyMark.setText("\u25CF");
-        dirtyMark.setTextColor(Workspace.COLOR_FOLDER);
-        dirtyMark.setTextSize(12);
-        dirtyMark.setPadding(0, 0, dp(6), 0);
-        dirtyMark.setVisibility(View.GONE);
-        header.addView(dirtyMark);
 
         filesMenuButton = new TextView(activity);
         filesMenuButton.setText("\u2630");
@@ -378,7 +373,6 @@ final class CodeEditor {
                 dirty = true;
                 saveFailureNotified = false;
                 if (firstDirty && portraitTabs) renderTabStrip();
-                refreshDirtyMark();
                 listener.onEdited();
             });
         view.addView(soraInput, new LinearLayout.LayoutParams(
@@ -494,20 +488,16 @@ final class CodeEditor {
         filesMenuButton.setVisibility(enabled ? View.VISIBLE : View.GONE);
         headerSpacer.setVisibility(enabled ? View.VISIBLE : View.GONE);
 
-        // Ordem no vertical: menu, titulo do arquivo, indicador de alteracao.
-        // No horizontal, mantem a posicao e as medidas anteriores.
-        header.removeView(dirtyMark);
+        // Indicador de alteracoes somente na aba, sem ponto roxo no cabecalho.
         if (enabled) {
             title.setMaxWidth(dp(210));
             title.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
-            header.addView(dirtyMark, header.indexOfChild(title) + 1);
         } else {
             title.setMaxWidth(Integer.MAX_VALUE);
             title.setLayoutParams(new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            header.addView(dirtyMark, 0);
         }
         updateEmptyState();
         renderTabStrip();
@@ -567,7 +557,6 @@ final class CodeEditor {
         }
         dirty = tab.dirty;
         saveFailureNotified = false;
-        refreshDirtyMark();
         title.setText(file.getName());
         updateEmptyState();
         soraParameterHints.setEnabled(highlightLua);
@@ -621,7 +610,20 @@ final class CodeEditor {
             cell.setOnClickListener(v -> open(tab.file));
 
             TextView name = new TextView(activity);
-            name.setText(tab.file.getName() + (unsaved ? " \u2022" : ""));
+            // O circulo claro da aba permanece, apenas um pouco maior.
+            SpannableString tabLabel = new SpannableString(
+                tab.file.getName() + (unsaved ? " \u2022" : ""));
+            if (unsaved) {
+                int dotIndex = tabLabel.length() - 1;
+                tabLabel.setSpan(new RelativeSizeSpan(1.45f),
+                    dotIndex, dotIndex + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                tabLabel.setSpan(new ForegroundColorSpan(
+                    Workspace.isLightTheme() ? 0xFF303849 : 0xFFF1F3F8),
+                    dotIndex, dotIndex + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
+            name.setText(tabLabel);
+            name.setContentDescription(tab.file.getName() + (unsaved
+                ? ". " + activity.getString(R.string.cl_unsaved_mark) : ""));
             name.setTextSize(12);
             name.setTextColor(active ? Workspace.COLOR_TEXT : Workspace.COLOR_MUTED);
             name.setSingleLine(true);
@@ -850,7 +852,6 @@ final class CodeEditor {
         originalText = text;
         dirty = false;
         saveFailureNotified = false;
-        refreshDirtyMark();
         TabState tab = openTabs.get(file.getAbsolutePath());
         if (tab != null) {
             tab.text = text;
@@ -876,15 +877,6 @@ final class CodeEditor {
         Toast.makeText(activity,
             activity.getString(R.string.cl_save_failure),
             Toast.LENGTH_LONG).show();
-    }
-
-    private void refreshDirtyMark() {
-        dirtyMark.setVisibility(dirty ? View.VISIBLE : View.GONE);
-        String hint = dirty ? activity.getString(R.string.cl_unsaved_mark) : "";
-        dirtyMark.setContentDescription(hint);
-        if (android.os.Build.VERSION.SDK_INT >= 26) {
-            dirtyMark.setTooltipText(dirty ? hint : null);
-        }
     }
 
     /** Le um arquivo de texto. Devolve nulo se for grande demais ou binario. */
