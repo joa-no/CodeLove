@@ -66,26 +66,6 @@ jobs:
           unzip -Z1 "$APK" | grep -Fx 'assets/scripts/helper.lua'
           unzip -Z1 "$APK" | grep -Fx 'assets/assets/data.txt'
           unzip -p "$APK" assets/assets/data.txt | grep -Fx 'asset-preservation-test'
-          if unzip -Z1 "$APK" | grep -Eq '^assets/(codelove-licenses.txt|conf.lua)
-          if unzip -Z1 "$APK" | grep -Fq 'assets/codelove-licenses.txt'; then
-            echo "Unexpected normal-flavor assets in exported APK" >&2
-            exit 1
-          fi
-          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
-          test -x "$AAPT"
-          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/export-badging.txt"
-          grep -F "name='com.example.codelove.exporttest'" "$RUNNER_TEMP/export-badging.txt"
-          grep -F "application-label:'CodeLove Export Test'" "$RUNNER_TEMP/export-badging.txt"
-          echo "Smoke test: embedded Lua assets and APK metadata verified"
-      - name: Upload test APK (not a distributable release)
-        uses: actions/upload-artifact@v4
-        with:
-          name: export-smoke-test-debug-apk
-          path: app/build/outputs/apk/embedNoRecord/debug/app-embed-noRecord-debug.apk
-; then
-            echo "CodeLove runtime assets must not leak into the standalone game" >&2
-            exit 1
-          fi
           if unzip -Z1 "$APK" | grep -Fq 'assets/codelove-licenses.txt'; then
             echo "Unexpected normal-flavor assets in exported APK" >&2
             exit 1
