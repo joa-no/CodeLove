@@ -43,7 +43,7 @@ jobs:
           cat > "$RUNNER_TEMP/export-sample/scripts/helper.lua" <<'LUA'
           return { label = "nested Lua asset" }
           LUA
-          printf 'asset-preservation-test\\n' > "$RUNNER_TEMP/export-sample/assets/data.txt"
+          echo 'asset-preservation-test' > "$RUNNER_TEMP/export-sample/assets/data.txt"
           python3 tools/prepare_game_export.py \
             --project "$RUNNER_TEMP/export-sample" \
             --name "CodeLove Export Test" \
