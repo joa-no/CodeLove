@@ -39,11 +39,14 @@ final class GameExportDialog {
         if (result != Activity.RESULT_OK || data == null || data.getData() == null) return true;
         Uri uri = data.getData();
         if (!"content".equals(uri.getScheme())) return true;
+        SharedPreferences preferences = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String key = preferences.getString("pending_icon_key", "");
+        if (key.isEmpty()) return true;
         try {
             int flags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
             if (flags != 0) activity.getContentResolver().takePersistableUriPermission(uri, flags);
-            activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .putString("selected_icon", uri.toString()).apply();
+            preferences.edit().putString(key + "icon", uri.toString())
+                .remove("pending_icon_key").apply();
             Toast.makeText(activity, R.string.cl_export_icon_selected, Toast.LENGTH_SHORT).show();
         } catch (SecurityException ex) {
             Toast.makeText(activity, R.string.cl_export_icon_failed, Toast.LENGTH_LONG).show();
@@ -57,7 +60,6 @@ final class GameExportDialog {
         final String key = Integer.toHexString(projectId.hashCode()) + "_";
         final float density = activity.getResources().getDisplayMetrics().density;
         final int padding = (int) (20 * density + .5f);
-        final boolean light = Workspace.COLOR_PANEL == Color.WHITE;
 
         LinearLayout body = new LinearLayout(activity);
         body.setOrientation(LinearLayout.VERTICAL);
@@ -93,7 +95,7 @@ final class GameExportDialog {
         TextView icon = action(activity, activity.getString(R.string.cl_export_icon));
         body.addView(icon);
         TextView iconValue = new TextView(activity);
-        String selectedIcon = prefs.getString("selected_icon", "");
+        String selectedIcon = prefs.getString(key + "icon", "");
         iconValue.setText(selectedIcon.isEmpty()
             ? activity.getString(R.string.cl_export_icon_none)
             : activity.getString(R.string.cl_export_icon_selected));
@@ -128,6 +130,7 @@ final class GameExportDialog {
         }
 
         icon.setOnClickListener(v -> {
+            prefs.edit().putString("pending_icon_key", key).apply();
             dialog.dismiss();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.setType("image/*");
