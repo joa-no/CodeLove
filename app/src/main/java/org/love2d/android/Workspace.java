@@ -2172,6 +2172,9 @@ public final class Workspace {
         actions.add(() -> newFolder(folder));
         labels.add(activity.getString(R.string.cl_change_main_folder));
         actions.add(this::addExistingProject);
+        labels.add(activity.getString(R.string.cl_export_title));
+        actions.add(() -> GameExportDialog.show(activity, activeProject.getAbsolutePath(),
+            projectDisplayName(activeProject)));
         ui.showMenu(anchor, labels, actions);
     }
 
@@ -2191,6 +2194,7 @@ public final class Workspace {
 
     static void handleActivityResult(Activity activity, int requestCode,
                                      int resultCode, Intent data) {
+        if (GameExportDialog.handleIconResult(activity, requestCode, resultCode, data)) return;
         if (requestCode != REQUEST_ADD_PROJECT_TREE) return;
 
         Workspace workspace = currentInstance;
