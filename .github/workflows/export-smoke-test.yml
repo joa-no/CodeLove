@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/export-smoke-test.yml'
       - 'tools/prepare_game_export.py'
+      - 'tools/test_prepare_game_export.py'
+      - 'app/src/main/java/org/love2d/android/GameExportArchive.java'
       - 'app/src/main/java/org/love2d/android/GameActivity.java'
       - 'app/build.gradle'
   workflow_dispatch:
@@ -19,6 +21,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Validate LOVE archive staging
+        run: python3 tools/test_prepare_game_export.py
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -44,8 +48,19 @@ jobs:
           return { label = "nested Lua asset" }
           LUA
           echo 'asset-preservation-test' > "$RUNNER_TEMP/export-sample/assets/data.txt"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path(os.environ["RUNNER_TEMP"]) / "export-sample"
+          output = Path(os.environ["RUNNER_TEMP"]) / "sample.love"
+          with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file, file.relative_to(root).as_posix())
+          PY
           python3 tools/prepare_game_export.py \
-            --project "$RUNNER_TEMP/export-sample" \
+            --love "$RUNNER_TEMP/sample.love" \
             --name "CodeLove Export Test" \
             --package com.example.codelove.exporttest \
             --version-name 1.0.0 --version-code 1
