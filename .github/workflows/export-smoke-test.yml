@@ -6,6 +6,7 @@ on:
       - '.github/workflows/export-smoke-test.yml'
       - 'tools/prepare_game_export.py'
       - 'tools/game_build_request.py'
+      - 'tools/build_export_apk.py'
       - 'tools/test_game_build_request.py'
       - 'app/src/main/java/org/love2d/android/GameExportBuildRequest.java'
       - 'docs/exportacao-apk.md'
@@ -102,13 +103,7 @@ jobs:
               bundle.writestr("game.love", game)
               bundle.writestr("icon.png", icon)
           PY
-          python3 tools/prepare_game_export.py \
-            --request "$RUNNER_TEMP/sample-build.zip"
-          test -s app/src/embed/assets/main.lua
-          test -s app/src/embed/assets/scripts/helper.lua
-          test -s app/src/embed/res/drawable-mdpi/love.png
-          test -s app/src/embed/res/drawable-xxxhdpi/love.png
-          test ! -e app/src/normal/res/drawable-mdpi/love.png
+          test -s "$RUNNER_TEMP/sample-build.zip"
       - name: Generate temporary test-only signing key
         run: |
           keytool -genkeypair -noprompt \
@@ -120,20 +115,23 @@ jobs:
             -dname "CN=CodeLove Export Smoke Test"
       - name: Build isolated release game APK (temporary test signature)
         env:
-          CODELOVE_RELEASE_STORE_FILE: ${{ runner.temp }}/export-test-only.p12
-          CODELOVE_RELEASE_STORE_PASSWORD: export-only-demo-pass
-          CODELOVE_RELEASE_KEY_ALIAS: export-test
-          CODELOVE_RELEASE_KEY_PASSWORD: export-only-demo-pass
+          GAME_SIGNING_STORE_FILE: ${{ runner.temp }}/export-test-only.p12
+          GAME_SIGNING_STORE_PASSWORD: export-only-demo-pass
+          GAME_SIGNING_KEY_ALIAS: export-test
+          GAME_SIGNING_KEY_PASSWORD: export-only-demo-pass
         run: |
-          bash ./gradlew assembleEmbedNoRecordRelease \
-            '-Papp.name=CodeLove Export Test' \
-            '-Papp.application_id=com.example.codelove.exporttest' \
-            '-Papp.version_name=1.0.0' \
-            '-Papp.version_code=1'
+          python3 tools/build_export_apk.py \
+            --request "$RUNNER_TEMP/sample-build.zip" \
+            --output "$RUNNER_TEMP/export-game.apk"
+          test -s app/src/embed/assets/main.lua
+          test -s app/src/embed/assets/scripts/helper.lua
+          test -s app/src/embed/res/drawable-mdpi/love.png
+          test -s app/src/embed/res/drawable-xxxhdpi/love.png
+          test ! -e app/src/normal/res/drawable-mdpi/love.png
       - name: Validate APK contents and Android identity
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release.apk"
+          APK="$RUNNER_TEMP/export-game.apk"
           test -s "$APK"
           unzip -Z1 "$APK" | grep -Fx 'assets/main.lua'
           unzip -Z1 "$APK" | grep -Fx 'assets/scripts/helper.lua'
@@ -185,4 +183,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: export-smoke-test-release-testkey-apk
-          path: app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release.apk
+          path: ${{ runner.temp }}/export-game.apk
