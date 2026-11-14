@@ -442,11 +442,16 @@ final class OverlayUi {
     private TextView button(String label, int background, int textColor) {
         TextView button = new TextView(activity);
         button.setText(label);
-        button.setTextColor(textColor);
+        boolean formerlyPurple = background == Workspace.COLOR_FOLDER;
+        button.setTextColor(formerlyPurple ? Workspace.COLOR_TEXT : textColor);
         button.setTextSize(15);
         button.setGravity(Gravity.CENTER);
         button.setPadding(dp(18), 0, dp(18), 0);
-        button.setBackground(box(background, 12, false));
+        // Experimental visual standard: match the outlined Language options
+        // while preserving all existing click actions and labels.
+        button.setBackground(box(
+            formerlyPurple ? Workspace.COLOR_FIELD : background,
+            12, formerlyPurple));
         return button;
     }
 
