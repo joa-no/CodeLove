@@ -124,7 +124,35 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK"
-          unzip -Z1 "$APK" | grep -E 'res/.*/love[.]png'
+          # Resource names may be optimized/renamed in a release APK.
+          # Resolve the launcher icon from Android's badging metadata.
+          python3 - "$APK" "$RUNNER_TEMP/export-badging.txt" <<'PY'
+          import io
+          import re
+          import sys
+          import zipfile
+          from pathlib import Path
+          from PIL import Image
+
+          apk, badging = sys.argv[1:3]
+          metadata = Path(badging).read_text()
+          icon_entries = re.findall(
+              r"^application-icon-(\\d+):'([^']+)'$", metadata, re.MULTILINE)
+          if not icon_entries:
+              raise SystemExit("No launcher icons in APK badging metadata")
+          density, resource = next(
+              ((d, p) for d, p in icon_entries if d == "160"),
+              icon_entries[0])
+          with zipfile.ZipFile(apk) as archive:
+              with Image.open(io.BytesIO(archive.read(resource))) as icon:
+                  icon.load()
+                  center = icon.convert("RGBA").getpixel(
+                      (icon.width // 2, icon.height // 2))
+                  if center[:3] != (160, 90, 240):
+                      raise SystemExit(
+                          f"Embedded launcher icon color mismatch: {center}")
+          print(f"Verified custom launcher icon at {density} dpi: {resource}")
+          PY
           echo "Smoke test: assets, icon resources, identity and APK signature verified"
       - name: Upload signed test APK (ephemeral key, cannot be updated)
         uses: actions/upload-artifact@v4
