@@ -35,7 +35,19 @@ python3 tools/prepare_game_export.py \
 
 O pacote é conferido antes de ser extraído: estrutura exata, formatos, nomes, versão, identificador Android, tamanhos, SHA-256 e presença de `main.lua`. A entrada `icon.png`, quando presente, produz ícones no source set `embed` sem afetar o ícone do CodeLove.
 
-O utilitário prepara assets no checkout isolado e informa a linha de comando Gradle correspondente ao nome e versão declarados no pacote. **Ele não compila nem assina automaticamente o APK.**
+O utilitário `prepare_game_export.py` prepara assets no checkout isolado e informa a linha de comando Gradle correspondente ao nome e versão declarados no pacote. **Ele não compila nem assina o APK.**
+
+Para um ambiente de compilação Android já configurado, o novo comando `build_export_apk.py` executa o ciclo completo **do lado do compilador**: valida o pacote, prepara assets, compila o jogo, verifica a assinatura e copia o APK assinado para o destino indicado:
+
+```bash
+python3 tools/build_export_apk.py \
+  --request /tmp/meu-jogo-android-build.zip \
+  --output /tmp/meu-jogo.apk
+```
+
+Antes da execução, devem existir uma chave PKCS#12 **do próprio jogo** e as variáveis protegidas `GAME_SIGNING_STORE_FILE`, `GAME_SIGNING_STORE_PASSWORD`, `GAME_SIGNING_KEY_ALIAS` e `GAME_SIGNING_KEY_PASSWORD`. Se faltarem, o comando recusa a compilação de distribuição. Não coloque a chave nem as senhas dentro do ZIP ou em código versionado. Mantenha backup seguro e reutilize a mesma chave nas atualizações do jogo.
+
+Esse comando só funciona em um checkout isolado com Java, Gradle, SDK/NDK e as dependências Android disponíveis. **Não está embutido no celular nem vinculado a um serviço de build remoto.**
 
 O workflow `export-smoke-test` executa testes da entrada e monta um jogo sintético em `assembleEmbedNoRecordRelease`, assinado com chave gerada exclusivamente para o teste. Ele verifica conteúdo, ícone, identidade Android e assinatura usando ferramentas oficiais. Nenhum jogo real ou chave privada é enviado ao GitHub por esse teste.
 
