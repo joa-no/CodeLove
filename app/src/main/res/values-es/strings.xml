@@ -146,4 +146,7 @@
     <string name="cl_export_love_busy">Ya se está preparando otro paquete.</string>
     <string name="cl_export_love_save_first">Guarda todas las pestañas abiertas antes de preparar el proyecto.</string>
     <string name="cl_export_love_project_changed">El proyecto seleccionado ha cambiado. Vuelve a abrir Exportar APK.</string>
+    <string name="cl_export_request_prepare">Preparar paquete de compilación</string>
+    <string name="cl_export_request_saved">Paquete de compilación guardado. Todavía no es un APK.</string>
+    <string name="cl_export_request_failed">No se pudo preparar o guardar el paquete de compilación.</string>
 </resources>
