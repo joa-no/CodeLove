@@ -49,8 +49,8 @@ Antes da extração, todas as entradas são verificadas para evitar travessia de
 
 ## Itens ainda não implementados
 
-- Painel de configuração implementado; falta conectá-lo à preparação e à compilação de APK.
-- Leitura de arquivos SAF para `.love` implementada em `GameExportArchive`, mas falta acioná-la no fluxo e bloquear abas não salvas.
+- Painel de configuração implementado. O botão secundário `Salvar pacote .love` usa `GameExportArchive` para ler o SAF após verificar que não há abas não salvas; gera ZIP temporário antes de abrir o seletor de destino e o remove após a cópia. O botão ainda **não** produz APK; falta compilar e assinar.
+- Geração `.love` implementada a partir do SAF e acessível pelo painel. A saída não é um APK e ainda falta canal de compilação para o usuário final.
 - Canal seguro para levar o projeto ao ambiente de build. Não pressupor acesso GitHub do usuário final.
 - A variante `embed` inicia sem workspace ou canal de comandos; falta teste real em dispositivo e inspeção de classes não usadas no APK.
 - Ícone personalizado e eventual tela de abertura do jogo.

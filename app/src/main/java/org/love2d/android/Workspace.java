@@ -2173,8 +2173,24 @@ public final class Workspace {
         labels.add(activity.getString(R.string.cl_change_main_folder));
         actions.add(this::addExistingProject);
         labels.add(activity.getString(R.string.cl_export_title));
-        actions.add(() -> GameExportDialog.show(activity, activeProject.getAbsolutePath(),
-            projectDisplayName(activeProject)));
+        actions.add(() -> {
+            final File project = activeProject;
+            final DirectSafStorage storage = activeSafStorage;
+            if (project == null || storage == null) return;
+            GameExportDialog.show(activity, project.getAbsolutePath(),
+                projectDisplayName(project), name -> {
+                    if (disposed || activeSafStorage != storage || activeProject == null
+                            || !sameFile(activeProject, project)) {
+                        toast(activity.getString(R.string.cl_export_love_project_changed));
+                        return;
+                    }
+                    if (editor != null && editor.hasUnsavedTabs()) {
+                        toast(activity.getString(R.string.cl_export_love_save_first));
+                        return;
+                    }
+                    GameExportPackage.prepare(activity, storage, name);
+                });
+        });
         ui.showMenu(anchor, labels, actions);
     }
 
@@ -2195,6 +2211,7 @@ public final class Workspace {
     static void handleActivityResult(Activity activity, int requestCode,
                                      int resultCode, Intent data) {
         if (GameExportDialog.handleIconResult(activity, requestCode, resultCode, data)) return;
+        if (GameExportPackage.handleResult(activity, requestCode, resultCode, data)) return;
         if (requestCode != REQUEST_ADD_PROJECT_TREE) return;
 
         Workspace workspace = currentInstance;

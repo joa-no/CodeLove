@@ -139,4 +139,11 @@
     <string name="cl_export_disabled">APK generation will be enabled once the build integration is ready.</string>
     <string name="cl_export_invalid">Check game name, package ID and version.</string>
     <string name="cl_export_saved">Export configuration saved.</string>
+    <string name="cl_export_love_prepare">Save .love package</string>
+    <string name="cl_export_love_saved">LOVE package saved. This is not an installable APK.</string>
+    <string name="cl_export_love_failed">Could not prepare or save the LOVE package.</string>
+    <string name="cl_export_love_preparing">Preparing saved project files...</string>
+    <string name="cl_export_love_busy">A package export is already in progress.</string>
+    <string name="cl_export_love_save_first">Save all open tabs before preparing the project.</string>
+    <string name="cl_export_love_project_changed">The selected project changed. Open Export APK again.</string>
 </resources>

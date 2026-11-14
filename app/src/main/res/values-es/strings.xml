@@ -139,4 +139,11 @@
     <string name="cl_export_disabled">La generación del APK estará disponible tras integrar la compilación.</string>
     <string name="cl_export_invalid">Revisa el nombre, paquete y versión.</string>
     <string name="cl_export_saved">Configuración de exportación guardada.</string>
+    <string name="cl_export_love_prepare">Guardar paquete .love</string>
+    <string name="cl_export_love_saved">Paquete .love guardado. Todavía no es un APK instalable.</string>
+    <string name="cl_export_love_failed">No se pudo preparar o guardar el paquete .love.</string>
+    <string name="cl_export_love_preparing">Preparando los archivos guardados del proyecto...</string>
+    <string name="cl_export_love_busy">Ya se está preparando otro paquete.</string>
+    <string name="cl_export_love_save_first">Guarda todas las pestañas abiertas antes de preparar el proyecto.</string>
+    <string name="cl_export_love_project_changed">El proyecto seleccionado ha cambiado. Vuelve a abrir Exportar APK.</string>
 </resources>

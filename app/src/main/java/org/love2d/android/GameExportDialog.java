@@ -21,6 +21,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.regex.Pattern;
+import java.util.function.Consumer;
 
 /**
  * Configuration-only UI. This intentionally does NOT claim to compile an APK.
@@ -55,7 +56,8 @@ final class GameExportDialog {
         return true;
     }
 
-    static void show(Activity activity, String projectId, String projectName) {
+    static void show(Activity activity, String projectId, String projectName,
+                     Consumer<String> onPrepareLove) {
         if (activity.isFinishing()) return;
         final SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         final String key = Integer.toHexString(projectId.hashCode()) + "_";
@@ -114,6 +116,15 @@ final class GameExportDialog {
         saveParams.topMargin = (int)(12*density);
         body.addView(save, saveParams);
 
+        // A .love is an intermediate file used by the APK builder, not an APK.
+        LinearLayout prepareLove = secondaryAction(activity,
+            activity.getString(R.string.cl_export_love_prepare),
+            android.R.drawable.ic_menu_save);
+        LinearLayout.LayoutParams loveParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44 * density));
+        loveParams.topMargin = (int)(10 * density);
+        body.addView(prepareLove, loveParams);
+
         TextView status = new TextView(activity);
         status.setText(R.string.cl_export_disabled);
         status.setTextColor(Workspace.COLOR_MUTED);
@@ -149,7 +160,7 @@ final class GameExportDialog {
             }
         });
 
-        save.setOnClickListener(v -> {
+        java.util.function.Supplier<String> saveFields = () -> {
             String n = name.getText().toString().trim();
             String p = pack.getText().toString().trim();
             String ver = version.getText().toString().trim();
@@ -160,13 +171,23 @@ final class GameExportDialog {
             if (n.isEmpty() || n.contains("\n") || n.contains("\r")
                     || !PACKAGE.matcher(p).matches() || ver.isEmpty() || number < 1) {
                 Toast.makeText(activity, R.string.cl_export_invalid, Toast.LENGTH_LONG).show();
-                return;
+                return null;
             }
             prefs.edit().putString(key + "name", n).putString(key + "package", p)
                 .putString(key + "version", ver).putString(key + "version_code", code)
                 .apply();
+            return n;
+        };
+        save.setOnClickListener(v -> {
+            if (saveFields.get() == null) return;
             Toast.makeText(activity, R.string.cl_export_saved, Toast.LENGTH_SHORT).show();
             dialog.dismiss();
+        });
+        prepareLove.setOnClickListener(v -> {
+            String n = saveFields.get();
+            if (n == null) return;
+            dialog.dismiss();
+            if (onPrepareLove != null) onPrepareLove.accept(n);
         });
     }
 
@@ -206,6 +227,11 @@ final class GameExportDialog {
     }
 
     private static LinearLayout secondaryAction(Activity activity, String label) {
+        return secondaryAction(activity, label, android.R.drawable.ic_menu_gallery);
+    }
+
+    private static LinearLayout secondaryAction(Activity activity, String label,
+                                                 int drawableRes) {
         float density = activity.getResources().getDisplayMetrics().density;
         LinearLayout button = new LinearLayout(activity);
         button.setOrientation(LinearLayout.HORIZONTAL);
@@ -222,7 +248,7 @@ final class GameExportDialog {
         button.setContentDescription(label);
 
         ImageView picture = new ImageView(activity);
-        picture.setImageResource(android.R.drawable.ic_menu_gallery);
+        picture.setImageResource(drawableRes);
         picture.setColorFilter(Workspace.COLOR_MUTED);
         button.addView(picture, new LinearLayout.LayoutParams(
             Math.round(20 * density), Math.round(20 * density)));
