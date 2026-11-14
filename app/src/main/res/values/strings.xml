@@ -146,7 +146,4 @@
     <string name="cl_export_love_busy">A package export is already in progress.</string>
     <string name="cl_export_love_save_first">Save all open tabs before preparing the project.</string>
     <string name="cl_export_love_project_changed">The selected project changed. Open Export APK again.</string>
-    <string name="cl_export_request_prepare">Prepare Android build package</string>
-    <string name="cl_export_request_saved">Build package saved. This is not an installable APK.</string>
-    <string name="cl_export_request_failed">Could not prepare or save the build package.</string>
 </resources>

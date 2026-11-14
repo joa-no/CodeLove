@@ -23,31 +23,15 @@ import java.io.OutputStream;
  */
 final class GameExportPackage {
     static final int REQUEST_SAVE_LOVE = 4104;
-    static final int REQUEST_SAVE_BUILD_REQUEST = 4105;
     private static final String TAG = "CodeLoveExport";
     private static final Object LOCK = new Object();
     private static boolean busy;
     private static Activity owner;
     private static File stagedFile;
-    private static int pendingRequestCode;
 
     private GameExportPackage() {}
 
     static void prepare(Activity activity, DirectSafStorage storage, String title) {
-        prepareInternal(activity, storage, title, null, null, 0, null, false);
-    }
-
-    static void prepareBuildRequest(Activity activity, DirectSafStorage storage,
-                                    String name, String packageId, String versionName,
-                                    int versionCode, String iconUri) {
-        prepareInternal(activity, storage, name, packageId, versionName,
-            versionCode, iconUri, true);
-    }
-
-    private static void prepareInternal(Activity activity, DirectSafStorage storage,
-                                        String title, String packageId, String versionName,
-                                        int versionCode, String iconUri,
-                                        boolean asBuildRequest) {
         if (activity == null || storage == null || activity.isFinishing()) return;
         synchronized (LOCK) {
             if (busy) {
@@ -71,19 +55,12 @@ final class GameExportPackage {
                 File[] leftovers = directory.listFiles();
                 if (leftovers != null) {
                     for (File old : leftovers) {
-                        if (old.isFile() && (old.getName().endsWith(".love")
-                            || old.getName().endsWith(".zip"))) old.delete();
+                        if (old.isFile() && old.getName().endsWith(".love")) old.delete();
                     }
                 }
-                temp = File.createTempFile("game-",
-                    asBuildRequest ? ".zip" : ".love", directory);
+                temp = File.createTempFile("game-", ".love", directory);
                 try (FileOutputStream out = new FileOutputStream(temp)) {
-                    if (asBuildRequest) {
-                        GameExportBuildRequest.write(activity, storage, title,
-                            packageId, versionName, versionCode, iconUri, out);
-                    } else {
-                        GameExportArchive.write(activity, storage, out);
-                    }
+                    GameExportArchive.write(activity, storage, out);
                     out.getFD().sync();
                 }
                 final File ready = temp;
@@ -95,19 +72,14 @@ final class GameExportPackage {
                     }
                     synchronized (LOCK) {
                         stagedFile = ready;
-                        pendingRequestCode = asBuildRequest
-                            ? REQUEST_SAVE_BUILD_REQUEST : REQUEST_SAVE_LOVE;
                     }
                     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
                     intent.setType("application/zip");
-                    intent.putExtra(Intent.EXTRA_TITLE,
-                        safeFileName(title) + (asBuildRequest
-                            ? "-android-build.zip" : ".love"));
+                    intent.putExtra(Intent.EXTRA_TITLE, safeFileName(title) + ".love");
                     intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                     try {
-                        activity.startActivityForResult(intent,
-                            asBuildRequest ? REQUEST_SAVE_BUILD_REQUEST : REQUEST_SAVE_LOVE);
+                        activity.startActivityForResult(intent, REQUEST_SAVE_LOVE);
                     } catch (RuntimeException e) {
                         Log.w(TAG, "Cannot open file picker", e);
                         finish(activity, ready);
@@ -130,12 +102,10 @@ final class GameExportPackage {
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
-        if (request != REQUEST_SAVE_LOVE && request != REQUEST_SAVE_BUILD_REQUEST) {
-            return false;
-        }
+        if (request != REQUEST_SAVE_LOVE) return false;
         final File packageFile;
         synchronized (LOCK) {
-            if (!busy || request != pendingRequestCode) return true;
+            if (!busy) return true;
             // The Android system may recreate EditorActivity while the document
             // picker is open. Its result still belongs to this single request.
             if (owner != activity) {
@@ -195,13 +165,8 @@ final class GameExportPackage {
                 activity.runOnUiThread(() -> {
                     if (!activity.isFinishing() && !activity.isDestroyed()) {
                         Toast.makeText(activity,
-                            successful
-                                ? (request == REQUEST_SAVE_BUILD_REQUEST
-                                    ? R.string.cl_export_request_saved
-                                    : R.string.cl_export_love_saved)
-                                : (request == REQUEST_SAVE_BUILD_REQUEST
-                                    ? R.string.cl_export_request_failed
-                                    : R.string.cl_export_love_failed),
+                            successful ? R.string.cl_export_love_saved
+                                       : R.string.cl_export_love_failed,
                             Toast.LENGTH_LONG).show();
                     }
                 });
@@ -227,7 +192,6 @@ final class GameExportPackage {
         synchronized (LOCK) {
             if (owner == activity) {
                 stagedFile = null;
-                pendingRequestCode = 0;
                 busy = false;
                 owner = null;
             }

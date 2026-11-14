@@ -2178,8 +2178,7 @@ public final class Workspace {
             final DirectSafStorage storage = activeSafStorage;
             if (project == null || storage == null) return;
             GameExportDialog.show(activity, project.getAbsolutePath(),
-                projectDisplayName(project), (name, buildRequest,
-                    packageId, versionName, versionCode, iconUri) -> {
+                projectDisplayName(project), name -> {
                     if (disposed || activeSafStorage != storage || activeProject == null
                             || !sameFile(activeProject, project)) {
                         toast(activity.getString(R.string.cl_export_love_project_changed));
@@ -2189,12 +2188,7 @@ public final class Workspace {
                         toast(activity.getString(R.string.cl_export_love_save_first));
                         return;
                     }
-                    if (buildRequest) {
-                        GameExportPackage.prepareBuildRequest(activity, storage,
-                            name, packageId, versionName, versionCode, iconUri);
-                    } else {
-                        GameExportPackage.prepare(activity, storage, name);
-                    }
+                    GameExportPackage.prepare(activity, storage, name);
                 });
         });
         ui.showMenu(anchor, labels, actions);

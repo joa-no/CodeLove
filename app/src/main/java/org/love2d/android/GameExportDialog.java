@@ -28,9 +28,7 @@ import java.util.regex.Pattern;
  */
 final class GameExportDialog {
     interface PrepareListener {
-        void onPrepare(String name, boolean buildRequest,
-                       String packageId, String versionName,
-                       int versionCode, String selectedIcon);
+        void onPrepare(String name);
     }
 
     static final int REQUEST_ICON = 4103;
@@ -130,14 +128,6 @@ final class GameExportDialog {
         loveParams.topMargin = (int)(10 * density);
         body.addView(prepareLove, loveParams);
 
-        LinearLayout prepareRequest = secondaryAction(activity,
-            activity.getString(R.string.cl_export_request_prepare),
-            android.R.drawable.ic_menu_upload);
-        LinearLayout.LayoutParams requestParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44 * density));
-        requestParams.topMargin = (int)(8 * density);
-        body.addView(prepareRequest, requestParams);
-
         TextView status = new TextView(activity);
         status.setText(R.string.cl_export_disabled);
         status.setTextColor(Workspace.COLOR_MUTED);
@@ -185,22 +175,7 @@ final class GameExportDialog {
                 name, pack, version, versionCode);
             if (value == null) return;
             dialog.dismiss();
-            if (onPrepareLove != null) {
-                onPrepareLove.onPrepare(value, false, null, null, 0, null);
-            }
-        });
-        prepareRequest.setOnClickListener(v -> {
-            String value = saveFields(activity, prefs, key,
-                name, pack, version, versionCode);
-            if (value == null) return;
-            dialog.dismiss();
-            if (onPrepareLove != null) {
-                onPrepareLove.onPrepare(value, true,
-                    pack.getText().toString().trim(),
-                    version.getText().toString().trim(),
-                    Integer.parseInt(versionCode.getText().toString().trim()),
-                    prefs.getString(key + "icon", ""));
-            }
+            if (onPrepareLove != null) onPrepareLove.onPrepare(value);
         });
     }
 
