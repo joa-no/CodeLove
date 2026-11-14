@@ -180,6 +180,19 @@ final class GameExportDialog {
         input.setHintTextColor(Workspace.COLOR_MUTED);
         input.setInputType(numeric ? InputType.TYPE_CLASS_NUMBER
             : InputType.TYPE_CLASS_TEXT);
+        // EditText herda um fundo claro do tema Android; aplicar a paleta
+        // CodeLove explicitamente para manter contraste nos dois temas.
+        final float density = activity.getResources().getDisplayMetrics().density;
+        GradientDrawable fieldBackground = new GradientDrawable();
+        fieldBackground.setColor(Workspace.COLOR_FIELD);
+        fieldBackground.setCornerRadius(10 * density);
+        fieldBackground.setStroke(Math.max(1, Math.round(density)), Workspace.COLOR_BORDER);
+        input.setBackground(fieldBackground);
+        input.setTextColor(Workspace.COLOR_TEXT);
+        input.setHintTextColor(Workspace.COLOR_MUTED);
+        input.setPadding(Math.round(12 * density), Math.round(10 * density),
+            Math.round(12 * density), Math.round(10 * density));
+        input.setSelectAllOnFocus(false);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.bottomMargin = (int)(10 * activity.getResources().getDisplayMetrics().density);
