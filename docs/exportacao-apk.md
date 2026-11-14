@@ -4,7 +4,7 @@
 
 A variante Android `embed` do LÖVE já existe no CodeLove. `GameActivity.hasEmbeddedGame()` aceita um `main.lua` ou `game.love` na raiz dos assets do APK. O CodeLove mantém o editor na variante `normal`, e a edição dos arquivos do projeto usa SAF diretamente.
 
-**Esta etapa não adiciona exportação de APK ao aplicativo Android.** Implementa apenas o preparo de assets para uma compilação em checkout isolado. Não há compilador Android embutido no celular nem envio automático de projetos ao GitHub.
+**O painel de configuração já existe no CodeLove, mas ainda não gera APK.** O aplicativo contém um gerador interno de arquivos `.love` a partir da árvore SAF, ainda não conectado ao painel. No ambiente de compilação isolado, a ferramenta aceita uma pasta de projeto ou um arquivo `.love`. Não há compilador Android embutido nem envio automático de projetos ao GitHub.
 
 ## Fluxo de exportação proposto
 
@@ -29,14 +29,30 @@ python3 tools/prepare_game_export.py \
   --version-code 1
 ```
 
-A ferramenta recusa destino não vazio (exceto `.gitkeep`), `main.lua` ausente, links simbólicos, projetos com mais de 512 MiB ou 10.000 arquivos, nomes vazios, IDs de pacote inválidos e versões numéricas não positivas. Ela apenas copia os arquivos e imprime uma sugestão de comando Gradle. Não modifica a pasta de origem.
+A ferramenta recusa destino não vazio (exceto `.gitkeep`), `main.lua` ausente, links simbólicos, projetos com mais de 512 MiB ou 10.000 arquivos, nomes vazios, IDs de pacote inválidos e versões numéricas não positivas.
+
+Também é possível fornecer um pacote `.love` criado a partir dos documentos salvos no SAF:
+
+```bash
+python3 tools/prepare_game_export.py \
+  --love /tmp/meu-jogo.love \
+  --name "Meu Jogo" \
+  --package com.exemplo.meujogo \
+  --version-name 1.0.0 \
+  --version-code 1
+```
+
+Antes da extração, todas as entradas são verificadas para evitar travessia de caminhos, nomes duplicados, links simbólicos e arquivos acima dos limites. Os testes do workflow agora empacotam um `.love` em um APK `embed` e verificam seus assets e a identidade Android.
+
+**Isso não valida a execução em um celular nem a assinatura de distribuição.**
+ Ela apenas copia os arquivos e imprime uma sugestão de comando Gradle. Não modifica a pasta de origem.
 
 ## Itens ainda não implementados
 
-- Interface de exportação no CodeLove, integrada ao tema e traduzida.
-- Verificação de alterações não salvas e coleta da árvore SAF, com limites e exclusões apropriados.
+- Painel de configuração implementado; falta conectá-lo à preparação e à compilação de APK.
+- Leitura de arquivos SAF para `.love` implementada em `GameExportArchive`, mas falta acioná-la no fluxo e bloquear abas não salvas.
 - Canal seguro para levar o projeto ao ambiente de build. Não pressupor acesso GitHub do usuário final.
-- Ajuste do template `embed` para produzir somente um jogo independente, sem canal de comandos, console, seleção de pastas ou interface CodeLove.
+- A variante `embed` inicia sem workspace ou canal de comandos; falta teste real em dispositivo e inspeção de classes não usadas no APK.
 - Ícone personalizado e eventual tela de abertura do jogo.
 - Estratégia de assinatura por jogo, armazenamento seguro das chaves e atualizações.
 - Compilação automática, relatório de erros, entrega e limpeza do APK.
