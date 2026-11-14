@@ -1,77 +1,55 @@
-# Exportação de jogos Android — arquitetura inicial
+# CodeLove — Exportação Android
 
-## Situação
+## Status em novembro de 2026
 
-A variante Android `embed` do LÖVE já existe no CodeLove. `GameActivity.hasEmbeddedGame()` aceita um `main.lua` ou `game.love` na raiz dos assets do APK. O CodeLove mantém o editor na variante `normal`, e a edição dos arquivos do projeto usa SAF diretamente.
+O CodeLove possui um painel para configurar nome, pacote Android, versão e ícone. O painel permite salvar um arquivo `.love` e preparar um **pacote de compilação** (`.zip`). Nenhum desses arquivos é um APK instalável.
 
-**O painel de configuração já existe no CodeLove, mas ainda não gera APK.** O aplicativo contém um gerador interno de arquivos `.love` a partir da árvore SAF, ainda não conectado ao painel. No ambiente de compilação isolado, a ferramenta aceita uma pasta de projeto ou um arquivo `.love`. Não há compilador Android embutido nem envio automático de projetos ao GitHub.
+O compilador isolado do projeto já gerou e verificou um APK Release de teste a partir de um jogo LÖVE, com ícone personalizado e assinatura **temporária**. Esse teste não garante execução num celular nem garante que uma chave de distribuição possa ser reutilizada.
 
-## Fluxo de exportação proposto
+**Ainda não existe compilação automática a partir do botão do CodeLove.** Não há endpoint de build, autenticação de usuários, gestão permanente de chaves ou sistema de entrega de APK configurados. Portanto, o botão "Gerar APK" não pode ser habilitado.
 
-1. O usuário salva explicitamente todas as abas antes de exportar. Se houver arquivos pendentes, bloquear a exportação e informar o motivo.
-2. O usuário configura nome, pacote Android, versão numérica, versão legível e ícone.
-3. Ler a árvore SAF selecionada com permissão explícita e preparar um pacote transitório **somente para exportação**. Não mudar a pasta principal SAF nem converter a cópia temporária em workspace.
-4. No ambiente de compilação isolado, validar `main.lua`, tamanho, quantidade de arquivos e caminhos, e transferir o conteúdo para `app/src/embed/assets`.
-5. Compilar a variante `embed` usando parâmetros `-Papp.name`, `-Papp.application_id`, `-Papp.version_name`, `-Papp.version_code`. Garantir que o APK exportado não tenha os componentes de editor nem o executor especial do CodeLove.
-6. Assinar com uma chave de distribuição escolhida pelo usuário, **nunca** com a chave pública de debug do CodeLove nem automaticamente com a chave privada usada para assinar o CodeLove.
-7. Disponibilizar o APK final pelo seletor de documentos do Android e limpar todos os artefatos temporários.
+## Pacote de compilação v1
 
-## Preparação dos assets (implementada)
+A opção **Preparar pacote de compilação** do painel guarda um ZIP selecionado pelo usuário. Ele contém:
 
-Num checkout de build isolado, com o conteúdo do jogo em `/tmp/meu-jogo`:
+| Entrada | Conteúdo |
+|---|---|
+| `request.json` | Configuração do projeto, formato e hashes |
+| `game.love` | Arquivos salvos do projeto, lidos diretamente do SAF |
+| `icon.png` | Ícone opcional, recortado centralmente para 512×512 |
 
-```bash
-python3 tools/prepare_game_export.py \
-  --project /tmp/meu-jogo \
-  --name "Meu Jogo" \
-  --package com.exemplo.meujogo \
-  --version-name 1.0.0 \
-  --version-code 1
-```
+O campo `format` é `codelove.android-build.v1`. Os campos `name`, `package`, `version_name` e `version_code` representam a identidade Android do jogo. `game_love` e `icon_png` incluem `size` e `sha256`. Nenhuma senha, token, chave de assinatura ou URL de servidor é incluída.
 
-A ferramenta recusa destino não vazio (exceto `.gitkeep`), `main.lua` ausente, links simbólicos, projetos com mais de 512 MiB ou 10.000 arquivos, nomes vazios, IDs de pacote inválidos e versões numéricas não positivas.
+O CodeLove não altera os documentos da pasta SAF. Se alguma aba contiver alterações não salvas, bloqueia a preparação. O arquivo temporário é criado antes de abrir o seletor de destino, evitando que ele inclua a si mesmo quando salvo dentro do projeto.
 
-Também é possível fornecer um pacote `.love` criado a partir dos documentos salvos no SAF:
+**Privacidade:** esse ZIP contém o código-fonte e os recursos do jogo, potencialmente privados. Não o publique em repositórios públicos. Nenhum envio para a internet é feito por essa funcionalidade.
+
+## Uso pelo compilador isolado
+
+O ambiente de compilação aceita uma pasta local (`--project`), um arquivo `.love` (`--love`) ou o pacote inteiro:
 
 ```bash
 python3 tools/prepare_game_export.py \
-  --love /tmp/meu-jogo.love \
-  --name "Meu Jogo" \
-  --package com.exemplo.meujogo \
-  --version-name 1.0.0 \
-  --version-code 1
+  --request /tmp/meu-jogo-android-build.zip
 ```
 
-Antes da extração, todas as entradas são verificadas para evitar travessia de caminhos, nomes duplicados, links simbólicos e arquivos acima dos limites. Os testes do workflow agora empacotam um `.love` em um APK `embed` e verificam seus assets e a identidade Android.
+O pacote é conferido antes de ser extraído: estrutura exata, formatos, nomes, versão, identificador Android, tamanhos, SHA-256 e presença de `main.lua`. A entrada `icon.png`, quando presente, produz ícones no source set `embed` sem afetar o ícone do CodeLove.
 
-**Isso não valida a execução em um celular nem a assinatura de distribuição.**
- Ela apenas copia os arquivos e imprime uma sugestão de comando Gradle. Não modifica a pasta de origem.
+O utilitário prepara assets no checkout isolado e informa a linha de comando Gradle correspondente ao nome e versão declarados no pacote. **Ele não compila nem assina automaticamente o APK.**
 
+O workflow `export-smoke-test` executa testes da entrada e monta um jogo sintético em `assembleEmbedNoRecordRelease`, assinado com chave gerada exclusivamente para o teste. Ele verifica conteúdo, ícone, identidade Android e assinatura usando ferramentas oficiais. Nenhum jogo real ou chave privada é enviado ao GitHub por esse teste.
 
-### Ícone e assinatura no ambiente de compilação
+## Etapas ainda necessárias para exportação diretamente no CodeLove
 
-Uma imagem PNG, JPEG ou WebP entre 192 e 4096 pixels pode ser passada opcionalmente com `--icon /tmp/icone.png`. O preparo gera ícones nos cinco tamanhos de densidade sob `app/src/embed/res/drawable-*/love.png`, sem modificar os ícones da variante normal do CodeLove. A imagem é recortada ao centro para ficar quadrada. Essa operação exige Pillow no ambiente de build isolado.
+1. **Transporte autenticado:** implementar e hospedar um serviço de compilação confiável, capaz de receber o pacote por HTTPS, criar um trabalho isolado, fornecer status e devolver o APK. O endereço do serviço e as credenciais ainda não existem; não há razão para pedir permissões gerais da conta GitHub do usuário.
+2. **Assinatura por jogo:** preservar uma chave estável, permitir backup/recuperação pelo proprietário e garantir que versões futuras usem a mesma identidade criptográfica. Não reaproveitar a chave privada do CodeLove. Chaves temporárias dos testes não são adequadas para distribuição.
+3. **Cliente Android:** quando houver um endpoint funcional, enviar o pacote somente mediante consentimento claro, acompanhar o build, baixar o arquivo validado e salvar o APK pelo SAF.
+4. **Testes em aparelho:** instalar, iniciar, testar carregamento de scripts, imagens/áudio, requisitos e atualização de uma versão instalada.
 
-O teste automatizado agora assina um APK da variante `embed` em modo Release com uma **chave temporária exclusiva do teste**, verificando a assinatura com `apksigner`. Esse APK **não é uma versão de distribuição**, porque a chave é descartada após o teste e não permitiria atualizar a instalação no futuro.
+## Restrições de implementação
 
-**Ainda falta:** transporte seguro de `.love`, configurações e imagem para o compilador, assinatura persistente por jogo, entrega no Android e validação funcional em dispositivo. O ícone escolhido no painel ainda não é enviado automaticamente ao compilador.
-
-## Itens ainda não implementados
-
-- Painel de configuração implementado. O botão secundário `Salvar pacote .love` usa `GameExportArchive` para ler o SAF após verificar que não há abas não salvas; gera ZIP temporário antes de abrir o seletor de destino e o remove após a cópia. O botão ainda **não** produz APK; falta compilar e assinar.
-- Geração `.love` implementada a partir do SAF e acessível pelo painel. A saída não é um APK e ainda falta canal de compilação para o usuário final.
-- Canal seguro para levar o projeto ao ambiente de build. Não pressupor acesso GitHub do usuário final.
-- A variante `embed` inicia sem workspace ou canal de comandos; falta teste real em dispositivo e inspeção de classes não usadas no APK.
-- Ícone personalizado e eventual tela de abertura do jogo.
-- Estratégia de assinatura por jogo, armazenamento seguro das chaves e atualizações.
-- Compilação automática, relatório de erros, entrega e limpeza do APK.
-- Testes de instalação em dispositivo, libs nativas, `require`, imagens, áudio, rotação, permissões e atualização da mesma assinatura.
-
-## Restrições importantes
-
-- Um APK Android executável exige SDK/NDK, Gradle e bibliotecas nativas. A variante `embed` não faz esse trabalho dentro do Android por si só.
-- O cache de execução do CodeLove não é o diretório de trabalho permanente: exportar deve partir dos arquivos SAF salvos.
-- Não enviar código privado de projetos ou chaves privadas a um servidor sem consentimento e modelo de segurança definidos.
-- Não reutilizar automaticamente a chave de assinatura de release do CodeLove para jogos exportados.
-- Preservar licenças do LÖVE e dependências no aplicativo exportado.
-- Somente ativar o botão de exportação quando existir um fluxo realmente funcional e testado de ponta a ponta.
+- O compilador Android depende de Gradle, SDK, NDK e bibliotecas nativas. O aplicativo Android atual não embute esse ambiente.
+- A variante `embed` deve manter o jogo independente do editor. Continuar verificando que não há runtime especial de CodeLove no APK exportado.
+- Respeitar licenças do LÖVE e demais dependências.
+- Falhas não devem modificar a pasta principal nem perder arquivos não salvos.
+- Não habilitar um botão chamado **Gerar APK** até que o caminho completo de compilação, assinatura e entrega esteja funcional e testado.
