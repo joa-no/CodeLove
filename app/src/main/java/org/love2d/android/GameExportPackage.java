@@ -105,7 +105,15 @@ final class GameExportPackage {
         if (request != REQUEST_SAVE_LOVE) return false;
         final File packageFile;
         synchronized (LOCK) {
-            if (!busy || owner != activity) return true;
+            if (!busy) return true;
+            // The Android system may recreate EditorActivity while the document
+            // picker is open. Its result still belongs to this single request.
+            if (owner != activity) {
+                if (owner != null && !owner.isDestroyed() && !owner.isFinishing()) {
+                    return true;
+                }
+                owner = activity;
+            }
             packageFile = stagedFile;
             stagedFile = null;
         }

@@ -21,13 +21,16 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.regex.Pattern;
-import java.util.function.Consumer;
 
 /**
  * Configuration-only UI. This intentionally does NOT claim to compile an APK.
  * The compiler transport and game signing still need to be implemented.
  */
 final class GameExportDialog {
+    interface PrepareListener {
+        void onPrepare(String name);
+    }
+
     static final int REQUEST_ICON = 4103;
     private static final String PREFS = "codelove_game_export";
     private static final Pattern PACKAGE = Pattern.compile(
@@ -57,7 +60,7 @@ final class GameExportDialog {
     }
 
     static void show(Activity activity, String projectId, String projectName,
-                     Consumer<String> onPrepareLove) {
+                     PrepareListener onPrepareLove) {
         if (activity.isFinishing()) return;
         final SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         final String key = Integer.toHexString(projectId.hashCode()) + "_";
@@ -160,35 +163,41 @@ final class GameExportDialog {
             }
         });
 
-        java.util.function.Supplier<String> saveFields = () -> {
-            String n = name.getText().toString().trim();
-            String p = pack.getText().toString().trim();
-            String ver = version.getText().toString().trim();
-            String code = versionCode.getText().toString().trim();
-            int number;
-            try { number = Integer.parseInt(code); }
-            catch (NumberFormatException ex) { number = 0; }
-            if (n.isEmpty() || n.contains("\n") || n.contains("\r")
-                    || !PACKAGE.matcher(p).matches() || ver.isEmpty() || number < 1) {
-                Toast.makeText(activity, R.string.cl_export_invalid, Toast.LENGTH_LONG).show();
-                return null;
-            }
-            prefs.edit().putString(key + "name", n).putString(key + "package", p)
-                .putString(key + "version", ver).putString(key + "version_code", code)
-                .apply();
-            return n;
-        };
         save.setOnClickListener(v -> {
-            if (saveFields.get() == null) return;
+            String value = saveFields(activity, prefs, key,
+                name, pack, version, versionCode);
+            if (value == null) return;
             Toast.makeText(activity, R.string.cl_export_saved, Toast.LENGTH_SHORT).show();
             dialog.dismiss();
         });
         prepareLove.setOnClickListener(v -> {
-            String n = saveFields.get();
-            if (n == null) return;
+            String value = saveFields(activity, prefs, key,
+                name, pack, version, versionCode);
+            if (value == null) return;
             dialog.dismiss();
-            if (onPrepareLove != null) onPrepareLove.accept(n);
+            if (onPrepareLove != null) onPrepareLove.onPrepare(value);
         });
+    }
+
+    private static String saveFields(Activity activity, SharedPreferences prefs,
+                                     String key, EditText name, EditText pack,
+                                     EditText version, EditText versionCode) {
+        String n = name.getText().toString().trim();
+        String p = pack.getText().toString().trim();
+        String ver = version.getText().toString().trim();
+        String code = versionCode.getText().toString().trim();
+        int number;
+        try { number = Integer.parseInt(code); }
+        catch (NumberFormatException ex) { number = 0; }
+        if (n.isEmpty() || n.contains("\n") || n.contains("\r")
+                || !PACKAGE.matcher(p).matches() || ver.isEmpty() || number < 1) {
+            Toast.makeText(activity, R.string.cl_export_invalid, Toast.LENGTH_LONG).show();
+            return null;
+        }
+        prefs.edit().putString(key + "name", n).putString(key + "package", p)
+            .putString(key + "version", ver).putString(key + "version_code", code)
+            .apply();
+        return n;
     }
 
     private static EditText field(Activity activity, LinearLayout body, int title,
