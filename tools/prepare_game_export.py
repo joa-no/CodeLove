@@ -186,35 +186,54 @@ def main() -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--project", type=Path)
     source.add_argument("--love", type=Path)
+    source.add_argument("--request", type=Path,
+                        help="Versioned CodeLove build-request bundle")
     parser.add_argument("--assets", type=Path, default=Path("app/src/embed/assets"))
     parser.add_argument("--icon", type=Path,
                         help="Custom PNG, JPEG or WebP launcher image")
     parser.add_argument("--icon-res", type=Path, default=Path("app/src/embed/res"),
                         help="Embed-only Android resource output directory")
-    parser.add_argument("--name", required=True)
-    parser.add_argument("--package", required=True)
+    parser.add_argument("--name")
+    parser.add_argument("--package")
     parser.add_argument("--version-name", default="1.0.0")
     parser.add_argument("--version-code", type=int, default=1)
     args = parser.parse_args()
-    if not args.name.strip() or "\n" in args.name or "\r" in args.name:
-        parser.error("Game name must be non-empty and single-line")
-    if not PACKAGE_RE.fullmatch(args.package):
-        parser.error("Invalid Android application ID")
-    if args.version_code < 1 or not args.version_name.strip():
-        parser.error("Version code must be positive and version name non-empty")
-    try:
-        count, size = (prepare_love(args.love, args.assets)
-                       if args.love is not None else prepare(args.project, args.assets))
-        if args.icon is not None:
-            staged = prepare_icon(args.icon, args.icon_res)
-            print(f"Staged custom icon for {len(staged)} Android densities")
-    except (OSError, ValueError, zipfile.BadZipFile, RuntimeError) as exc:
-        parser.error(str(exc))
+    if args.request is not None:
+        if args.name is not None or args.package is not None or args.icon is not None:
+            parser.error("--request carries its own identity and icon settings")
+        try:
+            from game_build_request import prepare_request
+            metadata, count, size = prepare_request(
+                args.request, args.assets, args.icon_res)
+        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError) as exc:
+            parser.error(str(exc))
+        name = metadata["name"]
+        package = metadata["package"]
+        version_name = metadata["version_name"]
+        version_code = metadata["version_code"]
+    else:
+        if args.name is None or not args.name.strip() or (
+                "\n" in args.name or "\r" in args.name):
+            parser.error("Game name must be non-empty and single-line")
+        if args.package is None or not PACKAGE_RE.fullmatch(args.package):
+            parser.error("Invalid Android application ID")
+        if args.version_code < 1 or not args.version_name.strip():
+            parser.error("Version code must be positive and version name non-empty")
+        try:
+            count, size = (prepare_love(args.love, args.assets)
+                           if args.love is not None else prepare(args.project, args.assets))
+            if args.icon is not None:
+                staged = prepare_icon(args.icon, args.icon_res)
+                print(f"Staged custom icon for {len(staged)} Android densities")
+        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError) as exc:
+            parser.error(str(exc))
+        name, package = args.name, args.package
+        version_name, version_code = args.version_name, args.version_code
     print(f"Staged {count} files ({size} bytes) into {args.assets}")
     print("Build in this isolated checkout with:")
-    print(f"./gradlew assembleEmbedNoRecordRelease {shlex.quote('-Papp.name=' + args.name)} "
-          f"{shlex.quote('-Papp.application_id=' + args.package)} {shlex.quote('-Papp.version_name=' + args.version_name)} "
-          f"-Papp.version_code={args.version_code}")
+    print(f"./gradlew assembleEmbedNoRecordRelease {shlex.quote('-Papp.name=' + name)} "
+          f"{shlex.quote('-Papp.application_id=' + package)} {shlex.quote('-Papp.version_name=' + version_name)} "
+          f"-Papp.version_code={version_code}")
     print("Release signing must be configured separately; this script never signs APKs.")
     return 0
 
