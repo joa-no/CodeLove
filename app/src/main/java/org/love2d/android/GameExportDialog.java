@@ -14,6 +14,7 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -92,8 +93,12 @@ final class GameExportDialog {
         EditText versionCode = field(activity, body, R.string.cl_export_version_code,
             prefs.getString(key + "version_code", "1"), true);
 
-        TextView icon = action(activity, activity.getString(R.string.cl_export_icon));
-        body.addView(icon);
+        // Secondary action: outlined row with an icon and chevron.
+        LinearLayout icon = secondaryAction(activity,
+            activity.getString(R.string.cl_export_icon));
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44 * density));
+        body.addView(icon, iconParams);
         TextView iconValue = new TextView(activity);
         String selectedIcon = prefs.getString(key + "icon", "");
         iconValue.setText(selectedIcon.isEmpty()
@@ -106,7 +111,7 @@ final class GameExportDialog {
         TextView save = action(activity, activity.getString(R.string.cl_export_save));
         LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
-        saveParams.topMargin = (int)(15*density);
+        saveParams.topMargin = (int)(12*density);
         body.addView(save, saveParams);
 
         TextView status = new TextView(activity);
@@ -198,6 +203,45 @@ final class GameExportDialog {
         lp.bottomMargin = (int)(10 * activity.getResources().getDisplayMetrics().density);
         body.addView(input, lp);
         return input;
+    }
+
+    private static LinearLayout secondaryAction(Activity activity, String label) {
+        float density = activity.getResources().getDisplayMetrics().density;
+        LinearLayout button = new LinearLayout(activity);
+        button.setOrientation(LinearLayout.HORIZONTAL);
+        button.setGravity(Gravity.CENTER_VERTICAL);
+        button.setPadding(Math.round(14 * density), 0,
+            Math.round(14 * density), 0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Workspace.COLOR_FIELD);
+        bg.setCornerRadius(12 * density);
+        bg.setStroke(Math.max(1, Math.round(density)), Workspace.COLOR_BORDER);
+        button.setBackground(bg);
+        button.setClickable(true);
+        button.setFocusable(true);
+        button.setContentDescription(label);
+
+        ImageView picture = new ImageView(activity);
+        picture.setImageResource(android.R.drawable.ic_menu_gallery);
+        picture.setColorFilter(Workspace.COLOR_MUTED);
+        button.addView(picture, new LinearLayout.LayoutParams(
+            Math.round(20 * density), Math.round(20 * density)));
+
+        TextView text = new TextView(activity);
+        text.setText(label);
+        text.setTextSize(15);
+        text.setTextColor(Workspace.COLOR_TEXT);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        labelParams.leftMargin = Math.round(10 * density);
+        button.addView(text, labelParams);
+
+        TextView chevron = new TextView(activity);
+        chevron.setText("›");
+        chevron.setTextSize(25);
+        chevron.setTextColor(Workspace.COLOR_MUTED);
+        button.addView(chevron);
+        return button;
     }
 
     private static TextView action(Activity activity, String label) {
