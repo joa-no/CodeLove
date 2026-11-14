@@ -2079,10 +2079,10 @@ public final class Workspace {
 
         TextView retry = new TextView(activity);
         retry.setText(activity.getString(R.string.cl_select_again));
-        retry.setTextColor(COLOR_TEXT);
+        retry.setTextColor(COLOR_ACCENT_TEXT);
         retry.setTextSize(13);
         retry.setGravity(Gravity.CENTER);
-        retry.setBackground(box(COLOR_FIELD, 12, true));
+        retry.setBackground(box(COLOR_FOLDER, 10, false));
         retry.setPadding(dp(12), 0, dp(12), 0);
         actions.addView(retry, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));

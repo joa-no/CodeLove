@@ -30,6 +30,7 @@ final class GameExportDialog {
     private static final String PREFS = "codelove_game_export";
     private static final Pattern PACKAGE = Pattern.compile(
         "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)+");
+    private static final int PURPLE = 0xFFA78BFA;
 
     private GameExportDialog() {}
 
@@ -204,13 +205,11 @@ final class GameExportDialog {
         button.setText(label);
         button.setTextSize(15);
         button.setTypeface(Typeface.DEFAULT_BOLD);
-        button.setTextColor(Workspace.COLOR_TEXT);
+        button.setTextColor(0xFF17131F);
         button.setGravity(Gravity.CENTER);
         GradientDrawable bg = new GradientDrawable();
-        float density = activity.getResources().getDisplayMetrics().density;
-        bg.setColor(Workspace.COLOR_FIELD);
-        bg.setCornerRadius(12 * density);
-        bg.setStroke(Math.max(1, Math.round(density)), Workspace.COLOR_BORDER);
+        bg.setColor(PURPLE);
+        bg.setCornerRadius(12 * activity.getResources().getDisplayMetrics().density);
         button.setBackground(bg);
         button.setPadding(12, 12, 12, 12);
         return button;
