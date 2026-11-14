@@ -112,7 +112,7 @@ jobs:
           unzip -Z1 "$APK" | grep -Fx 'assets/scripts/helper.lua'
           unzip -Z1 "$APK" | grep -Fx 'assets/assets/data.txt'
           unzip -p "$APK" assets/assets/data.txt | grep -Fx 'asset-preservation-test'
-          if unzip -Z1 "$APK" | grep -Fq 'assets/codelove-licenses.txt'; then
+          unzip -Z1 "$APK" | grep -E 'res/.*/love[.]png'
             echo "Unexpected normal-flavor assets in exported APK" >&2
             exit 1
           fi
