@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/export-smoke-test.yml'
       - 'tools/prepare_game_export.py'
+      - 'docs/exportacao-apk.md'
       - 'tools/test_prepare_game_export.py'
       - 'app/src/main/java/org/love2d/android/GameExportArchive.java'
       - 'app/src/main/java/org/love2d/android/GameActivity.java'
@@ -21,7 +22,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Validate LOVE archive staging
+      - name: Install isolated Python icon tooling
+        run: |
+          python3 -m venv "$RUNNER_TEMP/export-python"
+          "$RUNNER_TEMP/export-python/bin/pip" install --disable-pip-version-check 'Pillow==11.3.0'
+          echo "$RUNNER_TEMP/export-python/bin" >> "$GITHUB_PATH"
+      - name: Validate LOVE archive and icon staging
         run: python3 tools/test_prepare_game_export.py
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -59,15 +65,40 @@ jobs:
                   if file.is_file():
                       archive.write(file, file.relative_to(root).as_posix())
           PY
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from PIL import Image
+          Image.new("RGBA", (512, 512), (160, 90, 240, 255)).save(
+              Path(os.environ["RUNNER_TEMP"]) / "game-icon.png")
+          PY
           python3 tools/prepare_game_export.py \
             --love "$RUNNER_TEMP/sample.love" \
+            --icon "$RUNNER_TEMP/game-icon.png" \
             --name "CodeLove Export Test" \
             --package com.example.codelove.exporttest \
             --version-name 1.0.0 --version-code 1
           test -s app/src/embed/assets/main.lua
-      - name: Build isolated game APK (debug signature, testing only)
+          test -s app/src/embed/res/drawable-mdpi/love.png
+          test -s app/src/embed/res/drawable-xxxhdpi/love.png
+          test ! -e app/src/normal/res/drawable-mdpi/love.png
+      - name: Generate temporary test-only signing key
         run: |
-          bash ./gradlew assembleEmbedNoRecordDebug \
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/export-test-only.p12" \
+            -storetype PKCS12 -alias export-test \
+            -keyalg RSA -keysize 3072 -validity 2 \
+            -storepass "export-only-demo-pass" \
+            -keypass "export-only-demo-pass" \
+            -dname "CN=CodeLove Export Smoke Test"
+      - name: Build isolated release game APK (temporary test signature)
+        env:
+          CODELOVE_RELEASE_STORE_FILE: ${{ runner.temp }}/export-test-only.p12
+          CODELOVE_RELEASE_STORE_PASSWORD: export-only-demo-pass
+          CODELOVE_RELEASE_KEY_ALIAS: export-test
+          CODELOVE_RELEASE_KEY_PASSWORD: export-only-demo-pass
+        run: |
+          bash ./gradlew assembleEmbedNoRecordRelease \
             '-Papp.name=CodeLove Export Test' \
             '-Papp.application_id=com.example.codelove.exporttest' \
             '-Papp.version_name=1.0.0' \
@@ -75,7 +106,7 @@ jobs:
       - name: Validate APK contents and Android identity
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/embedNoRecord/debug/app-embed-noRecord-debug.apk"
+          APK="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release.apk"
           test -s "$APK"
           unzip -Z1 "$APK" | grep -Fx 'assets/main.lua'
           unzip -Z1 "$APK" | grep -Fx 'assets/scripts/helper.lua'
@@ -90,9 +121,13 @@ jobs:
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/export-badging.txt"
           grep -F "name='com.example.codelove.exporttest'" "$RUNNER_TEMP/export-badging.txt"
           grep -F "application-label:'CodeLove Export Test'" "$RUNNER_TEMP/export-badging.txt"
-          echo "Smoke test: embedded Lua assets and APK metadata verified"
-      - name: Upload test APK (not a distributable release)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          unzip -Z1 "$APK" | grep -E 'res/.*/love\\.png'
+          echo "Smoke test: assets, icon resources, identity and APK signature verified"
+      - name: Upload signed test APK (ephemeral key, cannot be updated)
         uses: actions/upload-artifact@v4
         with:
-          name: export-smoke-test-debug-apk
-          path: app/build/outputs/apk/embedNoRecord/debug/app-embed-noRecord-debug.apk
+          name: export-smoke-test-release-testkey-apk
+          path: app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release.apk

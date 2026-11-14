@@ -139,12 +139,58 @@ def prepare_love(source: Path, destination: Path) -> tuple[int, int]:
                     writer.write(chunk)
     return len(files), actual_bytes
 
+
+def prepare_icon(source: Path, resources: Path) -> dict[str, Path]:
+    """Generate launcher icons for the embed flavor only.
+
+    Requires Pillow when --icon is provided. This step runs on the isolated
+    builder, never on the phone or against the CodeLove launcher resources.
+    """
+    source = source.resolve(strict=True)
+    if not source.is_file() or source.stat().st_size > 8 * 1024 * 1024:
+        raise ValueError("Icon must be an image no larger than 8 MiB")
+    try:
+        from PIL import Image, ImageOps
+    except ImportError as exc:
+        raise ValueError("Pillow is required to stage a custom game icon") from exc
+
+    with Image.open(source) as picture:
+        if picture.format not in ("PNG", "JPEG", "WEBP"):
+            raise ValueError("Icon must be PNG, JPEG or WebP")
+        width, height = picture.size
+        if min(width, height) < 192 or max(width, height) > 4096:
+            raise ValueError("Icon dimensions must be between 192 and 4096 pixels")
+        picture.load()
+        picture = picture.convert("RGBA")
+        result = {}
+        for density, size in (
+            ("mdpi", 48),
+            ("hdpi", 72),
+            ("xhdpi", 96),
+            ("xxhdpi", 144),
+            ("xxxhdpi", 192),
+        ):
+            # Same qualifiers as main/res, but in the higher-priority embed
+            # source set. This deliberately leaves the normal CodeLove icon.
+            output = resources / f"drawable-{density}" / "love.png"
+            if output.exists():
+                raise ValueError(f"Refusing to overwrite existing icon: {output}")
+            output.parent.mkdir(parents=True, exist_ok=True)
+            ImageOps.fit(picture, (size, size), method=Image.Resampling.LANCZOS
+                         ).save(output, format="PNG", optimize=True)
+            result[density] = output
+        return result
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--project", type=Path)
     source.add_argument("--love", type=Path)
     parser.add_argument("--assets", type=Path, default=Path("app/src/embed/assets"))
+    parser.add_argument("--icon", type=Path,
+                        help="Custom PNG, JPEG or WebP launcher image")
+    parser.add_argument("--icon-res", type=Path, default=Path("app/src/embed/res"),
+                        help="Embed-only Android resource output directory")
     parser.add_argument("--name", required=True)
     parser.add_argument("--package", required=True)
     parser.add_argument("--version-name", default="1.0.0")
@@ -159,6 +205,9 @@ def main() -> int:
     try:
         count, size = (prepare_love(args.love, args.assets)
                        if args.love is not None else prepare(args.project, args.assets))
+        if args.icon is not None:
+            staged = prepare_icon(args.icon, args.icon_res)
+            print(f"Staged custom icon for {len(staged)} Android densities")
     except (OSError, ValueError, zipfile.BadZipFile, RuntimeError) as exc:
         parser.error(str(exc))
     print(f"Staged {count} files ({size} bytes) into {args.assets}")

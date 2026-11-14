@@ -7,7 +7,7 @@ import warnings
 import zipfile
 from pathlib import Path
 
-from prepare_game_export import prepare, prepare_love
+from prepare_game_export import prepare, prepare_love, prepare_icon
 
 
 class ExportArchiveTest(unittest.TestCase):
@@ -89,6 +89,54 @@ class ExportArchiveTest(unittest.TestCase):
             count, _ = prepare(game, root / "assets")
             self.assertEqual(count, 1)
             self.assertEqual((root / "assets/main.lua").read_text(), "print('ok')")
+
+
+    def test_custom_icon_is_only_staged_in_embed_resources(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            original = root / "icon.png"
+            Image.new("RGBA", (512, 512), (160, 90, 240, 255)).save(original)
+            output = root / "app/src/embed/res"
+            files = prepare_icon(original, output)
+            self.assertEqual(set(files.keys()), {
+                "mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"
+            })
+            for density, size in [
+                ("mdpi", 48), ("hdpi", 72), ("xhdpi", 96),
+                ("xxhdpi", 144), ("xxxhdpi", 192),
+            ]:
+                with Image.open(files[density]) as generated:
+                    self.assertEqual(generated.size, (size, size))
+                    self.assertEqual(generated.format, "PNG")
+            self.assertFalse((root / "app/src/normal").exists())
+            self.assertFalse((root / "app/src/main").exists())
+
+    def test_rejects_invalid_or_tiny_icons(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            invalid = root / "icon.png"
+            invalid.write_bytes(b"not a real image")
+            with self.assertRaises(OSError):
+                prepare_icon(invalid, root / "res")
+            small = root / "small.png"
+            Image.new("RGBA", (32, 32), "purple").save(small)
+            with self.assertRaises(ValueError):
+                prepare_icon(small, root / "res")
+
+    def test_refuses_to_overwrite_an_existing_launcher_icon(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            icon = root / "icon.png"
+            Image.new("RGBA", (512, 512), "purple").save(icon)
+            existing = root / "res/drawable-mdpi/love.png"
+            existing.parent.mkdir(parents=True)
+            existing.write_bytes(b"KEEP")
+            with self.assertRaises(ValueError):
+                prepare_icon(icon, root / "res")
+            self.assertEqual(existing.read_bytes(), b"KEEP")
 
 
 if __name__ == "__main__":

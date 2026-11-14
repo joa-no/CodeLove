@@ -47,6 +47,15 @@ Antes da extração, todas as entradas são verificadas para evitar travessia de
 **Isso não valida a execução em um celular nem a assinatura de distribuição.**
  Ela apenas copia os arquivos e imprime uma sugestão de comando Gradle. Não modifica a pasta de origem.
 
+
+### Ícone e assinatura no ambiente de compilação
+
+Uma imagem PNG, JPEG ou WebP entre 192 e 4096 pixels pode ser passada opcionalmente com `--icon /tmp/icone.png`. O preparo gera ícones nos cinco tamanhos de densidade sob `app/src/embed/res/drawable-*/love.png`, sem modificar os ícones da variante normal do CodeLove. A imagem é recortada ao centro para ficar quadrada. Essa operação exige Pillow no ambiente de build isolado.
+
+O teste automatizado agora assina um APK da variante `embed` em modo Release com uma **chave temporária exclusiva do teste**, verificando a assinatura com `apksigner`. Esse APK **não é uma versão de distribuição**, porque a chave é descartada após o teste e não permitiria atualizar a instalação no futuro.
+
+**Ainda falta:** transporte seguro de `.love`, configurações e imagem para o compilador, assinatura persistente por jogo, entrega no Android e validação funcional em dispositivo. O ícone escolhido no painel ainda não é enviado automaticamente ao compilador.
+
 ## Itens ainda não implementados
 
 - Painel de configuração implementado. O botão secundário `Salvar pacote .love` usa `GameExportArchive` para ler o SAF após verificar que não há abas não salvas; gera ZIP temporário antes de abrir o seletor de destino e o remove após a cópia. O botão ainda **não** produz APK; falta compilar e assinar.
