@@ -41,6 +41,7 @@ final class GameExportArchive {
     private final ContentResolver resolver;
     private final Set<String> names = new HashSet<>();
     private int fileCount;
+    private int entryCount;
     private long totalBytes;
     private boolean hasMainLua;
 
@@ -81,6 +82,9 @@ final class GameExportArchive {
         if (depth > MAX_DEPTH) throw new IOException("Projeto profundo demais.");
         for (DirectSafStorage.Entry entry : entries) {
             validateName(entry.name);
+            if (++entryCount > MAX_ENTRIES) {
+                throw new IOException("O projeto excede o limite de 10.000 entradas.");
+            }
             String path = prefix + entry.name;
             if (entry.directory) {
                 String directory = path + "/";
