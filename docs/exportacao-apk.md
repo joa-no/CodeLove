@@ -30,6 +30,16 @@ Os arquivos removidos foram:
 
 Também foram retirados o botão **Preparar pacote de compilação**, suas traduções, a entrada `--request` do preparador de assets e o teste que consumia esse formato. As ferramentas `--love`, `--project` e `--icon` continuam disponíveis para os testes com a variante `embed`.
 
+## Experimento atual: substituição offline de game.love
+
+Foi adicionado `tools/offline_apk_prototype.py` para testar **somente** a troca de `assets/game.love` num APK-base Android `embed`, sem usar SDK, NDK, Gradle ou rede durante a substituição ZIP. O script preserva as demais entradas, valida o `.love`, remove assinaturas antigas e produz um **APK não assinado e sem alinhamento garantido**. Ele não é um exportador instalável.
+
+O workflow `offline-apk-prototype.yml` compila um APK-base apenas uma vez durante o teste de desenvolvimento, faz a troca usando o script, verifica a integridade do jogo incorporado e então usa `zipalign -P 16` e `apksigner` **no ambiente CI, exclusivamente como instrumentos de verificação**. Não existe ainda alinhamento nem assinatura implementados dentro do CodeLove.
+
+O APK-base tem um identificador, nome, versão e ícone fixos, e não pode representar diversos jogos personalizados sem tratamento adicional. O formato `game.love` é suportado pelo código Android presente no fork, mas é uma opção antiga cuja compatibilidade futura precisa ser considerada.
+
+Se esse experimento falhar, não empilhar mudanças no aplicativo: corrigir ou remover a prova de conceito e preservar a última implementação funcional.
+
 ## Próxima investigação: APK-base offline
 
 1. **Preparar um APK-base com o LÖVE Android**: runtime nativo e estrutura mínima, sem jogo próprio e sem componentes da interface do CodeLove.
