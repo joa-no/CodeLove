@@ -187,6 +187,9 @@ android {
         }
     }
     packagingOptions {
+        resources {
+            excludes += ['META-INF/LICENSE.md']
+        }
         jniLibs {
             excludes += [
                 'lib/armeabi-v7a/libOpenSLES.so',
