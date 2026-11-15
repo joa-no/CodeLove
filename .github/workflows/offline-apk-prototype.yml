@@ -8,7 +8,7 @@ on:
       - 'tools/offline_apk_prototype.py'
       - 'tools/test_offline_apk_prototype.py'
       - 'tools/prepare_game_export.py'
-      - 'app/src/main/java/org/love2d/android/OfflineGameApk.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineGameApk.java'
       - 'tools/OfflineGameApkTest.java'
   workflow_dispatch:
 
@@ -27,7 +27,7 @@ jobs:
           python3 tools/test_offline_apk_prototype.py
           mkdir -p "$RUNNER_TEMP/offline-jvm"
           javac -d "$RUNNER_TEMP/offline-jvm" \
-            app/src/main/java/org/love2d/android/OfflineGameApk.java \
+            app/src/normal/java/org/love2d/android/OfflineGameApk.java \
             tools/OfflineGameApkTest.java
           java -cp "$RUNNER_TEMP/offline-jvm" \
             org.love2d.android.OfflineGameApkTest
