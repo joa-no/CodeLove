@@ -12,6 +12,8 @@ on:
       - 'tools/OfflineGameApkTest.java'
       - 'app/src/normal/java/org/love2d/android/OfflineApkSigner.java'
       - 'tools/OfflineApkSignerTest.java'
+      - 'app/src/normal/java/org/love2d/android/GameSigningKeyStore.java'
+      - 'tools/GameSigningKeyStoreTest.java'
       - 'app/build.gradle'
   workflow_dispatch:
 
@@ -37,16 +39,27 @@ jobs:
             -o "$RUNNER_TEMP/apksig.jar" \
             "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.13.2/apksig-8.13.2.jar"
           echo "c070ed1394629d74641aa0906f60b2ffa1ee77e6366a1f93437f59717b1aeb89  $RUNNER_TEMP/apksig.jar" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/bc"
+          for artifact in bcprov-jdk18on bcutil-jdk18on bcpkix-jdk18on; do
+            curl --fail --location --retry 3 --silent --show-error \
+              "https://repo.maven.apache.org/maven2/org/bouncycastle/$artifact/1.86/$artifact-1.86.jar" \
+              -o "$RUNNER_TEMP/bc/$artifact-1.86.jar"
+            unzip -tq "$RUNNER_TEMP/bc/$artifact-1.86.jar" > /dev/null
+          done
       - name: Unit test SDK-free ZIP replacement
         run: |
           python3 tools/test_offline_apk_prototype.py
           mkdir -p "$RUNNER_TEMP/offline-jvm"
-          javac --release 17 -cp "$RUNNER_TEMP/apksig.jar" \
+          javac --release 17 -cp "$RUNNER_TEMP/apksig.jar:$RUNNER_TEMP/bc/*" \
             -d "$RUNNER_TEMP/offline-jvm" \
             app/src/normal/java/org/love2d/android/OfflineGameApk.java \
             tools/OfflineGameApkTest.java \
             app/src/normal/java/org/love2d/android/OfflineApkSigner.java \
-            tools/OfflineApkSignerTest.java
+            tools/OfflineApkSignerTest.java \
+            app/src/normal/java/org/love2d/android/GameSigningKeyStore.java \
+            tools/GameSigningKeyStoreTest.java
+          java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/bc/*" \
+            org.love2d.android.GameSigningKeyStoreTest
           java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
             org.love2d.android.OfflineGameApkTest
           java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
@@ -147,13 +160,12 @@ jobs:
           # without running zipalign to modify the APK.
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-java-unsigned.apk"
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-unsigned.apk"
-          keytool -genkeypair -noprompt \
-            -keystore "$RUNNER_TEMP/offline-test-only.p12" \
-            -storetype PKCS12 -alias offline-test \
-            -keyalg RSA -keysize 3072 -validity 2 \
-            -storepass "offline-test-only-pass" \
-            -keypass "offline-test-only-pass" \
-            -dname "CN=Offline APK Prototype Only"
+          # A game-scoped key is created by CodeLove's actual Java code.
+          # The constant password is for a throwaway CI identity only.
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/bc/*" \
+            org.love2d.android.GameSigningKeyStoreTest --generate \
+            "$RUNNER_TEMP/offline-test-only.p12"
           # Sign with the exact Java class shipped in CodeLove, without
           # invoking the host apksigner to produce the signatures.
           GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
@@ -161,19 +173,19 @@ jobs:
             org.love2d.android.OfflineApkSignerTest --sign \
             "$RUNNER_TEMP/offline-java-unsigned.apk" \
             "$RUNNER_TEMP/offline-prototype-test.apk" \
-            "$RUNNER_TEMP/offline-test-only.p12" offline-test
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
           GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
             java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
             org.love2d.android.OfflineApkSignerTest --sign \
             "$RUNNER_TEMP/offline-java-unsigned.apk" \
             "$RUNNER_TEMP/offline-prototype-again.apk" \
-            "$RUNNER_TEMP/offline-test-only.p12" offline-test
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
           GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
             java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
             org.love2d.android.OfflineApkSignerTest --sign \
             "$RUNNER_TEMP/offline-direct-unsigned.apk" \
             "$RUNNER_TEMP/offline-direct-prototype.apk" \
-            "$RUNNER_TEMP/offline-test-only.p12" offline-test
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
           "$APKSIGNER" verify --verbose --print-certs \
             "$RUNNER_TEMP/offline-direct-prototype.apk"
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-prototype.apk"
