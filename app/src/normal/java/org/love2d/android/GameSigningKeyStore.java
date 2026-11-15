@@ -63,7 +63,7 @@ final class GameSigningKeyStore {
     private GameSigningKeyStore() {}
 
     /** Generate a new signing identity. Never replace an existing identity. */
-    static Identity create(File destination, char[] password)
+    static synchronized Identity create(File destination, char[] password)
             throws IOException, GeneralSecurityException {
         requirePassword(password, true);
         requireNewDestination(destination);
@@ -160,7 +160,7 @@ final class GameSigningKeyStore {
      * The supplied stream is not closed. Existing identities are never
      * replaced because doing so could permanently break game updates.
      */
-    static Identity restore(InputStream backup, File destination, char[] password)
+    static synchronized Identity restore(InputStream backup, File destination, char[] password)
             throws IOException, GeneralSecurityException {
         if (backup == null) throw new IOException("Missing backup input");
         requirePassword(password, false);
@@ -244,19 +244,12 @@ final class GameSigningKeyStore {
     }
 
     private static void publishNewFile(File temp, File destination) throws IOException {
-        // Exclusive creation avoids overwriting an existing project identity.
-        // Copy before marking success; remove a partial output on any failure.
-        if (!destination.createNewFile()) {
-            throw new IOException("Signing identity already exists");
-        }
-        boolean success = false;
-        try (FileInputStream in = new FileInputStream(temp);
-             FileOutputStream out = new FileOutputStream(destination)) {
-            transfer(in, out);
-            out.getFD().sync();
-            success = true;
-        } finally {
-            if (!success) destination.delete();
+        // The temporary key was fully written and fsynced in the same private
+        // directory. Rename publishes atomically, avoiding a half-written key
+        // after abrupt process death. create/restore are synchronized and
+        // neither operation may replace an existing identity.
+        if (destination.exists() || !temp.renameTo(destination)) {
+            throw new IOException("Could not safely publish new signing identity");
         }
     }
 
