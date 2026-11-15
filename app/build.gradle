@@ -204,6 +204,10 @@ dependencies {
     implementation 'io.github.rosemoe:editor:0.24.7'
     // APK signing is only for the CodeLove editor; never package it inside games.
     normalImplementation 'com.android.tools.build:apksig:8.13.2'
+    // Per-game offline PKCS#12 identities and self-signed X.509 certificates.
+    // Included only in the CodeLove editor flavor, never the exported runtime.
+    normalImplementation 'org.bouncycastle:bcprov-jdk18on:1.86'
+    normalImplementation 'org.bouncycastle:bcpkix-jdk18on:1.86'
     implementation 'com.google.oboe:oboe:1.9.3'
 }
 
