@@ -1,57 +1,41 @@
-# Exportação de jogos Android — direção offline
+# CodeLove — exportação Android totalmente offline
 
-## Objetivo
+## Objetivo e restrições
 
-Permitir que o CodeLove produza um APK instalável no próprio Android, **sem hospedagem, servidor de compilação, conta GitHub do usuário ou cobrança recorrente**.
+O usuário deve poder gerar um APK independente de seu jogo LÖVE2D **diretamente no CodeLove no Android**, sem servidor, hospedagem, acesso obrigatório à internet, ferramentas instaladas separadamente ou credenciais GitHub.
 
-O LÖVE Android possui uma variante `embed` que embute arquivos Lua e recursos do jogo em um APK. Essa compilação já foi confirmada pelo workflow de teste. Entretanto, a compilação tradicional utiliza Gradle, SDK e NDK — não é um exportador offline integrado ao aplicativo.
+A variante Android `embed` do LÖVE2D permite empacotar um jogo. Na documentação oficial do LÖVE 11.4+, o formato recomendado é incluir **`assets/main.lua` e demais arquivos diretamente em `assets/`**. O método `assets/game.love` continua reconhecido pelo fork, mas é legado e não será o formato definitivo.
 
-A arquitetura offline ainda precisa ser comprovada antes de ativarmos o botão "Gerar APK".
+O processo deve **reutilizar um APK-base já compilado**, sem levar Gradle/SDK/NDK para o dispositivo. GitHub Actions participa dos builds e testes do CodeLove, não da exportação dos usuários.
 
-## Componentes aproveitáveis já implementados
+## Componentes implementados
 
-- **Painel Exportar APK:** configura nome, identificador Android, versão, código de versão e ícone. As configurações ficam locais no CodeLove.
-- **Arquivamento SAF:** `GameExportArchive.java` lê os documentos salvos da pasta do projeto e cria um arquivo `.love` ZIP. A geração exige `main.lua` na raiz e possui limites de tamanho, profundidade e quantidade de arquivos.
-- **Opção "Salvar pacote .love":** `GameExportPackage.java` oferece gravação via seletor de documentos Android, sem alterar a pasta original nem as abas do editor.
-- **Preparação do LÖVE Android:** `tools/prepare_game_export.py` valida uma pasta de jogo ou um `.love` e prepara os assets da variante `embed`. Para o processo de construção de um APK-base, também consegue preparar os recursos do ícone com Pillow.
-- **Workflow de verificação:** `export-smoke-test.yml` constrói um jogo sintético com a variante `embed`, verifica nome, assets e ícone, e assina uma cópia exclusivamente de teste com uma chave temporária. Isso comprova o processo Gradle tradicional, **não** a exportação offline no telefone.
+- **Interface de configurações:** `GameExportDialog.java` permite configurar nome, applicationId, versão, versionCode e ícone, e salvar preferências por projeto. Não tem botão de APK funcional.
+- **Empacotamento do projeto salvo:** `GameExportArchive.java` lê arquivos via SAF, valida `main.lua`, limita arquivos/profundidade/tamanho e produz `.love`. `GameExportPackage.java` oferece a opção de salvá-lo pelo seletor Android.
+- **Montador offline:** `app/src/normal/java/org/love2d/android/OfflineGameApk.java` não depende das APIs Android e produz ZIP APK **não assinado**. A classe preserva as bibliotecas nativas e seu alinhamento de 16 KiB, valida o ZIP e remove assinaturas antigas.
+  - `writeUnsigned`: substitui `assets/game.love`, método legado, mantido como referência funcional.
+  - `writeUnsignedAssets`: lê o `.love` e incorpora `assets/main.lua`, scripts e recursos **diretamente**, conforme o formato recomendado. Aceita um APK-base com um único placeholder `assets/game.love` ou `assets/main.lua`, e rejeita colisões com os assets do runtime.
+- **Assinador isolado:** `OfflineApkSigner.java` usa `apksig` e uma chave PKCS#12 fornecida pelo chamador; gera e verifica assinaturas v1/v2/v3 e compara certificados. A dependência foi limitada ao flavor `normal` do CodeLove, não aos APKs dos jogos.
+- **Testes:** `tools/OfflineGameApkTest.java`, `tools/OfflineApkSignerTest.java`, `tools/test_offline_apk_prototype.py` e `.github/workflows/offline-apk-prototype.yml`.
 
-O editor, a árvore SAF, o runtime do CodeLove e o ícone principal do aplicativo devem permanecer separados do APK final do jogo.
+## Resultados de testes
 
-## Trabalho removido
+- **Teste offline #4: aprovado.** Substituição de `game.love`, alinhamento nativo, assinatura de teste e verificação do APK real.
+- **Teste offline #6: assinatura Java v1/v2/v3 aprovada em dois APKs, com o mesmo certificado.** O job foi marcado como falho porque um `grep` procurava um texto incompatível com a saída atual do `apksigner`. A comparação foi corrigida sem alterar o algoritmo de assinatura.
+- **Teste offline #12:** os testes unitários da montagem Java e da integração do assinador passaram. O teste completo do APK real, agora com os assets diretos, ainda não tinha resultado final na última consulta.
 
-A tentativa de compilação remota introduziu o formato `codelove.android-build.v1` e scripts para validar/compilar esse pacote em um serviço externo. Essas funções foram retiradas do aplicativo e do repositório porque não atendem ao objetivo offline.
+**Não há comprovação de instalação e execução no celular**, e ainda não foi testado o assinador dentro do processo Android do CodeLove. Um teste no JVM do GitHub Actions não prova compatibilidade no dispositivo.
 
-Os arquivos removidos foram:
-- `GameExportBuildRequest.java`
-- `tools/game_build_request.py`
-- `tools/test_game_build_request.py`
-- `tools/build_export_apk.py`
+## Pendências obrigatórias antes de habilitar “Gerar APK”
 
-Também foram retirados o botão **Preparar pacote de compilação**, suas traduções, a entrada `--request` do preparador de assets e o teste que consumia esse formato. As ferramentas `--love`, `--project` e `--icon` continuam disponíveis para os testes com a variante `embed`.
+1. Validar o novo empacotamento direto em um APK real, incluindo alinhamento de 16 KiB, assinatura verificável e execução no Android.
+2. Implementar a geração ou importação de chave **persistente por jogo**, com backup/reimportação e proteção contra perda da identidade de assinatura. Não reutilizar a chave do CodeLove nem chaves efêmeras de CI.
+3. Implementar personalização confiável do `applicationId`, nome, versão, versionCode e ícone no APK compilado. Isso requer tratar corretamente manifesto binário e recursos; não presumir que um simples ZIP resolve.
+4. Incorporar o APK-base ao CodeLove de forma offline, sem acesso à rede do usuário ou compilações por projeto.
+5. Integrar empacotamento, assinatura e salvamento do APK por SAF num fluxo assíncrono seguro; testar instalação e **atualização** sem desinstalar os jogos.
 
-## Experimento atual: substituição offline de game.love
+As implementações experimentais devem permanecer isoladas e reversíveis. Quando algo falhar, corrigir ou restaurar a última abordagem validada em vez de acumular protótipos.
 
-Foi adicionado `tools/offline_apk_prototype.py` para testar **somente** a troca de `assets/game.love` num APK-base Android `embed`, sem usar SDK, NDK, Gradle ou rede durante a substituição ZIP. O script preserva as demais entradas, valida o `.love`, remove assinaturas antigas e produz um **APK não assinado e sem alinhamento garantido**. Ele não é um exportador instalável.
+## Histórico de limpeza
 
-O workflow `offline-apk-prototype.yml` compila um APK-base apenas uma vez durante o teste de desenvolvimento, faz a troca usando o script, verifica a integridade do jogo incorporado e então usa `zipalign -P 16` e `apksigner` **no ambiente CI, exclusivamente como instrumentos de verificação**. Não existe ainda alinhamento nem assinatura implementados dentro do CodeLove.
-
-O APK-base tem um identificador, nome, versão e ícone fixos, e não pode representar diversos jogos personalizados sem tratamento adicional. O formato `game.love` é suportado pelo código Android presente no fork, mas é uma opção antiga cuja compatibilidade futura precisa ser considerada.
-
-Se esse experimento falhar, não empilhar mudanças no aplicativo: corrigir ou remover a prova de conceito e preservar a última implementação funcional.
-
-## Próxima investigação: APK-base offline
-
-1. **Preparar um APK-base com o LÖVE Android**: runtime nativo e estrutura mínima, sem jogo próprio e sem componentes da interface do CodeLove.
-2. **Provar a substituição local do jogo**: incluir `main.lua` e assets da pasta SAF no APK-base, sem precisar recompilar código nativo. Verificar integridade ZIP, alinhamento das bibliotecas, execução e compatibilidade.
-3. **Avaliar a personalização de metadados e recursos**: identificador de pacote, nome, versão e ícone no manifesto/recursos Android compilados; não presumir que bastará substituir um ZIP.
-4. **Validar assinatura de APK offline e persistente**: gerar/importar uma chave por jogo com backup, assinar o APK no Android e confirmar que uma versão posterior atualiza a anterior sem desinstalar.
-5. **Só então ligar a montagem ao painel "Gerar APK"** e salvar o APK final via SAF.
-
-Não reutilizar a chave privada do CodeLove nem usar uma chave pública de debug para distribuir jogos. Não inserir artefatos transitórios na pasta principal como workspace.
-
-## Estado da validação
-
-O teste automatizado #11 do processo `embed` anterior passou. A implementação de exportação offline **ainda não foi testada** e não deve ser apresentada como funcional. A assinatura de teste do workflow não prova assinatura local nem persistência de chave.
-
-Distribuição inicial prevista: APK pelo GitHub, sem dependência da Google Play.
+Foi descartada a proposta de compilação remota. Removidos o pacote de solicitações `codelove.android-build.v1`, `GameExportBuildRequest.java`, `tools/game_build_request.py`, `tools/test_game_build_request.py`, `tools/build_export_apk.py` e a opção de UI para prepará-lo. Os componentes úteis para exportação offline foram preservados.
