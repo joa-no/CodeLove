@@ -1,0 +1,149 @@
+name: offline-apk-prototype
+
+# Feasibility test only: no project upload, no server, no user credentials.
+on:
+  push:
+    paths:
+      - '.github/workflows/offline-apk-prototype.yml'
+      - 'tools/offline_apk_prototype.py'
+      - 'tools/test_offline_apk_prototype.py'
+      - 'tools/prepare_game_export.py'
+  workflow_dispatch:
+
+jobs:
+  repack-template:
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx4G'"
+    steps:
+      - name: Checkout with native LÖVE submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Unit test SDK-free ZIP replacement
+        run: python3 tools/test_offline_apk_prototype.py
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: gradle
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          curl -Lo kitware-archive.sh https://apt.kitware.com/kitware-archive.sh
+          sudo bash ./kitware-archive.sh
+          sudo apt-get install -y ninja-build cmake
+      - name: Prepare base and replacement LOVE games
+        run: |
+          set -euo pipefail
+          test ! -e app/src/embed/assets/main.lua
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path(os.environ["RUNNER_TEMP"])
+          template = Path("app/src/embed/assets/game.love")
+          template.parent.mkdir(parents=True, exist_ok=True)
+          with ZipFile(template, "w", ZIP_DEFLATED) as archive:
+              archive.writestr("main.lua", "error('Template is not a finished game')")
+          game = root / "offline-sample.love"
+          with ZipFile(game, "w", ZIP_DEFLATED) as archive:
+              archive.writestr("main.lua",
+                  "function love.draw()\n"
+                  "  love.graphics.print('Offline APK prototype', 32, 32)\n"
+                  "end\n")
+              archive.writestr("scripts/helper.lua", "return 'nested Lua'")
+              archive.writestr("images/test.bin", b"\x00\xfe\xff\x01")
+          PY
+      - name: Build unsigned embed template once
+        run: |
+          bash ./gradlew assembleEmbedNoRecordRelease \
+            '-Papp.name=CodeLove Offline Template' \
+            '-Papp.application_id=com.example.codelove.offlinetemplate' \
+            '-Papp.version_name=1.0.0' \
+            '-Papp.version_code=1'
+      - name: Replace game.love without running Gradle
+        run: |
+          set -euo pipefail
+          TEMPLATE="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk"
+          test -s "$TEMPLATE"
+          unzip -Z1 "$TEMPLATE" | grep -Fx 'assets/game.love'
+          if unzip -Z1 "$TEMPLATE" | grep -Fxq 'assets/main.lua'; then
+            echo "Unexpected loose main.lua in template" >&2
+            exit 1
+          fi
+          python3 tools/offline_apk_prototype.py \
+            --template "$TEMPLATE" \
+            --love "$RUNNER_TEMP/offline-sample.love" \
+            --out "$RUNNER_TEMP/offline-repacked-unsigned.apk"
+          unzip -p "$RUNNER_TEMP/offline-repacked-unsigned.apk" assets/game.love \
+            > "$RUNNER_TEMP/embedded-game.love"
+          cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/embedded-game.love"
+          unzip -Z1 "$RUNNER_TEMP/offline-repacked-unsigned.apk" \
+            | grep -Fx 'lib/arm64-v8a/liblove.so'
+      - name: Align and sign test APK
+        run: |
+          set -euo pipefail
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign -type f | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -x "$ZIPALIGN"
+          test -x "$APKSIGNER"
+          "$ZIPALIGN" -P 16 -f 4 \
+            "$RUNNER_TEMP/offline-repacked-unsigned.apk" \
+            "$RUNNER_TEMP/offline-aligned-unsigned.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-aligned-unsigned.apk"
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/offline-test-only.p12" \
+            -storetype PKCS12 -alias offline-test \
+            -keyalg RSA -keysize 3072 -validity 2 \
+            -storepass "offline-test-only-pass" \
+            -keypass "offline-test-only-pass" \
+            -dname "CN=Offline APK Prototype Only"
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/offline-test-only.p12" \
+            --ks-key-alias offline-test \
+            --ks-pass "pass:offline-test-only-pass" \
+            --key-pass "pass:offline-test-only-pass" \
+            --out "$RUNNER_TEMP/offline-prototype-test.apk" \
+            "$RUNNER_TEMP/offline-aligned-unsigned.apk"
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-prototype-test.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-test.apk"
+      - name: Validate embedded game, native libraries and identity
+        run: |
+          set -euo pipefail
+          APK="$RUNNER_TEMP/offline-prototype-test.apk"
+          test -s "$APK"
+          unzip -p "$APK" assets/game.love > "$RUNNER_TEMP/signed-game.love"
+          cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/signed-game.love"
+          python3 - <<'PY'
+          import io
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          apk = Path(os.environ["RUNNER_TEMP"]) / "offline-prototype-test.apk"
+          with ZipFile(apk) as package:
+              assert package.testzip() is None
+              names = package.namelist()
+              assert names.count("assets/game.love") == 1
+              assert "assets/main.lua" not in names
+              assert "lib/arm64-v8a/liblove.so" in names
+              with ZipFile(io.BytesIO(package.read("assets/game.love"))) as love:
+                  assert "main.lua" in love.namelist()
+                  assert "scripts/helper.lua" in love.namelist()
+                  assert love.read("images/test.bin") == b"\x00\xfe\xff\x01"
+                  assert b"Template is not a finished game" not in love.read("main.lua")
+          PY
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/offline-badging.txt"
+          grep -F "name='com.example.codelove.offlinetemplate'" \
+            "$RUNNER_TEMP/offline-badging.txt"
+          grep -F "application-label:'CodeLove Offline Template'" \
+            "$RUNNER_TEMP/offline-badging.txt"
+          echo "Offline ZIP replacement, alignment and test signature verified"
+      - name: Upload prototype test APK (not ready for distribution)
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-prototype-test-only
+          path: ${{ runner.temp }}/offline-prototype-test.apk
