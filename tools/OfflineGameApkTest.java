@@ -75,6 +75,58 @@ public final class OfflineGameApkTest {
         }
     }
 
+
+    private static void testDirectAssets() throws Exception {
+        File directory = Files.createTempDirectory("offline-assets-jvm-").toFile();
+        try {
+            File template = new File(directory, "template.apk");
+            File game = new File(directory, "direct.love");
+            File output = new File(directory, "direct-unsigned.apk");
+            makeTemplate(template, true, false);
+            byte[] originalTemplate = Files.readAllBytes(template.toPath());
+            Files.write(game.toPath(), love("print('direct embed')"));
+
+            try (FileOutputStream stream = new FileOutputStream(output)) {
+                OfflineGameApk.writeUnsignedAssets(template, game, stream);
+            }
+            check(Arrays.equals(originalTemplate, Files.readAllBytes(template.toPath())),
+                  "Direct export modified the original APK base");
+            try (ZipFile apk = new ZipFile(output)) {
+                check(apk.getEntry("assets/game.love") == null,
+                      "Legacy ZIP should not remain in direct-asset APK");
+                ZipEntry main = apk.getEntry("assets/main.lua");
+                ZipEntry nested = apk.getEntry("assets/scripts/data.lua");
+                check(main != null && nested != null,
+                      "Direct game Lua assets are missing");
+                try (java.io.InputStream stream = apk.getInputStream(main)) {
+                    check(Arrays.equals(stream.readAllBytes(),
+                          "print('direct embed')".getBytes(
+                            java.nio.charset.StandardCharsets.UTF_8)),
+                          "Direct main.lua differs from original");
+                }
+                check(apk.getEntry("lib/arm64-v8a/liblove.so") != null,
+                      "Native engine missing from direct asset output");
+                check(apk.getEntry("META-INF/OLD.RSA") == null,
+                      "Stale signature remained in direct asset output");
+            }
+
+            // The recommended template has assets/main.lua instead of
+            // assets/game.love. Replacing that placeholder must work too.
+            makeTemplate(template, false, true);
+            try (FileOutputStream stream = new FileOutputStream(output)) {
+                // Do not overwrite an existing output silently; tests use a
+                // separate output file just as production should.
+                OfflineGameApk.writeUnsignedAssets(
+                    template, game, new FileOutputStream(
+                      new File(directory, "direct-from-main.apk")));
+            }
+        } finally {
+            File[] entries = directory.listFiles();
+            if (entries != null) for (File item : entries) item.delete();
+            directory.delete();
+        }
+    }
+
     private static void test() throws Exception {
         File directory = Files.createTempDirectory("offline-apk-java-").toFile();
         try {
@@ -114,6 +166,7 @@ public final class OfflineGameApkTest {
                 add(malformed, "../main.lua", new byte[]{1}, false);
             }
             expectReject(template, game, new File(directory, "bad3.apk"));
+            testDirectAssets();
             System.out.println("OfflineGameApk JVM tests passed");
         } finally {
             File[] entries = directory.listFiles();
@@ -129,6 +182,12 @@ public final class OfflineGameApkTest {
                     new File(args[1]), new File(args[2]), out);
             }
             System.out.println("Java offline APK created: unsigned");
+        } else if (args.length == 4 && "--repack-assets".equals(args[0])) {
+            try (FileOutputStream out = new FileOutputStream(args[3])) {
+                OfflineGameApk.writeUnsignedAssets(
+                    new File(args[1]), new File(args[2]), out);
+            }
+            System.out.println("Direct asset APK created: unsigned");
         } else if (args.length == 0) {
             test();
         } else {
