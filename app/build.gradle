@@ -202,6 +202,8 @@ dependencies {
     implementation 'androidx.core:core:1.15.0'
     // Sora Editor: motor de edicao com suporte a Lua, abas e autocomplete.
     implementation 'io.github.rosemoe:editor:0.24.7'
+    // APK signing is only for the CodeLove editor; never package it inside games.
+    normalImplementation 'com.android.tools.build:apksig:8.13.2'
     implementation 'com.google.oboe:oboe:1.9.3'
 }
 
