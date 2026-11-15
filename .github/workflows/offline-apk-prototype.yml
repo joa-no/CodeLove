@@ -10,6 +10,9 @@ on:
       - 'tools/prepare_game_export.py'
       - 'app/src/normal/java/org/love2d/android/OfflineGameApk.java'
       - 'tools/OfflineGameApkTest.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkSigner.java'
+      - 'tools/OfflineApkSignerTest.java'
+      - 'app/build.gradle'
   workflow_dispatch:
 
 jobs:
@@ -28,15 +31,26 @@ jobs:
           distribution: zulu
           java-version: 17
           cache: gradle
+      - name: Download verified APK signing library for JVM test
+        run: |
+          curl --fail --location --retry 3 --silent --show-error \
+            -o "$RUNNER_TEMP/apksig.jar" \
+            "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.13.2/apksig-8.13.2.jar"
+          echo "c070ed1394629d74641aa0906f60b2ffa1ee77e6366a1f93437f59717b1aeb89  $RUNNER_TEMP/apksig.jar" | sha256sum --check
       - name: Unit test SDK-free ZIP replacement
         run: |
           python3 tools/test_offline_apk_prototype.py
           mkdir -p "$RUNNER_TEMP/offline-jvm"
-          javac --release 17 -d "$RUNNER_TEMP/offline-jvm" \
+          javac --release 17 -cp "$RUNNER_TEMP/apksig.jar" \
+            -d "$RUNNER_TEMP/offline-jvm" \
             app/src/normal/java/org/love2d/android/OfflineGameApk.java \
-            tools/OfflineGameApkTest.java
-          java -cp "$RUNNER_TEMP/offline-jvm" \
+            tools/OfflineGameApkTest.java \
+            app/src/normal/java/org/love2d/android/OfflineApkSigner.java \
+            tools/OfflineApkSignerTest.java
+          java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
             org.love2d.android.OfflineGameApkTest
+          java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest
       - name: Install native build dependencies
         run: |
           sudo apt-get update
@@ -115,16 +129,32 @@ jobs:
             -storepass "offline-test-only-pass" \
             -keypass "offline-test-only-pass" \
             -dname "CN=Offline APK Prototype Only"
-          "$APKSIGNER" sign \
-            --ks "$RUNNER_TEMP/offline-test-only.p12" \
-            --ks-key-alias offline-test \
-            --ks-pass "pass:offline-test-only-pass" \
-            --key-pass "pass:offline-test-only-pass" \
-            --out "$RUNNER_TEMP/offline-prototype-test.apk" \
-            "$RUNNER_TEMP/offline-java-unsigned.apk"
+          # Sign with the exact Java class shipped in CodeLove, without
+          # invoking the host apksigner to produce the signatures.
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-java-unsigned.apk" \
+            "$RUNNER_TEMP/offline-prototype-test.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" offline-test
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-java-unsigned.apk" \
+            "$RUNNER_TEMP/offline-prototype-again.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" offline-test
           "$APKSIGNER" verify --verbose --print-certs \
             "$RUNNER_TEMP/offline-prototype-test.apk"
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-test.apk"
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-prototype-again.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-again.apk"
+          # Both APKs use the same signing certificate, allowing updates.
+          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/offline-prototype-test.apk" \
+            | grep 'Signer #1 certificate SHA-256 digest' > "$RUNNER_TEMP/signer1.txt"
+          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/offline-prototype-again.apk" \
+            | grep 'Signer #1 certificate SHA-256 digest' > "$RUNNER_TEMP/signer2.txt"
+          cmp "$RUNNER_TEMP/signer1.txt" "$RUNNER_TEMP/signer2.txt"
       - name: Validate embedded game, native libraries and identity
         run: |
           set -euo pipefail
