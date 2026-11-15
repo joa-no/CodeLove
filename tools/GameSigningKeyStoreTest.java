@@ -122,6 +122,24 @@ public final class GameSigningKeyStoreTest {
     }
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 2 && "--generate".equals(args[0])) {
+            String value = System.getenv("GAME_TEST_KEY_PASSWORD");
+            if (value == null || value.isEmpty()) {
+                throw new IllegalStateException("Test key password was not supplied");
+            }
+            char[] password = value.toCharArray();
+            try {
+                GameSigningKeyStore.Identity id = GameSigningKeyStore.create(
+                        new File(args[1]), password);
+                System.out.println("Generated offline test key: " + id.sha256);
+            } finally {
+                Arrays.fill(password, '\0');
+            }
+            return;
+        }
+        if (args.length != 0) {
+            throw new IllegalArgumentException("Usage: [--generate output.p12]");
+        }
         test();
     }
 }
