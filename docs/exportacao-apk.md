@@ -26,10 +26,23 @@ O processo deve **reutilizar um APK-base já compilado**, sem levar Gradle/SDK/N
 
 **Não há comprovação de instalação e execução no celular**, e ainda não foi testado o assinador dentro do processo Android do CodeLove. Um teste no JVM do GitHub Actions não prova compatibilidade no dispositivo.
 
+## Chaves de assinatura: geração, armazenamento e recuperação
+
+A etapa de **criação e backup offline** foi adicionada, ainda sem interface:
+
+- `GameSigningKeyStore.java`: cria um par RSA de 3072 bits e um certificado X.509 próprio do jogo, salva o material em PKCS#12 protegido por senha de no mínimo 12 caracteres, confere a chave privada e permite exportar e restaurar o mesmo certificado por `InputStream`/`OutputStream`. Uma chave existente nunca é substituída automaticamente.
+- `GameSigningKeyManager.java`: usa exclusivamente `Context.getNoBackupFilesDir()/game-signing-keys`, com nome derivado por SHA-256 do **ID estável do projeto SAF**, não do nome editável do jogo. Nenhuma senha é salva nas preferências. O diretório é privado e excluído do backup automático do Android.
+- `tools/GameSigningKeyStoreTest.java` e `game-signing-key-tests.yml`: verificam no JVM geração, senha errada, backup, restauração, identidade preservada, chaves distintas e compatibilidade com o formato de KeyStore usado pelo assinador. **Teste #1 aprovado.**
+- Dependências Bouncy Castle `bcprov-jdk18on:1.86` e `bcpkix-jdk18on:1.86` limitadas à variante `normal`, pois o Android não disponibiliza uma API pública completa para emitir certificados de chaves de software exportáveis. O mecanismo de assinatura usa `apksig` separadamente.
+
+**Atenção:** o armazenamento privado protege os arquivos de outros apps comuns, mas não equivale a uma chave não exportável de hardware. O formato PKCS#12 permite backup; a senha e o arquivo de backup precisam ser guardados pelo usuário. **Desinstalar o CodeLove ou limpar seus dados apaga a cópia local**. Sem o backup e a senha, uma nova versão do jogo não poderá ser instalada como atualização com a mesma assinatura.
+
+`GameSigningKeyManager` ainda não está conectado ao seletor SAF, painel ou exportação real. A compatibilidade de geração, PKCS#12 e assinatura **dentro de um dispositivo Android** também precisa ser validada antes de disponibilizar a função.
+
 ## Pendências obrigatórias antes de habilitar “Gerar APK”
 
 1. Validar o novo empacotamento direto em um APK real, incluindo alinhamento de 16 KiB, assinatura verificável e execução no Android.
-2. Implementar a geração ou importação de chave **persistente por jogo**, com backup/reimportação e proteção contra perda da identidade de assinatura. Não reutilizar a chave do CodeLove nem chaves efêmeras de CI.
+2. Integrar a chave por jogo ao painel e ao SAF, incluindo criação, backup manual, importação e solicitação segura da senha; confirmar a geração e assinatura no Android real. Nunca reutilizar a chave do CodeLove nem chaves efêmeras de CI.
 3. Implementar personalização confiável do `applicationId`, nome, versão, versionCode e ícone no APK compilado. Isso requer tratar corretamente manifesto binário e recursos; não presumir que um simples ZIP resolve.
 4. Incorporar o APK-base ao CodeLove de forma offline, sem acesso à rede do usuário ou compilações por projeto.
 5. Integrar empacotamento, assinatura e salvamento do APK por SAF num fluxo assíncrono seguro; testar instalação e **atualização** sem desinstalar os jogos.
