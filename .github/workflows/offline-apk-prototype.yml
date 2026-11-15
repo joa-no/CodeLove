@@ -122,10 +122,16 @@ jobs:
             | grep -F "Offline APK prototype"
           unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/scripts/helper.lua \
             | grep -Fx "return 'nested Lua'"
-          unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/images/test.bin \
-            > "$RUNNER_TEMP/direct-test.bin"
-          printf '\\000\\376\\377\\001' > "$RUNNER_TEMP/expected-test.bin"
-          cmp "$RUNNER_TEMP/expected-test.bin" "$RUNNER_TEMP/direct-test.bin"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          apk = Path(os.environ["RUNNER_TEMP"]) / "offline-direct-unsigned.apk"
+          with ZipFile(apk) as package:
+              assert package.testzip() is None
+              assert package.read("assets/images/test.bin") == b"\x00\xfe\xff\x01"
+              assert "assets/game.love" not in package.namelist()
+          PY
           if unzip -Z1 "$RUNNER_TEMP/offline-direct-unsigned.apk" | grep -Fxq 'assets/game.love'; then
             echo "Legacy game.love must not remain in recommended embedded APK" >&2
             exit 1
@@ -179,9 +185,13 @@ jobs:
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-again.apk"
           # Both APKs use the same signing certificate, allowing updates.
           "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/offline-prototype-test.apk" \
-            | grep 'Signer #1 certificate SHA-256 digest' > "$RUNNER_TEMP/signer1.txt"
+            | sed -nE 's/^.*certificate SHA-256 digest: ([0-9a-f]+).*$/\1/p' \
+            | head -n 1 > "$RUNNER_TEMP/signer1.txt"
           "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/offline-prototype-again.apk" \
-            | grep 'Signer #1 certificate SHA-256 digest' > "$RUNNER_TEMP/signer2.txt"
+            | sed -nE 's/^.*certificate SHA-256 digest: ([0-9a-f]+).*$/\1/p' \
+            | head -n 1 > "$RUNNER_TEMP/signer2.txt"
+          test -s "$RUNNER_TEMP/signer1.txt"
+          test -s "$RUNNER_TEMP/signer2.txt"
           cmp "$RUNNER_TEMP/signer1.txt" "$RUNNER_TEMP/signer2.txt"
       - name: Validate embedded game, native libraries and identity
         run: |
