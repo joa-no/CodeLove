@@ -212,6 +212,8 @@ final class OfflineGameApk {
     private static void validateGame(File gameLove) throws IOException {
         try (ZipFile game = new ZipFile(gameLove)) {
             Set<String> names = new HashSet<>();
+            Set<String> files = new HashSet<>();
+            Set<String> directories = new HashSet<>();
             long size = 0;
             int count = 0;
             boolean foundMain = false;
@@ -227,12 +229,36 @@ final class OfflineGameApk {
                         || entry.getSize() < 0) {
                     throw new IOException("Unsupported or duplicate LOVE entry: " + name);
                 }
+                String logical = entry.isDirectory()
+                        ? name.substring(0, name.length() - 1) : name;
+                String[] parts = logical.split("/");
+                StringBuilder parent = new StringBuilder();
+                for (int i = 0; i < parts.length - 1; i++) {
+                    if (i > 0) parent.append('/');
+                    parent.append(parts[i]);
+                    String path = parent.toString();
+                    if (files.contains(path)) {
+                        throw new IOException("LOVE file/directory collision: " + path);
+                    }
+                    directories.add(path);
+                }
+                if (entry.isDirectory()) {
+                    if (files.contains(logical)) {
+                        throw new IOException("LOVE file/directory collision: " + logical);
+                    }
+                    directories.add(logical);
+                } else {
+                    if (directories.contains(logical)) {
+                        throw new IOException("LOVE file/directory collision: " + logical);
+                    }
+                    files.add(logical);
+                }
                 if ("main.lua".equals(name) && !entry.isDirectory()) foundMain = true;
                 if (!entry.isDirectory()) {
-                    size += entry.getSize();
-                    if (size > MAX_GAME_CONTENT) {
+                    if (entry.getSize() > MAX_GAME_CONTENT - size) {
                         throw new IOException("Uncompressed LOVE game exceeds 512 MiB");
                     }
+                    size += entry.getSize();
                     // Verify that the archive can be read and its CRC matches.
                     CRC32 crc = new CRC32();
                     long copied = 0;
@@ -286,9 +312,12 @@ final class OfflineGameApk {
                 || name.indexOf('\\') >= 0 || name.indexOf('\0') >= 0) {
             throw new IOException("Unsafe archive entry path");
         }
-        for (String part : name.split("/", -1)) {
-            if ("..".equals(part) || ".".equals(part) ||
-                    (part.isEmpty() && !name.endsWith("/"))) {
+        String[] parts = name.split("/", -1);
+        for (int i = 0; i < parts.length; i++) {
+            String part = parts[i];
+            if ("..".equals(part) || ".".equals(part)
+                    || (part.isEmpty()
+                        && !(i == parts.length - 1 && name.endsWith("/")))) {
                 throw new IOException("Unsafe archive entry path: " + name);
             }
         }
