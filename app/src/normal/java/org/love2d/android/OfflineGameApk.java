@@ -94,6 +94,121 @@ final class OfflineGameApk {
         }
     }
 
+
+    /**
+     * Recommended LÖVE 11.4+ embedding format: unpack the saved .love into
+     * the APK's assets/ directory (assets/main.lua, scripts/, images/, ...).
+     *
+     * Accepts an *embed* template containing exactly one placeholder game
+     * slot, either assets/game.love (legacy) or assets/main.lua (new form).
+     * The slot is removed before writing the new game assets. Unrelated APK
+     * contents are preserved, and collisions are rejected rather than
+     * silently overwriting runtime resources.
+     *
+     * Output is aligned but UNSIGNED and has unchanged app identity.
+     */
+    static void writeUnsignedAssets(File templateApk, File gameLove,
+                                    OutputStream output) throws IOException {
+        if (templateApk == null || gameLove == null || output == null
+                || !templateApk.isFile() || !gameLove.isFile()
+                || templateApk.getCanonicalFile().equals(gameLove.getCanonicalFile())) {
+            throw new IOException("Template APK, game.love and output must be different");
+        }
+        if (gameLove.length() <= 0 || gameLove.length() > MAX_GAME_ARCHIVE) {
+            throw new IOException("Game LOVE archive exceeds allowed size");
+        }
+        validateGame(gameLove);
+        try (ZipFile template = new ZipFile(templateApk);
+             ZipFile game = new ZipFile(gameLove)) {
+            Set<String> templateNames = new HashSet<>();
+            Set<String> reservedAssets = new HashSet<>();
+            String slot = null;
+            int count = 0;
+            Enumeration<? extends ZipEntry> templates = template.entries();
+            while (templates.hasMoreElements()) {
+                ZipEntry item = templates.nextElement();
+                String name = item.getName();
+                validateZipName(name);
+                if (!templateNames.add(name) || ++count > MAX_APK_ENTRIES
+                        || (item.getMethod() != ZipEntry.STORED
+                            && item.getMethod() != ZipEntry.DEFLATED)
+                        || item.getSize() < 0) {
+                    throw new IOException("Invalid APK template entry: " + name);
+                }
+                if (GAME_ENTRY.equals(name) || "assets/main.lua".equals(name)) {
+                    if (slot != null) {
+                        throw new IOException("Template contains multiple game slots");
+                    }
+                    slot = name;
+                } else if (name.startsWith("assets/") && !isOldJarSignature(name)) {
+                    reservedAssets.add(name);
+                }
+            }
+            if (slot == null || !templateNames.contains("AndroidManifest.xml")
+                    || !templateNames.contains("classes.dex")) {
+                throw new IOException("Missing embedded game slot or Android manifest");
+            }
+
+            // No game file may overwrite or shadow an asset supplied by the
+            // engine. Also reject file-versus-directory prefix conflicts.
+            Enumeration<? extends ZipEntry> gameEntries = game.entries();
+            while (gameEntries.hasMoreElements()) {
+                ZipEntry item = gameEntries.nextElement();
+                String target = "assets/" + item.getName();
+                String logical = item.isDirectory()
+                        ? target.substring(0, target.length() - 1) : target;
+                for (String existing : reservedAssets) {
+                    String base = existing.endsWith("/")
+                            ? existing.substring(0, existing.length() - 1)
+                            : existing;
+                    if (base.equals(logical)
+                            || (!item.isDirectory()
+                                && base.startsWith(logical + "/"))
+                            || (!existing.endsWith("/")
+                                && logical.startsWith(base + "/"))) {
+                        throw new IOException("Game asset conflicts with APK: " + target);
+                    }
+                }
+            }
+
+            CountingStream counter = new CountingStream(output);
+            try (ZipOutputStream apk = new ZipOutputStream(counter)) {
+                templates = template.entries();
+                while (templates.hasMoreElements()) {
+                    ZipEntry entry = templates.nextElement();
+                    String name = entry.getName();
+                    if (slot.equals(name) || isOldJarSignature(name)) continue;
+                    writeCopiedEntry(template, entry, name, apk, counter);
+                }
+                gameEntries = game.entries();
+                while (gameEntries.hasMoreElements()) {
+                    ZipEntry entry = gameEntries.nextElement();
+                    writeCopiedEntry(game, entry, "assets/" + entry.getName(),
+                                     apk, counter);
+                }
+            }
+        }
+    }
+
+    private static void writeCopiedEntry(ZipFile source, ZipEntry entry,
+                                         String target, ZipOutputStream result,
+                                         CountingStream counter)
+            throws IOException {
+        ZipEntry copy = copyEntry(target, entry);
+        if (entry.getMethod() == ZipEntry.STORED) {
+            int alignment = target.startsWith("lib/") && target.endsWith(".so")
+                    ? NATIVE_ALIGNMENT : OTHER_ALIGNMENT;
+            copy.setExtra(alignmentExtra(counter.count, target, alignment));
+        }
+        result.putNextEntry(copy);
+        if (!entry.isDirectory()) {
+            try (InputStream in = source.getInputStream(entry)) {
+                transfer(in, result);
+            }
+        }
+        result.closeEntry();
+    }
+
     private static void validateGame(File gameLove) throws IOException {
         try (ZipFile game = new ZipFile(gameLove)) {
             Set<String> names = new HashSet<>();
