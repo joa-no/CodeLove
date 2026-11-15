@@ -113,12 +113,31 @@ public final class OfflineGameApkTest {
             // The recommended template has assets/main.lua instead of
             // assets/game.love. Replacing that placeholder must work too.
             makeTemplate(template, false, true);
-            try (FileOutputStream stream = new FileOutputStream(output)) {
-                // Do not overwrite an existing output silently; tests use a
-                // separate output file just as production should.
-                OfflineGameApk.writeUnsignedAssets(
-                    template, game, new FileOutputStream(
-                      new File(directory, "direct-from-main.apk")));
+            File recommended = new File(directory, "direct-from-main.apk");
+            try (FileOutputStream stream = new FileOutputStream(recommended)) {
+                OfflineGameApk.writeUnsignedAssets(template, game, stream);
+            }
+            try (ZipFile apk = new ZipFile(recommended)) {
+                check(apk.getEntry("assets/game.love") == null,
+                      "The recommended template should not add a legacy slot");
+                ZipEntry main = apk.getEntry("assets/main.lua");
+                check(main != null, "Recommended template lost main.lua");
+                try (java.io.InputStream input = apk.getInputStream(main)) {
+                    check(Arrays.equals(input.readAllBytes(),
+                          "print('direct embed')".getBytes(
+                              java.nio.charset.StandardCharsets.UTF_8)),
+                          "Failed to replace recommended template placeholder");
+                }
+            }
+            makeTemplate(template, true, true);
+            try (FileOutputStream stream = new FileOutputStream(
+                    new File(directory, "invalid-duplicate-slot.apk"))) {
+                try {
+                    OfflineGameApk.writeUnsignedAssets(template, game, stream);
+                    throw new AssertionError("Template with both slots was accepted");
+                } catch (java.io.IOException expected) {
+                    // A template containing game.love AND main.lua is invalid.
+                }
             }
         } finally {
             File[] entries = directory.listFiles();
