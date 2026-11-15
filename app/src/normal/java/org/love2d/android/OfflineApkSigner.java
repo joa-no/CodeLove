@@ -2,6 +2,7 @@ package org.love2d.android;
 
 import com.android.apksig.ApkSigner;
 import com.android.apksig.ApkVerifier;
+import com.android.apksig.apk.ApkFormatException;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -144,6 +145,8 @@ final class OfflineApkSigner {
                     verification.isVerifiedUsingV1Scheme(),
                     verification.isVerifiedUsingV2Scheme(),
                     verification.isVerifiedUsingV3Scheme());
+        } catch (ApkFormatException malformed) {
+            throw new IOException("Cannot sign an invalid Android APK", malformed);
         } finally {
             if (temporary.exists() && !temporary.delete()) {
                 // Temporary files are in the app's private cache. Caller should
