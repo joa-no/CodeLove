@@ -112,6 +112,24 @@ jobs:
           unzip -p "$RUNNER_TEMP/offline-java-unsigned.apk" assets/game.love \
             > "$RUNNER_TEMP/java-embedded-game.love"
           cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/java-embedded-game.love"
+          # Recommended LÖVE 11.4+ mode: add Lua/asset files directly
+          # under assets/; no assets/game.love in the finished APK.
+          java -cp "$RUNNER_TEMP/offline-jvm" \
+            org.love2d.android.OfflineGameApkTest --repack-assets \
+            "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
+            "$RUNNER_TEMP/offline-direct-unsigned.apk"
+          unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/main.lua \
+            | grep -F "Offline APK prototype"
+          unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/scripts/helper.lua \
+            | grep -Fx "return 'nested Lua'"
+          unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/images/test.bin \
+            > "$RUNNER_TEMP/direct-test.bin"
+          printf '\\000\\376\\377\\001' > "$RUNNER_TEMP/expected-test.bin"
+          cmp "$RUNNER_TEMP/expected-test.bin" "$RUNNER_TEMP/direct-test.bin"
+          if unzip -Z1 "$RUNNER_TEMP/offline-direct-unsigned.apk" | grep -Fxq 'assets/game.love'; then
+            echo "Legacy game.love must not remain in recommended embedded APK" >&2
+            exit 1
+          fi
       - name: Align and sign test APK
         run: |
           set -euo pipefail
@@ -122,6 +140,7 @@ jobs:
           # The Java assembler must align stored .so files itself,
           # without running zipalign to modify the APK.
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-java-unsigned.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-unsigned.apk"
           keytool -genkeypair -noprompt \
             -keystore "$RUNNER_TEMP/offline-test-only.p12" \
             -storetype PKCS12 -alias offline-test \
@@ -143,6 +162,15 @@ jobs:
             "$RUNNER_TEMP/offline-java-unsigned.apk" \
             "$RUNNER_TEMP/offline-prototype-again.apk" \
             "$RUNNER_TEMP/offline-test-only.p12" offline-test
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-direct-unsigned.apk" \
+            "$RUNNER_TEMP/offline-direct-prototype.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" offline-test
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-direct-prototype.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-prototype.apk"
           "$APKSIGNER" verify --verbose --print-certs \
             "$RUNNER_TEMP/offline-prototype-test.apk"
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-test.apk"
@@ -162,6 +190,15 @@ jobs:
           test -s "$APK"
           unzip -p "$APK" assets/game.love > "$RUNNER_TEMP/signed-game.love"
           cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/signed-game.love"
+          # The new direct-asset APK must also retain its game after signing.
+          unzip -p "$RUNNER_TEMP/offline-direct-prototype.apk" assets/main.lua \
+            | grep -F "Offline APK prototype"
+          unzip -p "$RUNNER_TEMP/offline-direct-prototype.apk" assets/scripts/helper.lua \
+            | grep -Fx "return 'nested Lua'"
+          if unzip -Z1 "$RUNNER_TEMP/offline-direct-prototype.apk" | grep -Fxq 'assets/game.love'; then
+            echo "Signed direct APK unexpectedly includes game.love" >&2
+            exit 1
+          fi
           python3 - <<'PY'
           import io
           import os
@@ -191,4 +228,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: offline-apk-prototype-test-only
-          path: ${{ runner.temp }}/offline-prototype-test.apk
+          path: |
+            ${{ runner.temp }}/offline-prototype-test.apk
+            ${{ runner.temp }}/offline-direct-prototype.apk
