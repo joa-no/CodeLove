@@ -22,21 +22,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Unit test SDK-free ZIP replacement
-        run: |
-          python3 tools/test_offline_apk_prototype.py
-          mkdir -p "$RUNNER_TEMP/offline-jvm"
-          javac -d "$RUNNER_TEMP/offline-jvm" \
-            app/src/normal/java/org/love2d/android/OfflineGameApk.java \
-            tools/OfflineGameApkTest.java
-          java -cp "$RUNNER_TEMP/offline-jvm" \
-            org.love2d.android.OfflineGameApkTest
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: 17
           cache: gradle
+      - name: Unit test SDK-free ZIP replacement
+        run: |
+          python3 tools/test_offline_apk_prototype.py
+          mkdir -p "$RUNNER_TEMP/offline-jvm"
+          javac --release 17 -d "$RUNNER_TEMP/offline-jvm" \
+            app/src/normal/java/org/love2d/android/OfflineGameApk.java \
+            tools/OfflineGameApkTest.java
+          java -cp "$RUNNER_TEMP/offline-jvm" \
+            org.love2d.android.OfflineGameApkTest
       - name: Install native build dependencies
         run: |
           sudo apt-get update
