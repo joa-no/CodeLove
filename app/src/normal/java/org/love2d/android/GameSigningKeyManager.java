@@ -27,6 +27,24 @@ final class GameSigningKeyManager {
 
     private GameSigningKeyManager() {}
 
+    /**
+     * Stable identity for an Android game. A package name is the identity
+     * Android itself uses for app updates; it survives project folder moves,
+     * folder renames, and changes to the game's display name.
+     *
+     * The UI must pass the SAVED applicationId, not a filesystem path.
+     * Changing applicationId intentionally creates a different Android app
+     * and therefore a different signing identity.
+     */
+    static String projectIdForPackage(String applicationId)
+            throws GeneralSecurityException {
+        if (applicationId == null || !applicationId.matches(
+                "[a-zA-Z_][a-zA-Z0-9_]*(\\\\.[a-zA-Z_][a-zA-Z0-9_]*)+")) {
+            throw new GeneralSecurityException("Invalid Android application ID");
+        }
+        return "android-package:" + applicationId;
+    }
+
     static File privateKeyFile(Context context, String projectId)
             throws IOException, GeneralSecurityException {
         if (context == null || projectId == null || projectId.trim().isEmpty()) {
