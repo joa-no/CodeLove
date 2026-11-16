@@ -30,7 +30,7 @@ final class GameSigningKeySaf {
         StringBuilder safeName = new StringBuilder(fileName.length());
         for (int i = 0; i < fileName.length(); i++) {
             char ch = fileName.charAt(i);
-            safeName.append(ch == '/' || ch == '\\\\' || ch < 32 || ch == 127 ? '_' : ch);
+            safeName.append(ch == '/' || ch == '\\' || ch < 32 || ch == 127 ? '_' : ch);
         }
         fileName = safeName.toString();
         if (!fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".p12")) {
