@@ -679,20 +679,6 @@ public final class Workspace {
         settingsButton.setOnClickListener(v -> showSettings());
         header.addView(settingsButton, new LinearLayout.LayoutParams(dp(40), dp(40)));
 
-        // No vertical, a gaveta cobre o editor. O Play tambem deve existir
-        // no painel de arquivos para executar o projeto sem abrir um arquivo.
-        panelPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
-        panelPlayButton = new LinearLayout(activity);
-        panelPlayButton.setGravity(Gravity.CENTER);
-        panelPlayButton.setBackground(box(COLOR_FIELD, 10, false));
-        panelPlayButton.addView(panelPlayIcon,
-            new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(panelPlayButton, activity.getString(R.string.cl_run_project));
-        panelPlayButton.setOnClickListener(v -> togglePlayback());
-        LinearLayout.LayoutParams panelPlayLp =
-            new LinearLayout.LayoutParams(dp(40), dp(40));
-        panelPlayLp.leftMargin = dp(8);
-        header.addView(panelPlayButton, panelPlayLp);
 
         return header;
     }
@@ -1598,10 +1584,7 @@ public final class Workspace {
         }
         // Evita dois botoes Play simultaneos no modo horizontal: o Play do
         // editor ja fica no canto superior direito da area de trabalho.
-        if (panelPlayButton != null) {
-            panelPlayButton.setVisibility(verticalMode && surface == null
-                ? View.VISIBLE : View.GONE);
-        }
+
         int sideInset = onLeft ? insetLeft : insetRight;
         if (ui != null) {
             ui.topInset = insetTop;
