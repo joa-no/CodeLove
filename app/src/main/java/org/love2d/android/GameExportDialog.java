@@ -141,7 +141,7 @@ final class GameExportDialog {
             });
         }
 
-        TextView save = action(activity, activity.getString(R.string.cl_export_save"));
+        TextView save = action(activity, activity.getString(R.string.cl_export_save));
         LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         saveParams.topMargin = (int)(12*density);
