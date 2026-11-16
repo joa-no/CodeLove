@@ -99,11 +99,11 @@ final class GameSigningKeyUi {
         panel.addView(cancel);
         cancel.setOnClickListener(v -> dialog.dismiss());
 
-        showRoundedDialog(activity, dialog, panel, density);
+        showRoundedDialog(activity, dialog, panel, density, false);
     }
 
     private static void showRoundedDialog(Activity activity, Dialog dialog,
-                                          View panel, float density) {
+                                          View panel, float density, boolean longForm) {
         android.widget.FrameLayout frame = new android.widget.FrameLayout(activity);
         frame.setPadding((int)(3*density), (int)(3*density),
             (int)(3*density), (int)(3*density));
@@ -118,8 +118,8 @@ final class GameSigningKeyUi {
             window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
             android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
             window.setLayout(metrics.widthPixels - (int)(30*density),
-                Math.min((int)(metrics.heightPixels * 0.88f),
-                    (int)(780*density)));
+                longForm ? (int)(metrics.heightPixels * 0.84f) :
+                    android.view.WindowManager.LayoutParams.WRAP_CONTENT);
         }
     }
 
@@ -393,7 +393,7 @@ final class GameSigningKeyUi {
                 toast(activity, "Não foi possível abrir o seletor de arquivos");
             }
         });
-        showRoundedDialog(activity, dialog, layout, density);
+        showRoundedDialog(activity, dialog, layout, density, true);
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
