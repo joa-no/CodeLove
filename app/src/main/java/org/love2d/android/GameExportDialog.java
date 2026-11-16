@@ -19,6 +19,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.View;
 
 import java.util.regex.Pattern;
 
@@ -83,19 +84,34 @@ final class GameExportDialog {
         body.addView(heading);
 
         TextView note = new TextView(activity);
-        note.setText(R.string.cl_export_not_ready);
+        note.setText("Configure e prepare seu jogo para Android.");
         note.setTextSize(13);
         note.setTextColor(Workspace.COLOR_MUTED);
         note.setPadding(0, (int)(8*density), 0, (int)(12*density));
         body.addView(note);
 
+        section(activity, body, "1. Informações do jogo", android.R.drawable.ic_menu_manage);
         EditText name = field(activity, body, R.string.cl_export_name,
             prefs.getString(key + "name", projectName), false);
         EditText pack = field(activity, body, R.string.cl_export_package,
             prefs.getString(key + "package", "com.exemplo.meujogo"), false);
-        EditText version = field(activity, body, R.string.cl_export_version,
+
+        LinearLayout versionRow = new LinearLayout(activity);
+        versionRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout versionColumn = new LinearLayout(activity);
+        versionColumn.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout codeColumn = new LinearLayout(activity);
+        codeColumn.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        left.rightMargin = (int)(10*density);
+        versionRow.addView(versionColumn, left);
+        versionRow.addView(codeColumn, new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        body.addView(versionRow);
+        EditText version = field(activity, versionColumn, R.string.cl_export_version,
             prefs.getString(key + "version", "1.0.0"), false);
-        EditText versionCode = field(activity, body, R.string.cl_export_version_code,
+        EditText versionCode = field(activity, codeColumn, R.string.cl_export_version_code,
             prefs.getString(key + "version_code", "1"), true);
 
         // Secondary action: outlined row with an icon and chevron.
@@ -113,9 +129,11 @@ final class GameExportDialog {
         iconValue.setTextColor(Workspace.COLOR_MUTED);
         body.addView(iconValue);
 
+        section(activity, body, "2. Assinatura do aplicativo",
+            android.R.drawable.ic_lock_lock);
         // Normal editor flavor provides the signing UI; exported games do not.
         if (!BuildConfig.FLAVOR.startsWith("embed")) {
-            LinearLayout signing = secondaryAction(activity, "Chaves de assinatura",
+            LinearLayout signing = secondaryAction(activity, "Gerenciar chave de assinatura",
                 android.R.drawable.ic_lock_lock);
             LinearLayout.LayoutParams signingParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
@@ -141,25 +159,27 @@ final class GameExportDialog {
             });
         }
 
-        TextView save = action(activity, activity.getString(R.string.cl_export_save));
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
-        saveParams.topMargin = (int)(12*density);
-        body.addView(save, saveParams);
-
-        // A .love is an intermediate file used by the APK builder, not an APK.
+        section(activity, body, "3. Preparar exportação",
+            android.R.drawable.ic_menu_save);
         LinearLayout prepareLove = secondaryAction(activity,
             activity.getString(R.string.cl_export_love_prepare),
             android.R.drawable.ic_menu_save);
         LinearLayout.LayoutParams loveParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44 * density));
-        loveParams.topMargin = (int)(10 * density);
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         body.addView(prepareLove, loveParams);
+
+        TextView save = secondaryTextAction(activity,
+            activity.getString(R.string.cl_export_save));
+        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(42*density));
+        saveParams.topMargin = (int)(12*density);
+        body.addView(save, saveParams);
 
         TextView status = new TextView(activity);
         status.setText(R.string.cl_export_disabled);
         status.setTextColor(Workspace.COLOR_MUTED);
         status.setTextSize(12);
+        status.setGravity(Gravity.CENTER);
         status.setPadding(0, (int)(12*density), 0, 0);
         body.addView(status);
 
@@ -226,6 +246,54 @@ final class GameExportDialog {
             .putString(key + "version", ver).putString(key + "version_code", code)
             .apply();
         return n;
+    }
+
+    private static void section(Activity activity, LinearLayout body,
+                                String title, int iconResource) {
+        float d = activity.getResources().getDisplayMetrics().density;
+        View separator = new View(activity);
+        separator.setBackgroundColor(Workspace.COLOR_BORDER);
+        LinearLayout.LayoutParams sep = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, Math.round(d)));
+        sep.topMargin = Math.round(14*d);
+        sep.bottomMargin = Math.round(14*d);
+        body.addView(separator, sep);
+        LinearLayout heading = new LinearLayout(activity);
+        heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView icon = new ImageView(activity);
+        icon.setImageResource(iconResource);
+        icon.setColorFilter(PURPLE);
+        heading.addView(icon, new LinearLayout.LayoutParams(
+            Math.round(20*d), Math.round(20*d)));
+        TextView label = new TextView(activity);
+        label.setText(title);
+        label.setTextSize(16);
+        label.setTypeface(Typeface.DEFAULT_BOLD);
+        label.setTextColor(Workspace.COLOR_TEXT);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = Math.round(10*d);
+        heading.addView(label, lp);
+        LinearLayout.LayoutParams headingParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headingParams.bottomMargin = Math.round(14*d);
+        body.addView(heading, headingParams);
+    }
+
+    private static TextView secondaryTextAction(Activity activity, String label) {
+        TextView button = new TextView(activity);
+        button.setText(label);
+        button.setTextSize(14);
+        button.setTextColor(PURPLE);
+        button.setGravity(Gravity.CENTER);
+        GradientDrawable bg = new GradientDrawable();
+        float d = activity.getResources().getDisplayMetrics().density;
+        bg.setColor(Workspace.COLOR_FIELD);
+        bg.setStroke(Math.max(1, Math.round(d)), Workspace.COLOR_BORDER);
+        bg.setCornerRadius(12*d);
+        button.setBackground(bg);
+        return button;
     }
 
     private static EditText field(Activity activity, LinearLayout body, int title,
