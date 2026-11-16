@@ -4,7 +4,6 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.provider.DocumentsContract;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -28,7 +27,12 @@ final class GameSigningKeySaf {
         String fileName = suggestedFileName == null ? "" : suggestedFileName.trim();
         if (fileName.isEmpty()) fileName = "codelove-game-key";
         // Avoid treating a game title as a filesystem path.
-        fileName = fileName.replaceAll("[\\\\/\\\\x00-\\\\x1f]", "_");
+        StringBuilder safeName = new StringBuilder(fileName.length());
+        for (int i = 0; i < fileName.length(); i++) {
+            char ch = fileName.charAt(i);
+            safeName.append(ch == '/' || ch == '\\\\' || ch < 32 || ch == 127 ? '_' : ch);
+        }
+        fileName = safeName.toString();
         if (!fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".p12")) {
             fileName += ".p12";
         }
