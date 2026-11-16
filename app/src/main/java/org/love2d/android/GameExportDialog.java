@@ -113,7 +113,35 @@ final class GameExportDialog {
         iconValue.setTextColor(Workspace.COLOR_MUTED);
         body.addView(iconValue);
 
-        TextView save = action(activity, activity.getString(R.string.cl_export_save));
+        // Normal editor flavor provides the signing UI; exported games do not.
+        if (!BuildConfig.FLAVOR.startsWith("embed")) {
+            LinearLayout signing = secondaryAction(activity, "Chaves de assinatura",
+                android.R.drawable.ic_lock_lock);
+            LinearLayout.LayoutParams signingParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
+            signingParams.topMargin = (int)(10*density);
+            body.addView(signing, signingParams);
+            signing.setOnClickListener(v -> {
+                String packageName = pack.getText().toString().trim();
+                if (!PACKAGE.matcher(packageName).matches()) {
+                    Toast.makeText(activity, R.string.cl_export_invalid, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                // Only the normal source set contains the signing implementation.
+                try {
+                    Class<?> type = Class.forName("org.love2d.android.GameSigningKeyUi");
+                    java.lang.reflect.Method method = type.getDeclaredMethod(
+                        "show", Activity.class, String.class);
+                    method.setAccessible(true);
+                    method.invoke(null, activity, packageName);
+                } catch (ReflectiveOperationException ex) {
+                    Toast.makeText(activity, "Gerenciamento de chaves indisponível",
+                        Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+
+        TextView save = action(activity, activity.getString(R.string.cl_export_save"));
         LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         saveParams.topMargin = (int)(12*density);
