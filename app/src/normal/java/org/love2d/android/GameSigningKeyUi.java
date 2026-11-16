@@ -5,6 +5,12 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.text.InputType;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -28,15 +34,76 @@ final class GameSigningKeyUi {
             toast(activity, "Identificador do aplicativo inválido");
             return;
         }
-        new AlertDialog.Builder(activity)
-            .setTitle("Chaves de assinatura")
-            .setMessage("A chave é associada ao identificador " + applicationId
-                + ". Guarde o backup .p12 e sua senha: sem eles não será possível"
-                + " atualizar um jogo já publicado após perder os dados do CodeLove.")
-            .setItems(new String[]{"Criar chave", "Salvar backup .p12",
-                "Restaurar backup .p12"}, (dialog, which) ->
-                requestPassword(activity, projectId, applicationId, which))
-            .setNegativeButton("Cancelar", null).show();
+        final float density = activity.getResources().getDisplayMetrics().density;
+        final int pad = (int) (20 * density + 0.5f);
+        LinearLayout panel = new LinearLayout(activity);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(pad, pad, pad, pad);
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(Workspace.COLOR_PANEL);
+        background.setCornerRadius(18 * density);
+        panel.setBackground(background);
+
+        TextView heading = new TextView(activity);
+        heading.setText("Chaves de assinatura");
+        heading.setTextSize(20);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        heading.setTextColor(Workspace.COLOR_TEXT);
+        panel.addView(heading);
+
+        TextView explanation = new TextView(activity);
+        explanation.setText("A chave é associada ao identificador " + applicationId
+            + ". Guarde o backup .p12 e sua senha: sem eles não será possível"
+            + " atualizar um jogo já publicado após perder os dados do CodeLove.");
+        explanation.setTextSize(13);
+        explanation.setTextColor(Workspace.COLOR_MUTED);
+        explanation.setPadding(0, (int)(12 * density), 0, (int)(14 * density));
+        panel.addView(explanation);
+
+        final AlertDialog dialog = new AlertDialog.Builder(activity).create();
+        String[] labels = {"Criar chave", "Salvar backup .p12", "Restaurar backup .p12"};
+        for (int i = 0; i < labels.length; i++) {
+            final int action = i;
+            TextView option = new TextView(activity);
+            option.setText(labels[i]);
+            option.setTextSize(16);
+            option.setTextColor(Workspace.COLOR_TEXT);
+            option.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            option.setPadding((int)(14 * density), 0, (int)(14 * density), 0);
+            GradientDrawable optionBackground = new GradientDrawable();
+            optionBackground.setColor(Workspace.COLOR_PANEL);
+            optionBackground.setStroke(Math.max(1, (int)density), Workspace.COLOR_MUTED);
+            optionBackground.setCornerRadius(12 * density);
+            option.setBackground(optionBackground);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int)(52 * density));
+            params.bottomMargin = (int)(9 * density);
+            panel.addView(option, params);
+            option.setOnClickListener(v -> {
+                dialog.dismiss();
+                requestPassword(activity, projectId, applicationId, action);
+            });
+        }
+
+        TextView cancel = new TextView(activity);
+        cancel.setText("Cancelar");
+        cancel.setTextSize(15);
+        cancel.setTextColor(0xFFA78BFA);
+        cancel.setGravity(android.view.Gravity.CENTER);
+        cancel.setPadding(0, (int)(9 * density), 0, 0);
+        panel.addView(cancel);
+        cancel.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.setView(panel);
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+                dialog.getWindow().setLayout(
+                    activity.getResources().getDisplayMetrics().widthPixels
+                        - (int)(36 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
+        });
+        dialog.show();
     }
 
     private static void requestPassword(Activity activity, String projectId,
