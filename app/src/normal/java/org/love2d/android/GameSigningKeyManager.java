@@ -39,7 +39,7 @@ final class GameSigningKeyManager {
     static String projectIdForPackage(String applicationId)
             throws GeneralSecurityException {
         if (applicationId == null || !applicationId.matches(
-                "[a-zA-Z_][a-zA-Z0-9_]*(\\\\.[a-zA-Z_][a-zA-Z0-9_]*)+")) {
+                "[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)+")) {
             throw new GeneralSecurityException("Invalid Android application ID");
         }
         return "android-package:" + applicationId;
