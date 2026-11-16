@@ -14,6 +14,7 @@ import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.CheckBox;
 import android.widget.FrameLayout;
+import android.widget.ScrollView;
 import android.text.InputType;
 import android.view.Gravity;
 import android.widget.Toast;
@@ -64,7 +65,7 @@ final class GameSigningKeyUi {
         explanation.setPadding(0, (int)(12 * density), 0, (int)(14 * density));
         panel.addView(explanation);
 
-        final AlertDialog dialog = new AlertDialog.Builder(activity).create();
+        final Dialog dialog = new Dialog(activity);
         String[] labels = {"Criar chave", "Salvar backup .p12", "Restaurar backup .p12"};
         for (int i = 0; i < labels.length; i++) {
             final int action = i;
@@ -98,16 +99,28 @@ final class GameSigningKeyUi {
         panel.addView(cancel);
         cancel.setOnClickListener(v -> dialog.dismiss());
 
-        dialog.setView(panel);
-        dialog.setOnShowListener(ignored -> {
-            if (dialog.getWindow() != null) {
-                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-                dialog.getWindow().setLayout(
-                    activity.getResources().getDisplayMetrics().widthPixels
-                        - (int)(36 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
-            }
-        });
+        showRoundedDialog(activity, dialog, panel, density);
+    }
+
+    private static void showRoundedDialog(Activity activity, Dialog dialog,
+                                          View panel, float density) {
+        android.widget.FrameLayout frame = new android.widget.FrameLayout(activity);
+        frame.setPadding((int)(3*density), (int)(3*density),
+            (int)(3*density), (int)(3*density));
+        frame.addView(panel);
+        dialog.setContentView(frame);
         dialog.show();
+        android.view.Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawableResource(android.R.color.transparent);
+            window.setDimAmount(0.65f);
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+            window.setLayout(metrics.widthPixels - (int)(30*density),
+                Math.min((int)(metrics.heightPixels * 0.88f),
+                    (int)(780*density)));
+        }
     }
 
     private static TextView text(Activity activity, String value, int size, int color) {
@@ -230,18 +243,41 @@ final class GameSigningKeyUi {
                 ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int)density)));
 
             acknowledged = new CheckBox(activity);
-            acknowledged.setText("Li e compreendi os riscos de perder minha chave.");
-            acknowledged.setTextSize(14);
-            acknowledged.setTextColor(Workspace.COLOR_TEXT);
-            acknowledged.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFFA78BFA));
-            LinearLayout.LayoutParams checkboxParams = new LinearLayout.LayoutParams(
+            acknowledged.setButtonDrawable(android.R.color.transparent);
+            acknowledged.setText("");
+            acknowledged.setPadding(0, 0, 0, 0);
+            acknowledged.setMinWidth(0);
+            acknowledged.setMinHeight(0);
+            GradientDrawable checkBg = new GradientDrawable();
+            checkBg.setCornerRadius(4 * density);
+            checkBg.setStroke(Math.max(1, (int)(2*density)), 0xFFA78BFA);
+            acknowledged.setBackground(checkBg);
+            final CheckBox checkbox = acknowledged;
+            acknowledged.setOnCheckedChangeListener((button, checked) -> {
+                checkBg.setColor(checked ? 0xFFA78BFA : 0x00000000);
+                checkbox.setText(checked ? "✓" : "");
+                checkbox.setTextSize(12);
+                checkbox.setGravity(Gravity.CENTER);
+                checkbox.setTextColor(0xFF171322);
+            });
+            LinearLayout checkRow = new LinearLayout(activity);
+            checkRow.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(
+                (int)(20*density), (int)(20*density));
+            checkParams.rightMargin = (int)(10*density);
+            checkRow.addView(checkbox, checkParams);
+            TextView checkLabel = text(activity,
+                "Li e compreendi os riscos de perder minha chave.", 13, Workspace.COLOR_TEXT);
+            checkRow.addView(checkLabel, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            checkLabel.setOnClickListener(v -> checkbox.setChecked(!checkbox.isChecked()));
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            checkboxParams.topMargin = (int)(14*density);
-            content.addView(acknowledged, checkboxParams);
+            rowParams.topMargin = (int)(14*density);
+            content.addView(checkRow, rowParams);
         }
 
         TextView error = text(activity, "", 12, 0xFFFFA6A6);
-        content.addView(error);
         TextView confirm = text(activity, creating ? "Criar chave de assinatura" : "Continuar",
             15, 0xFF171322);
         confirm.setTypeface(Typeface.DEFAULT_BOLD);
@@ -253,23 +289,28 @@ final class GameSigningKeyUi {
         LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(48 * density));
         buttonParams.topMargin = (int)(12 * density);
-        content.addView(confirm, buttonParams);
-
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setOrientation(LinearLayout.VERTICAL);
+        footer.setPadding(pad, (int)(6*density), pad, (int)(12*density));
+        footer.setBackgroundColor(Workspace.COLOR_PANEL);
+        footer.addView(error);
+        footer.addView(confirm, buttonParams);
         TextView cancel = text(activity, "Cancelar", 15, 0xFFA78BFA);
         cancel.setGravity(Gravity.CENTER);
-        cancel.setPadding(0, (int)(14 * density), 0, 0);
-        content.addView(cancel);
+        footer.addView(cancel, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density)));
 
-        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
-        scroll.setFillViewport(false);
+        ScrollView scroll = new ScrollView(activity);
         scroll.setVerticalScrollBarEnabled(false);
         scroll.addView(content);
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setBackground(bg);
+        layout.setClipToOutline(true);
+        layout.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        layout.addView(footer);
         Dialog dialog = new Dialog(activity);
-        dialog.getWindow();
-        dialog.setContentView(scroll);
-        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-        dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        dialog.getWindow().setDimAmount(0.65f);
         cancel.setOnClickListener(v -> dialog.dismiss());
         final EditText confirmField = confirmation;
         final CheckBox check = acknowledged;
@@ -352,10 +393,7 @@ final class GameSigningKeyUi {
                 toast(activity, "Não foi possível abrir o seletor de arquivos");
             }
         });
-        dialog.show();
-        dialog.getWindow().setLayout(
-            activity.getResources().getDisplayMetrics().widthPixels - (int)(36*density),
-            ViewGroup.LayoutParams.WRAP_CONTENT);
+        showRoundedDialog(activity, dialog, layout, density);
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
