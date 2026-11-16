@@ -101,7 +101,7 @@ final class GameExportDialog {
         note.setPadding(0, (int)(8*density), 0, (int)(12*density));
         body.addView(note);
 
-        section(activity, body, "1. Informações do jogo", "settings");
+        section(activity, body, "Informações do jogo", "settings");
         EditText name = field(activity, body, R.string.cl_export_name,
             prefs.getString(key + "name", projectName), false);
         EditText pack = field(activity, body, R.string.cl_export_package,
@@ -141,7 +141,7 @@ final class GameExportDialog {
         iconValue.setVisibility(selectedIcon.isEmpty() ? View.GONE : View.VISIBLE);
         body.addView(iconValue);
 
-        section(activity, body, "2. Assinatura do aplicativo", "shield");
+        section(activity, body, "Assinatura do aplicativo", "shield");
         // Normal editor flavor provides the signing UI; exported games do not.
         if (!BuildConfig.FLAVOR.startsWith("embed")) {
             LinearLayout signing = secondaryAction(activity, "Gerenciar chave de assinatura",
@@ -171,39 +171,59 @@ final class GameExportDialog {
             });
         }
 
-        section(activity, body, "3. Preparar exportação", "package");
+        section(activity, body, "Preparar exportação", "package");
         LinearLayout prepareLove = secondaryAction(activity,
             "Exportar pacote .love", "archive");
         LinearLayout.LayoutParams loveParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         body.addView(prepareLove, loveParams);
 
-        TextView save = action(activity,
-            activity.getString(R.string.cl_export_save));
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, (int)(42*density));
-        saveParams.topMargin = (int)(12*density);
-        body.addView(save, saveParams);
-
         TextView status = new TextView(activity);
         status.setText(R.string.cl_export_disabled);
         status.setTextColor(Workspace.COLOR_MUTED);
         status.setTextSize(12);
         status.setGravity(Gravity.CENTER);
-        status.setPadding(0, (int)(12*density), 0, 0);
+        status.setPadding(0, (int)(12*density), 0, (int)(8*density));
         body.addView(status);
 
+        // Only the configuration fields scroll. The primary save action stays visible.
         ScrollView scroll = new ScrollView(activity);
+        scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(false);
         scroll.addView(body);
+
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setOrientation(LinearLayout.VERTICAL);
+        footer.setPadding(padding, (int)(10*density), padding, padding);
+        footer.setBackgroundColor(Workspace.COLOR_PANEL);
+        TextView save = action(activity,
+            activity.getString(R.string.cl_export_save));
+        footer.addView(save, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(46*density)));
+
+        LinearLayout panel = new LinearLayout(activity);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable panelBackground = new GradientDrawable();
+        panelBackground.setColor(Workspace.COLOR_PANEL);
+        panelBackground.setCornerRadius(18*density);
+        panel.setBackground(panelBackground);
+        panel.setClipToOutline(true);
+        panel.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        panel.addView(footer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         Dialog dialog = new Dialog(activity);
-        dialog.setContentView(scroll);
+        dialog.setContentView(panel);
         dialog.show();
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
             dialog.getWindow().setLayout(
-                Math.min(activity.getResources().getDisplayMetrics().widthPixels - (int)(24*density),
-                    (int)(480*density)),
-                ViewGroup.LayoutParams.WRAP_CONTENT);
+                Math.min(metrics.widthPixels - (int)(24*density), (int)(480*density)),
+                Math.min((int)(metrics.heightPixels * 0.88f), (int)(840*density)));
+            dialog.getWindow().setSoftInputMode(
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
 
         icon.setOnClickListener(v -> {
