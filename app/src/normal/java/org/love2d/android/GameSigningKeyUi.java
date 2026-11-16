@@ -67,22 +67,46 @@ final class GameSigningKeyUi {
 
         final Dialog dialog = new Dialog(activity);
         String[] labels = {"Criar chave", "Salvar backup .p12", "Restaurar backup .p12"};
+        String[] descriptions = {
+            "Gerar uma nova identidade de assinatura",
+            "Guardar uma cópia de segurança da chave",
+            "Recuperar uma chave de um backup existente"
+        };
         for (int i = 0; i < labels.length; i++) {
             final int action = i;
-            TextView option = new TextView(activity);
-            option.setText(labels[i]);
-            option.setTextSize(16);
-            option.setTextColor(Workspace.COLOR_TEXT);
-            option.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            option.setPadding((int)(14 * density), 0, (int)(14 * density), 0);
+            LinearLayout option = new LinearLayout(activity);
+            option.setOrientation(LinearLayout.HORIZONTAL);
+            option.setGravity(Gravity.CENTER_VERTICAL);
+            option.setPadding((int)(14*density), 0, (int)(14*density), 0);
             GradientDrawable optionBackground = new GradientDrawable();
             optionBackground.setColor(Workspace.COLOR_PANEL);
-            optionBackground.setStroke(Math.max(1, (int)density), Workspace.COLOR_MUTED);
-            optionBackground.setCornerRadius(12 * density);
+            optionBackground.setStroke(Math.max(1, (int)density), Workspace.COLOR_BORDER);
+            optionBackground.setCornerRadius(12*density);
             option.setBackground(optionBackground);
+            option.setClickable(true);
+            option.setFocusable(true);
+            option.setContentDescription(labels[i]);
+            TextView icon = text(activity,
+                i == 0 ? "⚿" : i == 1 ? "↓" : "↺", 23, 0xFFA78BFA);
+            icon.setGravity(Gravity.CENTER);
+            option.addView(icon, new LinearLayout.LayoutParams(
+                (int)(24*density), (int)(28*density)));
+            LinearLayout labelsGroup = new LinearLayout(activity);
+            labelsGroup.setOrientation(LinearLayout.VERTICAL);
+            TextView name = text(activity, labels[i], 15, Workspace.COLOR_TEXT);
+            labelsGroup.addView(name);
+            TextView description = text(activity, descriptions[i], 12, Workspace.COLOR_MUTED);
+            description.setPadding(0, (int)(3*density), 0, 0);
+            labelsGroup.addView(description);
+            LinearLayout.LayoutParams groupParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            groupParams.leftMargin = (int)(10*density);
+            option.addView(labelsGroup, groupParams);
+            TextView chevron = text(activity, "›", 25, Workspace.COLOR_MUTED);
+            option.addView(chevron);
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, (int)(52 * density));
-            params.bottomMargin = (int)(9 * density);
+                ViewGroup.LayoutParams.MATCH_PARENT, (int)(66*density));
+            params.bottomMargin = (int)(9*density);
             panel.addView(option, params);
             option.setOnClickListener(v -> {
                 dialog.dismiss();
