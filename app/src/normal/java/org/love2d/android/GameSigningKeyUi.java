@@ -86,9 +86,35 @@ final class GameSigningKeyUi {
             option.setClickable(true);
             option.setFocusable(true);
             option.setContentDescription(labels[i]);
-            TextView icon = text(activity,
-                i == 0 ? "⚿" : i == 1 ? "↓" : "↺", 23, 0xFFA78BFA);
-            icon.setGravity(Gravity.CENTER);
+            View icon;
+            if (i == 1) {
+                // File/archive symbol instead of a download arrow.
+                icon = new View(activity) {
+                    final android.graphics.Paint paint = new android.graphics.Paint(
+                        android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        canvas.save();
+                        canvas.translate((getWidth() - 24*density)/2f,
+                            (getHeight() - 24*density)/2f);
+                        canvas.scale(density, density);
+                        paint.setColor(0xFFA78BFA);
+                        paint.setStyle(android.graphics.Paint.Style.STROKE);
+                        paint.setStrokeWidth(1.9f);
+                        paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        paint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+                        canvas.drawRoundRect(4, 5, 20, 20, 2, 2, paint);
+                        canvas.drawLine(4, 9, 20, 9, paint);
+                        canvas.drawLine(12, 9, 12, 15, paint);
+                        canvas.drawLine(9, 15, 15, 15, paint);
+                        canvas.restore();
+                    }
+                };
+            } else {
+                TextView glyph = text(activity, i == 0 ? "⚿" : "↺", 23, 0xFFA78BFA);
+                glyph.setGravity(Gravity.CENTER);
+                icon = glyph;
+            }
             option.addView(icon, new LinearLayout.LayoutParams(
                 (int)(24*density), (int)(28*density)));
             LinearLayout labelsGroup = new LinearLayout(activity);
