@@ -113,20 +113,26 @@ final class GameSigningKeyUi {
         field.setInputType(InputType.TYPE_CLASS_TEXT
             | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         field.setHint("Senha da chave (mínimo 12 caracteres para criar)");
-        new AlertDialog.Builder(activity)
+        AlertDialog passwordDialog = new AlertDialog.Builder(activity)
             .setTitle(action == 0 ? "Criar chave" :
                 action == 1 ? "Salvar backup" : "Restaurar backup")
             .setView(field)
             .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Continuar", (dialog, which) -> {
+            .setPositiveButton("Continuar", null)
+            .create();
+        passwordDialog.setOnShowListener(ignored -> passwordDialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            .setOnClickListener(button -> {
                 char[] password = field.getText().toString().toCharArray();
-                field.setText("");
                 if (password.length == 0 || (action == 0 && password.length < 12)) {
                     Arrays.fill(password, '\0');
-                    toast(activity, "Senha inválida");
+                    field.setError(action == 0
+                        ? "Use pelo menos 12 caracteres (digitados: " + password.length + ")"
+                        : "Informe a senha da chave");
                     return;
                 }
                 if (action == 0) {
+                    field.setText("");
+                    passwordDialog.dismiss();
                     new Thread(() -> {
                         try {
                             if (GameSigningKeyManager.hasKey(activity, projectId)) {
@@ -143,6 +149,20 @@ final class GameSigningKeyUi {
                     }, "CodeLove-KeyCreate").start();
                     return;
                 }
+                if (action == 1) {
+                    try {
+                        if (!GameSigningKeyManager.hasKey(activity, projectId)) {
+                            Arrays.fill(password, '\0');
+                            field.setError("Crie uma chave antes de salvar o backup");
+                            return;
+                        }
+                        GameSigningKeyManager.inspect(activity, projectId, password);
+                    } catch (Exception error) {
+                        Arrays.fill(password, '\0');
+                        field.setError("Chave ausente ou senha incorreta");
+                        return;
+                    }
+                }
                 synchronized (GameSigningKeyUi.class) {
                     if (busy) {
                         Arrays.fill(password, '\0');
@@ -153,6 +173,8 @@ final class GameSigningKeyUi {
                     pendingProject = projectId;
                     pendingPassword = password;
                 }
+                field.setText("");
+                passwordDialog.dismiss();
                 try {
                     Intent intent = action == 1
                         ? GameSigningKeySaf.createBackupDocumentIntent(applicationId)
@@ -163,7 +185,8 @@ final class GameSigningKeyUi {
                     clearPending();
                     toast(activity, "Não foi possível abrir o seletor de arquivos");
                 }
-            }).show();
+            }));
+        passwordDialog.show();
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
