@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
-import android.text.InputType;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
@@ -12,6 +11,9 @@ import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.EditText;
+import android.widget.CheckBox;
+import android.text.InputType;
+import android.view.Gravity;
 import android.widget.Toast;
 
 import java.util.Arrays;
@@ -106,87 +108,204 @@ final class GameSigningKeyUi {
         dialog.show();
     }
 
+    private static TextView text(Activity activity, String value, int size, int color) {
+        TextView view = new TextView(activity);
+        view.setText(value);
+        view.setTextSize(size);
+        view.setTextColor(color);
+        return view;
+    }
+
     private static void requestPassword(Activity activity, String projectId,
                                         String applicationId, int action) {
+        final float density = activity.getResources().getDisplayMetrics().density;
+        final int pad = (int) (20 * density + 0.5f);
+        final boolean creating = action == 0;
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(pad, pad, pad, pad);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Workspace.COLOR_PANEL);
+        bg.setCornerRadius(18 * density);
+        content.setBackground(bg);
+
+        TextView title = text(activity, creating ? "Criar chave de assinatura" :
+            action == 1 ? "Salvar backup .p12" : "Restaurar backup .p12",
+            20, Workspace.COLOR_TEXT);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(title);
+
+        TextView info = text(activity, creating
+            ? "Esta chave será a identidade digital de " + applicationId
+                + " e será necessária para publicar atualizações do jogo."
+            : action == 1
+                ? "Salve uma cópia da chave fora do CodeLove. Você precisará deste arquivo e da senha para recuperar a identidade do jogo."
+                : "A restauração só é permitida quando este jogo ainda não possui uma chave. O backup deve corresponder à identidade usada nas versões anteriores.",
+            13, Workspace.COLOR_MUTED);
+        info.setPadding(0, (int)(12 * density), 0, (int)(12 * density));
+        content.addView(info);
+
+        if (creating) {
+            TextView warning = text(activity,
+                "ATENÇÃO\nDepois de distribuir um jogo assinado, perder a chave pode impedir futuras atualizações. "
+                + "Desinstalar o CodeLove ou limpar seus dados apaga a chave local. "
+                + "Crie um backup .p12 e guarde a senha em local seguro, separadamente.",
+                13, Workspace.COLOR_TEXT);
+            warning.setPadding((int)(12 * density), (int)(12 * density),
+                (int)(12 * density), (int)(12 * density));
+            GradientDrawable warningBg = new GradientDrawable();
+            warningBg.setColor(0xFF292431);
+            warningBg.setCornerRadius(12 * density);
+            warning.setBackground(warningBg);
+            content.addView(warning);
+        }
+
         EditText field = new EditText(activity);
         field.setSingleLine(true);
-        field.setInputType(InputType.TYPE_CLASS_TEXT
-            | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        field.setHint("Senha da chave (mínimo 12 caracteres para criar)");
-        AlertDialog passwordDialog = new AlertDialog.Builder(activity)
-            .setTitle(action == 0 ? "Criar chave" :
-                action == 1 ? "Salvar backup" : "Restaurar backup")
-            .setView(field)
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Continuar", null)
-            .create();
-        passwordDialog.setOnShowListener(ignored -> passwordDialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            .setOnClickListener(button -> {
-                char[] password = field.getText().toString().toCharArray();
-                if (password.length == 0 || (action == 0 && password.length < 12)) {
+        field.setTextColor(Workspace.COLOR_TEXT);
+        field.setHintTextColor(Workspace.COLOR_MUTED);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        field.setHint(creating ? "Senha (mínimo 12 caracteres)" : "Senha da chave");
+        content.addView(field);
+
+        EditText confirmation = null;
+        CheckBox acknowledged = null;
+        if (creating) {
+            confirmation = new EditText(activity);
+            confirmation.setSingleLine(true);
+            confirmation.setTextColor(Workspace.COLOR_TEXT);
+            confirmation.setHintTextColor(Workspace.COLOR_MUTED);
+            confirmation.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            confirmation.setHint("Confirme a senha");
+            content.addView(confirmation);
+            TextView guidance = text(activity,
+                "Use uma senha forte e exclusiva. Recomendamos 16 caracteres ou mais.",
+                12, Workspace.COLOR_MUTED);
+            content.addView(guidance);
+            acknowledged = new CheckBox(activity);
+            acknowledged.setText("Li os avisos e compreendo que preciso guardar a chave e a senha.");
+            acknowledged.setTextColor(Workspace.COLOR_TEXT);
+            acknowledged.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFFA78BFA));
+            content.addView(acknowledged);
+        }
+
+        TextView error = text(activity, "", 12, 0xFFFFA6A6);
+        content.addView(error);
+        TextView confirm = text(activity, creating ? "Criar chave de assinatura" : "Continuar",
+            15, 0xFF171322);
+        confirm.setTypeface(Typeface.DEFAULT_BOLD);
+        confirm.setGravity(Gravity.CENTER);
+        GradientDrawable buttonBg = new GradientDrawable();
+        buttonBg.setColor(0xFFA78BFA);
+        buttonBg.setCornerRadius(12 * density);
+        confirm.setBackground(buttonBg);
+        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(48 * density));
+        buttonParams.topMargin = (int)(12 * density);
+        content.addView(confirm, buttonParams);
+
+        TextView cancel = text(activity, "Cancelar", 15, 0xFFA78BFA);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(0, (int)(14 * density), 0, 0);
+        content.addView(cancel);
+
+        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+        scroll.setFillViewport(false);
+        scroll.addView(content);
+        AlertDialog dialog = new AlertDialog.Builder(activity).create();
+        dialog.setView(scroll);
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+                dialog.getWindow().setLayout(
+                    activity.getResources().getDisplayMetrics().widthPixels
+                        - (int)(36 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
+            }
+        });
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        final EditText confirmField = confirmation;
+        final CheckBox check = acknowledged;
+        confirm.setOnClickListener(v -> {
+            char[] password = field.getText().toString().toCharArray();
+            if (password.length == 0 || (creating && password.length < 12)) {
+                error.setText(creating ? "A senha deve ter pelo menos 12 caracteres." : "Informe a senha.");
+                Arrays.fill(password, '\0');
+                return;
+            }
+            if (creating) {
+                char[] repeated = confirmField.getText().toString().toCharArray();
+                boolean matches = Arrays.equals(password, repeated);
+                Arrays.fill(repeated, '\0');
+                if (!matches) {
+                    error.setText("As senhas não coincidem.");
                     Arrays.fill(password, '\0');
-                    field.setError(action == 0
-                        ? "Use pelo menos 12 caracteres (digitados: " + password.length + ")"
-                        : "Informe a senha da chave");
                     return;
                 }
-                if (action == 0) {
-                    field.setText("");
-                    passwordDialog.dismiss();
-                    new Thread(() -> {
-                        try {
-                            if (GameSigningKeyManager.hasKey(activity, projectId)) {
-                                throw new java.io.IOException("Já existe uma chave para este jogo");
-                            }
-                            GameSigningKeyManager.generate(activity, projectId, password);
-                            activity.runOnUiThread(() -> toast(activity, "Chave criada"));
-                        } catch (Exception e) {
-                            activity.runOnUiThread(() -> toast(activity,
-                                "Não foi possível criar a chave: " + e.getMessage()));
-                        } finally {
-                            Arrays.fill(password, '\0');
-                        }
-                    }, "CodeLove-KeyCreate").start();
+                if (!check.isChecked()) {
+                    error.setText("Confirme que leu os avisos antes de continuar.");
+                    Arrays.fill(password, '\0');
                     return;
-                }
-                if (action == 1) {
-                    try {
-                        if (!GameSigningKeyManager.hasKey(activity, projectId)) {
-                            Arrays.fill(password, '\0');
-                            field.setError("Crie uma chave antes de salvar o backup");
-                            return;
-                        }
-                        GameSigningKeyManager.inspect(activity, projectId, password);
-                    } catch (Exception error) {
-                        Arrays.fill(password, '\0');
-                        field.setError("Chave ausente ou senha incorreta");
-                        return;
-                    }
-                }
-                synchronized (GameSigningKeyUi.class) {
-                    if (busy) {
-                        Arrays.fill(password, '\0');
-                        toast(activity, "Já existe uma operação em andamento");
-                        return;
-                    }
-                    busy = true;
-                    pendingProject = projectId;
-                    pendingPassword = password;
                 }
                 field.setText("");
-                passwordDialog.dismiss();
+                confirmField.setText("");
+                dialog.dismiss();
+                new Thread(() -> {
+                    try {
+                        if (GameSigningKeyManager.hasKey(activity, projectId)) {
+                            throw new java.io.IOException("Já existe uma chave para este jogo");
+                        }
+                        GameSigningKeyManager.generate(activity, projectId, password);
+                        activity.runOnUiThread(() -> new AlertDialog.Builder(activity)
+                            .setTitle("Chave criada")
+                            .setMessage("A chave foi criada. Faça agora o backup .p12 e guarde sua senha em local seguro. Sem ambos, futuras atualizações podem ficar impossíveis.")
+                            .setPositiveButton("Entendi", null).show());
+                    } catch (Exception e) {
+                        activity.runOnUiThread(() -> toast(activity,
+                            "Não foi possível criar a chave: " + e.getMessage()));
+                    } finally {
+                        Arrays.fill(password, '\0');
+                    }
+                }, "CodeLove-KeyCreate").start();
+                return;
+            }
+            if (action == 1) {
                 try {
-                    Intent intent = action == 1
-                        ? GameSigningKeySaf.createBackupDocumentIntent(applicationId)
-                        : GameSigningKeySaf.openBackupDocumentIntent();
-                    activity.startActivityForResult(intent,
-                        action == 1 ? REQUEST_BACKUP : REQUEST_RESTORE);
-                } catch (RuntimeException e) {
-                    clearPending();
-                    toast(activity, "Não foi possível abrir o seletor de arquivos");
+                    if (!GameSigningKeyManager.hasKey(activity, projectId)) {
+                        error.setText("Crie uma chave antes de salvar o backup.");
+                        Arrays.fill(password, '\0');
+                        return;
+                    }
+                } catch (Exception e) {
+                    error.setText("Não foi possível localizar a chave.");
+                    Arrays.fill(password, '\0');
+                    return;
                 }
-            }));
-        passwordDialog.show();
+            }
+            synchronized (GameSigningKeyUi.class) {
+                if (busy) {
+                    Arrays.fill(password, '\0');
+                    error.setText("Já existe uma operação em andamento.");
+                    return;
+                }
+                busy = true;
+                pendingProject = projectId;
+                pendingPassword = password;
+            }
+            field.setText("");
+            dialog.dismiss();
+            try {
+                Intent intent = action == 1
+                    ? GameSigningKeySaf.createBackupDocumentIntent(applicationId)
+                    : GameSigningKeySaf.openBackupDocumentIntent();
+                activity.startActivityForResult(intent,
+                    action == 1 ? REQUEST_BACKUP : REQUEST_RESTORE);
+            } catch (RuntimeException e) {
+                clearPending();
+                toast(activity, "Não foi possível abrir o seletor de arquivos");
+            }
+        });
+        dialog.show();
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
