@@ -2210,6 +2210,20 @@ public final class Workspace {
 
     static void handleActivityResult(Activity activity, int requestCode,
                                      int resultCode, Intent data) {
+        // Signing controls exist only in the editor flavor.
+        if (!BuildConfig.FLAVOR.startsWith("embed")) {
+            try {
+                Class<?> type = Class.forName("org.love2d.android.GameSigningKeyUi");
+                java.lang.reflect.Method handler = type.getDeclaredMethod(
+                    "handleResult", Activity.class, int.class, int.class, Intent.class);
+                handler.setAccessible(true);
+                if ((Boolean) handler.invoke(null, activity, requestCode, resultCode, data)) {
+                    return;
+                }
+            } catch (ReflectiveOperationException e) {
+                Log.w(TAG, "Signing key result handler unavailable", e);
+            }
+        }
         if (GameExportDialog.handleIconResult(activity, requestCode, resultCode, data)) return;
         if (GameExportPackage.handleResult(activity, requestCode, resultCode, data)) return;
         if (requestCode != REQUEST_ADD_PROJECT_TREE) return;
