@@ -2,6 +2,7 @@ package org.love2d.android;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Typeface;
@@ -12,6 +13,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.EditText;
 import android.widget.CheckBox;
+import android.widget.FrameLayout;
 import android.text.InputType;
 import android.view.Gravity;
 import android.widget.Toast;
@@ -116,6 +118,24 @@ final class GameSigningKeyUi {
         return view;
     }
 
+    private static EditText passwordInput(Activity activity, String hint) {
+        float density = activity.getResources().getDisplayMetrics().density;
+        EditText field = new EditText(activity);
+        field.setSingleLine(true);
+        field.setTextSize(15);
+        field.setTextColor(Workspace.COLOR_TEXT);
+        field.setHintTextColor(Workspace.COLOR_MUTED);
+        field.setPadding((int)(14*density), 0, (int)(14*density), 0);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        field.setHint(hint);
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(0xFF20232D);
+        background.setStroke(Math.max(1, (int)density), 0xFF666477);
+        background.setCornerRadius(12*density);
+        field.setBackground(background);
+        return field;
+    }
+
     private static void requestPassword(Activity activity, String projectId,
                                         String applicationId, int action) {
         final float density = activity.getResources().getDisplayMetrics().density;
@@ -146,48 +166,78 @@ final class GameSigningKeyUi {
         content.addView(info);
 
         if (creating) {
-            TextView warning = text(activity,
-                "ATENÇÃO\nDepois de distribuir um jogo assinado, perder a chave pode impedir futuras atualizações. "
-                + "Desinstalar o CodeLove ou limpar seus dados apaga a chave local. "
-                + "Crie um backup .p12 e guarde a senha em local seguro, separadamente.",
-                13, Workspace.COLOR_TEXT);
-            warning.setPadding((int)(12 * density), (int)(12 * density),
-                (int)(12 * density), (int)(12 * density));
+            LinearLayout warningPanel = new LinearLayout(activity);
+            warningPanel.setOrientation(LinearLayout.VERTICAL);
+            warningPanel.setPadding((int)(14*density), (int)(14*density),
+                (int)(14*density), (int)(14*density));
             GradientDrawable warningBg = new GradientDrawable();
-            warningBg.setColor(0xFF292431);
+            warningBg.setColor(0xFF25212C);
             warningBg.setCornerRadius(12 * density);
-            warning.setBackground(warningBg);
-            content.addView(warning);
+            warningPanel.setBackground(warningBg);
+            TextView warningTitle = text(activity, "⚠  Antes de continuar", 15, Workspace.COLOR_TEXT);
+            warningTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            warningPanel.addView(warningTitle);
+            TextView warningBody = text(activity,
+                "Depois que um jogo for distribuído, a chave utilizada para assiná-lo deverá ser preservada. "
+                + "Perder essa chave pode impedir a atualização do mesmo aplicativo.",
+                14, Workspace.COLOR_TEXT);
+            warningBody.setPadding(0, (int)(10*density), 0, 0);
+            warningPanel.addView(warningBody);
+            LinearLayout.LayoutParams warningParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            warningParams.bottomMargin = (int)(18*density);
+            content.addView(warningPanel, warningParams);
         }
 
-        EditText field = new EditText(activity);
-        field.setSingleLine(true);
-        field.setTextColor(Workspace.COLOR_TEXT);
-        field.setHintTextColor(Workspace.COLOR_MUTED);
-        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        field.setHint(creating ? "Senha (mínimo 12 caracteres)" : "Senha da chave");
-        content.addView(field);
+        TextView passwordLabel = text(activity, "Senha da chave", 15, Workspace.COLOR_TEXT);
+        passwordLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(passwordLabel);
+        EditText field = passwordInput(activity, creating ? "Mínimo 12 caracteres" : "Digite a senha");
+        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(52*density));
+        inputParams.topMargin = (int)(10*density);
+        content.addView(field, inputParams);
+
+        TextView guidance = text(activity, creating
+            ? "Use uma senha forte e exclusiva, preferencialmente com 16 caracteres ou mais."
+            : "A senha não é armazenada pelo CodeLove.",
+            13, Workspace.COLOR_MUTED);
+        guidance.setPadding(0, (int)(10*density), 0, (int)(18*density));
+        content.addView(guidance);
 
         EditText confirmation = null;
         CheckBox acknowledged = null;
         if (creating) {
-            confirmation = new EditText(activity);
-            confirmation.setSingleLine(true);
-            confirmation.setTextColor(Workspace.COLOR_TEXT);
-            confirmation.setHintTextColor(Workspace.COLOR_MUTED);
-            confirmation.setInputType(InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-            confirmation.setHint("Confirme a senha");
-            content.addView(confirmation);
-            TextView guidance = text(activity,
-                "Use uma senha forte e exclusiva. Recomendamos 16 caracteres ou mais.",
-                12, Workspace.COLOR_MUTED);
-            content.addView(guidance);
+            TextView confirmationLabel = text(activity, "Confirmar senha", 15, Workspace.COLOR_TEXT);
+            confirmationLabel.setTypeface(Typeface.DEFAULT_BOLD);
+            content.addView(confirmationLabel);
+            confirmation = passwordInput(activity, "Digite a senha novamente");
+            LinearLayout.LayoutParams confirmParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int)(52*density));
+            confirmParams.topMargin = (int)(10*density);
+            content.addView(confirmation, confirmParams);
+
+            TextView backupNotice = text(activity,
+                "ⓘ  Após criar a chave, salve uma cópia de segurança .p12 fora do CodeLove "
+                + "e guarde a senha separadamente. Desinstalar o aplicativo apaga a chave local.",
+                13, Workspace.COLOR_MUTED);
+            backupNotice.setPadding(0, (int)(18*density), 0, (int)(18*density));
+            content.addView(backupNotice);
+
+            View separator = new View(activity);
+            separator.setBackgroundColor(0xFF363744);
+            content.addView(separator, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int)density)));
+
             acknowledged = new CheckBox(activity);
-            acknowledged.setText("Li os avisos e compreendo que preciso guardar a chave e a senha.");
+            acknowledged.setText("Li e compreendi os riscos de perder minha chave.");
+            acknowledged.setTextSize(14);
             acknowledged.setTextColor(Workspace.COLOR_TEXT);
             acknowledged.setButtonTintList(android.content.res.ColorStateList.valueOf(0xFFA78BFA));
-            content.addView(acknowledged);
+            LinearLayout.LayoutParams checkboxParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            checkboxParams.topMargin = (int)(14*density);
+            content.addView(acknowledged, checkboxParams);
         }
 
         TextView error = text(activity, "", 12, 0xFFFFA6A6);
@@ -212,17 +262,14 @@ final class GameSigningKeyUi {
 
         android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
         scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(false);
         scroll.addView(content);
-        AlertDialog dialog = new AlertDialog.Builder(activity).create();
-        dialog.setView(scroll);
-        dialog.setOnShowListener(ignored -> {
-            if (dialog.getWindow() != null) {
-                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
-                dialog.getWindow().setLayout(
-                    activity.getResources().getDisplayMetrics().widthPixels
-                        - (int)(36 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
-            }
-        });
+        Dialog dialog = new Dialog(activity);
+        dialog.getWindow();
+        dialog.setContentView(scroll);
+        dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        dialog.getWindow().setDimAmount(0.65f);
         cancel.setOnClickListener(v -> dialog.dismiss());
         final EditText confirmField = confirmation;
         final CheckBox check = acknowledged;
@@ -306,6 +353,9 @@ final class GameSigningKeyUi {
             }
         });
         dialog.show();
+        dialog.getWindow().setLayout(
+            activity.getResources().getDisplayMetrics().widthPixels - (int)(36*density),
+            ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
