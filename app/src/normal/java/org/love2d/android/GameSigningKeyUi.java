@@ -307,8 +307,10 @@ final class GameSigningKeyUi {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setBackground(bg);
         layout.setClipToOutline(true);
-        layout.addView(scroll, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        layout.addView(scroll, creating
+            ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+            : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
         layout.addView(footer);
         Dialog dialog = new Dialog(activity);
         cancel.setOnClickListener(v -> dialog.dismiss());
@@ -393,7 +395,7 @@ final class GameSigningKeyUi {
                 toast(activity, "Não foi possível abrir o seletor de arquivos");
             }
         });
-        showRoundedDialog(activity, dialog, layout, density, true);
+        showRoundedDialog(activity, dialog, layout, density, creating);
     }
 
     static boolean handleResult(Activity activity, int request, int result, Intent data) {
