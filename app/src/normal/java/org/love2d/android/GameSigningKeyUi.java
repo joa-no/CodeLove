@@ -55,7 +55,7 @@ final class GameSigningKeyUi {
                 char[] password = field.getText().toString().toCharArray();
                 field.setText("");
                 if (password.length == 0 || (action == 0 && password.length < 12)) {
-                    Arrays.fill(password, '\\0');
+                    Arrays.fill(password, '\0');
                     toast(activity, "Senha inválida");
                     return;
                 }
@@ -71,14 +71,14 @@ final class GameSigningKeyUi {
                             activity.runOnUiThread(() -> toast(activity,
                                 "Não foi possível criar a chave: " + e.getMessage()));
                         } finally {
-                            Arrays.fill(password, '\\0');
+                            Arrays.fill(password, '\0');
                         }
                     }, "CodeLove-KeyCreate").start();
                     return;
                 }
                 synchronized (GameSigningKeyUi.class) {
                     if (busy) {
-                        Arrays.fill(password, '\\0');
+                        Arrays.fill(password, '\0');
                         toast(activity, "Já existe uma operação em andamento");
                         return;
                     }
@@ -114,7 +114,7 @@ final class GameSigningKeyUi {
             return true;
         }
         if (result != Activity.RESULT_OK || data == null || data.getData() == null) {
-            Arrays.fill(password, '\\0');
+            Arrays.fill(password, '\0');
             clearPending();
             return true;
         }
@@ -132,7 +132,7 @@ final class GameSigningKeyUi {
                 activity.runOnUiThread(() -> toast(activity,
                     "Operação falhou: " + e.getMessage()));
             } finally {
-                Arrays.fill(password, '\\0');
+                Arrays.fill(password, '\0');
                 clearPending();
             }
         }, "CodeLove-KeyDocument").start();
@@ -140,7 +140,7 @@ final class GameSigningKeyUi {
     }
 
     private static synchronized void clearPending() {
-        if (pendingPassword != null) Arrays.fill(pendingPassword, '\\0');
+        if (pendingPassword != null) Arrays.fill(pendingPassword, '\0');
         pendingPassword = null;
         pendingProject = null;
         busy = false;
