@@ -13,7 +13,7 @@ public final class OfflineApkIdentityCheck {
         reject("com..game", "Game", "1.0", 1);
         reject("1com.example", "Game", "1.0", 1);
         reject("com.example.game", " ", "1.0", 1);
-        reject("com.example.game", "Game\\nOther", "1.0", 1);
+        reject("com.example.game", "Game" + (char) 10 + "Other", "1.0", 1);
         reject("com.example.game", "Game", "1 0", 1);
         reject("com.example.game", "Game", "1.0", 0);
         reject("com.example.game", "Game", "1.0", -1);
