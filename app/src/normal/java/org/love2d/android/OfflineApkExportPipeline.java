@@ -46,15 +46,11 @@ final class OfflineApkExportPipeline {
                         gameKeyStore, password, alias);
             } catch (IOException | GeneralSecurityException | RuntimeException error) {
                 // Never leave an unverified, apparently finished APK behind.
-                if (destination.exists() && !destination.delete()) {
-                    destination.deleteOnExit();
-                }
+                if (destination.exists()) destination.delete();
                 throw error;
             }
         } finally {
-            if (unsigned.exists() && !unsigned.delete()) {
-                unsigned.deleteOnExit();
-            }
+            if (unsigned.exists()) unsigned.delete();
         }
     }
 }
