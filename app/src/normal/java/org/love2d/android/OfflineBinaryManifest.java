@@ -1,0 +1,87 @@
+package org.love2d.android;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Strict read-only inspection of Android's binary XML string pool.
+ * A future manifest rewriter must validate this structure before editing.
+ * Does not edit the manifest or claim to personalize an APK.
+ */
+final class OfflineBinaryManifest {
+    private static final int XML = 0x0003;
+    private static final int STRING_POOL = 0x0001;
+    private static final int UTF8 = 0x100;
+    private static final int MAX_STRINGS = 200000;
+
+    private OfflineBinaryManifest() {}
+
+    static String[] readStrings(byte[] xml) throws IOException {
+        if (xml == null || xml.length < 36 || u16(xml, 0) != XML
+                || u16(xml, 2) != 8 || u32(xml, 4) != xml.length) {
+            throw new IOException("Invalid binary Android manifest header");
+        }
+        int offset = 8;
+        if (u16(xml, offset) != STRING_POOL) {
+            throw new IOException("Manifest does not start with a string pool");
+        }
+        int headerSize = u16(xml, offset + 2);
+        long chunkSize = u32(xml, offset + 4);
+        long count = u32(xml, offset + 8);
+        long styles = u32(xml, offset + 12);
+        long flags = u32(xml, offset + 16);
+        long stringsStart = u32(xml, offset + 20);
+        if (headerSize != 28 || chunkSize < headerSize || count > MAX_STRINGS
+                || styles != 0 || (flags & UTF8) == 0
+                || (flags & ~UTF8) != 0 || stringsStart < 28 + count * 4
+                || chunkSize > xml.length - offset) {
+            throw new IOException("Unsupported binary manifest string pool");
+        }
+        int end = offset + (int) chunkSize;
+        int dataStart = offset + (int) stringsStart;
+        if (dataStart > end) throw new IOException("Invalid string data offset");
+        String[] values = new String[(int) count];
+        for (int i = 0; i < values.length; i++) {
+            long relative = u32(xml, offset + headerSize + i * 4);
+            if (relative > end - dataStart) {
+                throw new IOException("String offset outside pool");
+            }
+            int at = dataStart + (int) relative;
+            int[] utf16Length = length(xml, at, end);
+            int[] byteLength = length(xml, utf16Length[1], end);
+            int size = byteLength[0];
+            at = byteLength[1];
+            if (size < 0 || at >= end || size >= end - at
+                    || xml[at + size] != 0) {
+                throw new IOException("Malformed UTF-8 manifest string");
+            }
+            String value = new String(xml, at, size, StandardCharsets.UTF_8);
+            if (value.length() != utf16Length[0]
+                    || !java.util.Arrays.equals(value.getBytes(StandardCharsets.UTF_8),
+                            java.util.Arrays.copyOfRange(xml, at, at + size))) {
+                throw new IOException("Malformed or noncanonical manifest string");
+            }
+            values[i] = value;
+        }
+        return values;
+    }
+
+    private static int[] length(byte[] data, int at, int end) throws IOException {
+        if (at >= end) throw new IOException("Truncated manifest string length");
+        int first = data[at++] & 255;
+        if ((first & 128) == 0) return new int[] { first, at };
+        if (at >= end) throw new IOException("Truncated manifest string length");
+        return new int[] { ((first & 127) << 8) | (data[at++] & 255), at };
+    }
+
+    private static int u16(byte[] b, int p) throws IOException {
+        if (p < 0 || p + 2 > b.length) throw new IOException("Truncated binary XML");
+        return (b[p] & 255) | ((b[p + 1] & 255) << 8);
+    }
+
+    private static long u32(byte[] b, int p) throws IOException {
+        if (p < 0 || p + 4 > b.length) throw new IOException("Truncated binary XML");
+        return (long)(b[p] & 255) | ((long)(b[p + 1] & 255) << 8)
+                | ((long)(b[p + 2] & 255) << 16) | ((long)(b[p + 3] & 255) << 24);
+    }
+}
