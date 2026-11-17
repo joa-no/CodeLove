@@ -110,8 +110,31 @@ final class GameSigningKeyUi {
                         canvas.restore();
                     }
                 };
+            } else if (i == 2) {
+                // Vetor de restauracao centralizado, independente das metricas da fonte.
+                icon = new View(activity) {
+                    final android.graphics.Paint paint = new android.graphics.Paint(
+                        android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    @Override protected void onDraw(android.graphics.Canvas canvas) {
+                        super.onDraw(canvas);
+                        canvas.save();
+                        canvas.translate((getWidth() - 24*density)/2f,
+                            (getHeight() - 24*density)/2f);
+                        canvas.scale(density, density);
+                        paint.setColor(Workspace.COLOR_FOLDER);
+                        paint.setStyle(android.graphics.Paint.Style.STROKE);
+                        paint.setStrokeWidth(1.9f);
+                        paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                        paint.setStrokeJoin(android.graphics.Paint.Join.ROUND);
+                        android.graphics.RectF arc = new android.graphics.RectF(4, 4, 20, 20);
+                        canvas.drawArc(arc, -130, 290, false, paint);
+                        canvas.drawLine(3.8f, 5.2f, 4.3f, 11.0f, paint);
+                        canvas.drawLine(3.8f, 5.2f, 9.4f, 6.2f, paint);
+                        canvas.restore();
+                    }
+                };
             } else {
-                TextView glyph = text(activity, i == 0 ? "⚿" : "↺", 23, 0xFFA78BFA);
+                TextView glyph = text(activity, "⚿", 23, 0xFFA78BFA);
                 glyph.setGravity(Gravity.CENTER);
                 icon = glyph;
             }
