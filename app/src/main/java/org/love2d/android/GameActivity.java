@@ -242,25 +242,34 @@ public class GameActivity extends SDLActivity {
         float density = getResources().getDisplayMetrics().density;
         int size = Math.round(44 * density);
         int margin = Math.round(12 * density);
-        int gap = Math.round(8 * density);
-
         android.widget.LinearLayout actions = new android.widget.LinearLayout(this);
         actions.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        // Um unico fundo arredondado para Console e Sair; cada metade mantem seu clique.
+        android.graphics.drawable.GradientDrawable actionsBackground =
+            new android.graphics.drawable.GradientDrawable();
+        actionsBackground.setColor(Workspace.COLOR_FIELD);
+        actionsBackground.setCornerRadius(Math.round(12 * density));
+        actionsBackground.setStroke(Math.max(1, Math.round(density)), Workspace.COLOR_BORDER);
+        actions.setBackground(actionsBackground);
 
         android.widget.LinearLayout consoleButton = CodeLoveConsolePanel.iconButton(this,
             Workspace.IconView.CONSOLE, Workspace.COLOR_FOLDER,
             () -> setStandaloneConsoleOpen(!standaloneConsoleOpen),
             localized.getString(R.string.cl_toggle_console), 44);
+        consoleButton.setBackground(null);
         actions.addView(consoleButton, new android.widget.LinearLayout.LayoutParams(size, size));
+
+        android.view.View separator = new android.view.View(this);
+        separator.setBackgroundColor(Workspace.COLOR_BORDER);
+        actions.addView(separator, new android.widget.LinearLayout.LayoutParams(
+            Math.max(1, Math.round(density)), Math.round(22 * density)));
 
         android.widget.LinearLayout close = CodeLoveConsolePanel.iconButton(this,
             Workspace.IconView.CLOSE, Workspace.COLOR_TEXT,
             this::returnToEditor, localized.getString(R.string.cl_back_to_codelove), 44);
-        android.widget.LinearLayout.LayoutParams closeLp =
-            new android.widget.LinearLayout.LayoutParams(size, size);
-        closeLp.leftMargin = gap;
-        actions.addView(close, closeLp);
+        close.setBackground(null);
+        actions.addView(close, new android.widget.LinearLayout.LayoutParams(size, size));
 
         android.widget.RelativeLayout.LayoutParams buttonsLp =
             new android.widget.RelativeLayout.LayoutParams(
