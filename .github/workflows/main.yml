@@ -36,6 +36,14 @@ jobs:
           app/src/testOffline/java/org/love2d/android/OfflineApkIdentityCheck.java
         java -cp "$RUNNER_TEMP/offline-identity-classes" \
           org.love2d.android.OfflineApkIdentityCheck
+    - name: Check binary manifest decoding
+      run: |
+        mkdir -p "$RUNNER_TEMP/offline-manifest-classes"
+        javac -d "$RUNNER_TEMP/offline-manifest-classes" \
+          app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java \
+          app/src/testOffline/java/org/love2d/android/OfflineBinaryManifestCheck.java
+        java -cp "$RUNNER_TEMP/offline-manifest-classes" \
+          org.love2d.android.OfflineBinaryManifestCheck
     - name: Prepare release signing
       if: ${{ matrix.build_type == 'Release' }}
       env:
