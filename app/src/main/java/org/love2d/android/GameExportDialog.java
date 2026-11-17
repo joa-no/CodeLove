@@ -77,7 +77,19 @@ final class GameExportDialog {
         GradientDrawable background = new GradientDrawable();
         background.setColor(Workspace.COLOR_PANEL);
         background.setCornerRadius(18 * density);
-        body.setBackground(background);
+        // Apenas o painel externo tem cantos arredondados.
+        body.setBackgroundColor(Workspace.COLOR_PANEL);
+
+        TextView eyebrow = new TextView(activity);
+        eyebrow.setText("CODELOVE");
+        eyebrow.setTextSize(12);
+        eyebrow.setLetterSpacing(0.12f);
+        eyebrow.setTypeface(Typeface.DEFAULT_BOLD);
+        eyebrow.setTextColor(Workspace.COLOR_FOLDER);
+        LinearLayout.LayoutParams eyebrowParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        eyebrowParams.bottomMargin = Math.round(12*density);
+        body.addView(eyebrow, eyebrowParams);
 
         TextView heading = new TextView(activity);
         heading.setText(R.string.cl_export_title);
@@ -98,7 +110,7 @@ final class GameExportDialog {
         note.setText("Configure e prepare seu jogo para Android.");
         note.setTextSize(13);
         note.setTextColor(Workspace.COLOR_MUTED);
-        note.setPadding(0, (int)(8*density), 0, (int)(12*density));
+        note.setPadding(0, (int)(12*density), 0, (int)(6*density));
         body.addView(note);
 
         section(activity, body, "Informações do jogo", "settings");
@@ -285,8 +297,8 @@ final class GameExportDialog {
         separator.setBackgroundColor(Workspace.COLOR_BORDER);
         LinearLayout.LayoutParams sep = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, Math.round(d)));
-        sep.topMargin = Math.round(18*d);
-        sep.bottomMargin = Math.round(20*d);
+        sep.topMargin = Math.round(20*d);
+        sep.bottomMargin = Math.round(18*d);
         body.addView(separator, sep);
         LinearLayout heading = new LinearLayout(activity);
         heading.setOrientation(LinearLayout.HORIZONTAL);
