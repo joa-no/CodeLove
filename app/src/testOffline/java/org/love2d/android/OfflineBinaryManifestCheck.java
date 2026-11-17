@@ -15,10 +15,10 @@ public final class OfflineBinaryManifestCheck {
         badHeader[0] = 0;
         reject(badHeader);
         byte[] badLength = valid.clone();
-        badLength[36] = 5; // UTF-16 length must be four, not five.
+        badLength[40] = 5; // UTF-16 length must be four, not five.
         reject(badLength);
         byte[] badTerminator = valid.clone();
-        badTerminator[42] = 1;
+        badTerminator[46] = 1;
         reject(badTerminator);
         System.out.println("Binary manifest string pool checks passed");
     }
