@@ -210,7 +210,9 @@ final class GameSigningKeyUi {
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Workspace.COLOR_PANEL);
         bg.setCornerRadius(18 * density);
-        content.setBackground(bg);
+        // O arredondamento pertence apenas ao dialogo externo.
+        // Arredondar o conteudo rolavel cria uma emenda visivel sobre o rodape.
+        content.setBackgroundColor(Workspace.COLOR_PANEL);
 
         TextView title = text(activity, creating ? "Criar chave de assinatura" :
             action == 1 ? "Salvar backup .p12" : "Restaurar backup .p12",
