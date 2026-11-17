@@ -28,6 +28,14 @@ jobs:
         distribution: zulu
         java-version: 17
         cache: gradle
+    - name: Check offline APK identity validation
+      run: |
+        mkdir -p "$RUNNER_TEMP/offline-identity-classes"
+        javac -d "$RUNNER_TEMP/offline-identity-classes" \
+          app/src/normal/java/org/love2d/android/OfflineApkIdentity.java \
+          app/src/testOffline/java/org/love2d/android/OfflineApkIdentityCheck.java
+        java -cp "$RUNNER_TEMP/offline-identity-classes" \
+          org.love2d.android.OfflineApkIdentityCheck
     - name: Prepare release signing
       if: ${{ matrix.build_type == 'Release' }}
       env:
