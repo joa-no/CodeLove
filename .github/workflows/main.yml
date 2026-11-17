@@ -44,13 +44,13 @@ jobs:
         python3 - <<'PY'
         from zipfile import ZipFile, ZIP_DEFLATED
         with ZipFile('app/src/embed/assets/game.love', 'w', ZIP_DEFLATED) as z:
-            z.writestr('main.lua', "error('CodeLove template placeholder')\\n")
+            z.writestr('main.lua', "error('CodeLove template placeholder')\n")
         PY
         # No release signing environment in this step: build an unsigned
         # embed-flavor APK for later per-game signing on the device.
-        bash ./gradlew assembleEmbedNoRecordRelease \\
-          '-Papp.name=CodeLove Offline Template' \\
-          '-Papp.application_id=com.example.codelove.offlinetemplate' \\
+        bash ./gradlew assembleEmbedNoRecordRelease \
+          '-Papp.name=CodeLove Offline Template' \
+          '-Papp.application_id=com.example.codelove.offlinetemplate' \
           '-Papp.version_name=1.0.0' '-Papp.version_code=1'
         TEMPLATE=app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk
         test -s "$TEMPLATE"
