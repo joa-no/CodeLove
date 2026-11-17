@@ -192,8 +192,8 @@ final class GameSigningKeyUi {
         field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         field.setHint(hint);
         GradientDrawable background = new GradientDrawable();
-        background.setColor(0xFF20232D);
-        background.setStroke(Math.max(1, (int)density), 0xFF666477);
+        background.setColor(Workspace.COLOR_FIELD);
+        background.setStroke(Math.max(1, (int)density), Workspace.COLOR_BORDER);
         background.setCornerRadius(12*density);
         field.setBackground(background);
         return field;
@@ -234,7 +234,8 @@ final class GameSigningKeyUi {
             warningPanel.setPadding((int)(14*density), (int)(14*density),
                 (int)(14*density), (int)(14*density));
             GradientDrawable warningBg = new GradientDrawable();
-            warningBg.setColor(0xFF25212C);
+            warningBg.setColor(Workspace.COLOR_FIELD);
+            warningBg.setStroke(Math.max(1, (int)density), Workspace.COLOR_BORDER);
             warningBg.setCornerRadius(12 * density);
             warningPanel.setBackground(warningBg);
             TextView warningTitle = text(activity, "⚠  Antes de continuar", 15, Workspace.COLOR_TEXT);
@@ -288,7 +289,7 @@ final class GameSigningKeyUi {
             content.addView(backupNotice);
 
             View separator = new View(activity);
-            separator.setBackgroundColor(0xFF363744);
+            separator.setBackgroundColor(Workspace.COLOR_BORDER);
             content.addView(separator, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, (int)density)));
 
@@ -300,15 +301,15 @@ final class GameSigningKeyUi {
             acknowledged.setMinHeight(0);
             GradientDrawable checkBg = new GradientDrawable();
             checkBg.setCornerRadius(4 * density);
-            checkBg.setStroke(Math.max(1, (int)(2*density)), 0xFFA78BFA);
+            checkBg.setStroke(Math.max(1, (int)(2*density)), Workspace.COLOR_FOLDER);
             acknowledged.setBackground(checkBg);
             final CheckBox checkbox = acknowledged;
             acknowledged.setOnCheckedChangeListener((button, checked) -> {
-                checkBg.setColor(checked ? 0xFFA78BFA : 0x00000000);
+                checkBg.setColor(checked ? Workspace.COLOR_FOLDER : 0x00000000);
                 checkbox.setText(checked ? "✓" : "");
                 checkbox.setTextSize(12);
                 checkbox.setGravity(Gravity.CENTER);
-                checkbox.setTextColor(0xFF171322);
+                checkbox.setTextColor(Workspace.COLOR_ACCENT_TEXT);
             });
             LinearLayout checkRow = new LinearLayout(activity);
             checkRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -329,11 +330,11 @@ final class GameSigningKeyUi {
 
         TextView error = text(activity, "", 12, 0xFFFFA6A6);
         TextView confirm = text(activity, creating ? "Criar chave de assinatura" : "Continuar",
-            15, 0xFF171322);
+            15, Workspace.COLOR_ACCENT_TEXT);
         confirm.setTypeface(Typeface.DEFAULT_BOLD);
         confirm.setGravity(Gravity.CENTER);
         GradientDrawable buttonBg = new GradientDrawable();
-        buttonBg.setColor(0xFFA78BFA);
+        buttonBg.setColor(Workspace.COLOR_FOLDER);
         buttonBg.setCornerRadius(12 * density);
         confirm.setBackground(buttonBg);
         LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
@@ -345,7 +346,7 @@ final class GameSigningKeyUi {
         footer.setBackgroundColor(Workspace.COLOR_PANEL);
         footer.addView(error);
         footer.addView(confirm, buttonParams);
-        TextView cancel = text(activity, "Cancelar", 15, 0xFFA78BFA);
+        TextView cancel = text(activity, "Cancelar", 15, Workspace.COLOR_FOLDER);
         cancel.setGravity(Gravity.CENTER);
         footer.addView(cancel, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density)));
