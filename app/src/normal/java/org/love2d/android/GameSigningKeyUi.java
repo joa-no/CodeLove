@@ -259,11 +259,11 @@ final class GameSigningKeyUi {
             warningPanel.setPadding((int)(14*density), (int)(14*density),
                 (int)(14*density), (int)(14*density));
             GradientDrawable warningBg = new GradientDrawable();
-            warningBg.setColor(Workspace.COLOR_FIELD);
-            warningBg.setStroke(Math.max(1, (int)density), Workspace.COLOR_BORDER);
+            warningBg.setColor(0xFF30291D);
+            warningBg.setStroke(Math.max(1, (int)density), 0xFFB78B42);
             warningBg.setCornerRadius(12 * density);
             warningPanel.setBackground(warningBg);
-            TextView warningTitle = text(activity, "⚠  Antes de continuar", 15, Workspace.COLOR_TEXT);
+            TextView warningTitle = text(activity, "⚠  Antes de continuar", 15, 0xFFFFCB78);
             warningTitle.setTypeface(Typeface.DEFAULT_BOLD);
             warningPanel.addView(warningTitle);
             TextView warningBody = text(activity,
@@ -383,11 +383,18 @@ final class GameSigningKeyUi {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setBackground(bg);
         layout.setClipToOutline(true);
-        layout.addView(scroll, creating
-            ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-            : new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT));
-        layout.addView(footer);
+        if (creating) {
+            // Formulario longo: campos rolaveis e botoes sempre acessiveis.
+            layout.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+            layout.addView(footer);
+        } else {
+            // Formularios curtos: conteudo e botoes no mesmo fluxo, sem area vazia.
+            content.addView(footer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            layout.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
         Dialog dialog = new Dialog(activity);
         cancel.setOnClickListener(v -> dialog.dismiss());
         final EditText confirmField = confirmation;
