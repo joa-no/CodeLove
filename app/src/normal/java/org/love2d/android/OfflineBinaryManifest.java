@@ -142,7 +142,9 @@ final class OfflineBinaryManifest {
                 throw new IOException("Invalid XML chunk at " + at);
             }
             if (type == 0x0102) {
-                if (header < 36) throw new IOException("Invalid start-element header");
+                if (header != 16 || size < 36) {
+                    throw new IOException("Invalid start-element header or extension");
+                }
                 long nameIndex = u32(xml, at + 20);
                 if (nameIndex >= pool.length || !"manifest".equals(pool[(int)nameIndex])) {
                     throw new IOException("First XML element is not manifest");
@@ -151,7 +153,7 @@ final class OfflineBinaryManifest {
                 int attributeSize = u16(xml, at + 26);
                 int attributeCount = u16(xml, at + 28);
                 long first = 16L + attributeStart;
-                if (attributeSize < 20 || first < header
+                if (attributeSize < 20 || first < 36
                         || first + (long)attributeSize * attributeCount > size) {
                     throw new IOException("Invalid manifest attribute table");
                 }
