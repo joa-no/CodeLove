@@ -67,6 +67,20 @@ public final class OfflineBinaryManifestCheck {
                 if (root.length == 0) {
                     throw new AssertionError("Manifest root has no attributes");
                 }
+                byte[] renamed = OfflineBinaryManifest.withVersionNameSameSize(real, "2.3.4");
+                boolean renamedFound = false;
+                for (String attribute : OfflineBinaryManifest.rootAttributes(renamed)) {
+                    if ("versionName=2.3.4".equals(attribute)) renamedFound = true;
+                }
+                if (!renamedFound || java.util.Arrays.equals(renamed, real)) {
+                    throw new AssertionError("Same-size versionName rewrite failed");
+                }
+                try {
+                    OfflineBinaryManifest.withVersionNameSameSize(real, "20.30.40");
+                    throw new AssertionError("Variable-size versionName unexpectedly accepted");
+                } catch (IOException expected) {
+                    // Rebuilding the string pool is intentionally not supported yet.
+                }
                 byte[] updated = OfflineBinaryManifest.withVersionCode(real, 12345);
                 if (java.util.Arrays.equals(real, updated)) {
                     throw new AssertionError("versionCode was not changed");
