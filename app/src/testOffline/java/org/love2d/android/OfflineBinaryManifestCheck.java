@@ -67,6 +67,31 @@ public final class OfflineBinaryManifestCheck {
                 if (root.length == 0) {
                     throw new AssertionError("Manifest root has no attributes");
                 }
+                byte[] updated = OfflineBinaryManifest.withVersionCode(real, 12345);
+                if (java.util.Arrays.equals(real, updated)) {
+                    throw new AssertionError("versionCode was not changed");
+                }
+                String[] changed = OfflineBinaryManifest.rootAttributes(updated);
+                boolean foundVersion = false;
+                for (String attribute : changed) {
+                    if (attribute.equals("versionCode=type=0x10,data=12345")) {
+                        foundVersion = true;
+                    }
+                }
+                if (!foundVersion) {
+                    throw new AssertionError("versionCode rewrite not reflected in manifest");
+                }
+                int differences = 0;
+                for (int i = 0; i < real.length; i++) {
+                    if (real[i] != updated[i]) differences++;
+                }
+                if (differences > 4) {
+                    throw new AssertionError("versionCode changed unrelated manifest bytes");
+                }
+                if (!java.util.Arrays.equals(
+                        OfflineBinaryManifest.withVersionCode(real, 12345), updated)) {
+                    throw new AssertionError("Non-deterministic versionCode rewrite");
+                }
                 for (String attribute : root) {
                     System.out.println("Manifest root: " + attribute);
                 }
