@@ -234,6 +234,110 @@ final class OfflineBinaryManifest {
         throw new IOException("Missing manifest element");
     }
 
+    /**
+     * Conservative versionName rewrite: only accepts an equally sized UTF-8
+     * replacement and a unique string-pool reference. Longer or shorter
+     * versions require rebuilding the pool and are deliberately rejected.
+     */
+    static byte[] withVersionNameSameSize(byte[] xml, String versionName)
+            throws IOException {
+        if (versionName == null || !versionName.matches("[0-9A-Za-z][0-9A-Za-z._+-]{0,63}")) {
+            throw new IOException("Invalid versionName");
+        }
+        String[] strings = readStrings(xml);
+        int root = -1;
+        int at = 8;
+        while (at < xml.length) {
+            int type = u16(xml, at);
+            int header = u16(xml, at + 2);
+            long size = u32(xml, at + 4);
+            if (header < 8 || size < header || size > xml.length - at || (size & 3) != 0) {
+                throw new IOException("Invalid XML chunk");
+            }
+            if (type == 0x0102) { root = at; break; }
+            at += (int)size;
+        }
+        if (root < 0 || u16(xml, root + 2) != 16
+                || u32(xml, root + 20) >= strings.length
+                || !"manifest".equals(strings[(int)u32(xml, root + 20)])) {
+            throw new IOException("Invalid manifest root");
+        }
+        int start = u16(xml, root + 24);
+        int stride = u16(xml, root + 26);
+        int count = u16(xml, root + 28);
+        long chunkSize = u32(xml, root + 4);
+        if (stride < 20 || 16L + start < 36
+                || 16L + start + (long)stride * count > chunkSize) {
+            throw new IOException("Invalid manifest attributes");
+        }
+        int index = -1;
+        for (int i = 0; i < count; i++) {
+            int p = root + 16 + start + i * stride;
+            long name = u32(xml, p + 4);
+            if (name >= strings.length) throw new IOException("Invalid attribute name");
+            if (!"versionName".equals(strings[(int)name])) continue;
+            if (index != -1 || u16(xml, p + 12) != 8
+                    || (xml[p + 15] & 255) != 3) {
+                throw new IOException("Unsupported versionName");
+            }
+            long typed = u32(xml, p + 16);
+            long raw = u32(xml, p + 8);
+            if (typed >= strings.length || (raw != 0xffffffffL && raw != typed)) {
+                throw new IOException("Unsupported versionName references");
+            }
+            index = (int)typed;
+        }
+        if (index < 0) throw new IOException("Missing versionName");
+        // Reject shared pool entries: a version string may be referenced
+        // elsewhere in XML and modifying it would change unrelated fields.
+        int references = 0;
+        at = 8;
+        while (at < xml.length) {
+            int type = u16(xml, at);
+            int header = u16(xml, at + 2);
+            int size = (int)u32(xml, at + 4);
+            if (type == 0x0102) {
+                int astart = u16(xml, at + 24), step = u16(xml, at + 26);
+                int n = u16(xml, at + 28);
+                if (header != 16 || size < 36 || step < 20
+                        || 16L + astart < 36 || 16L + astart + (long)step * n > size) {
+                    throw new IOException("Invalid start element");
+                }
+                for (int i = 0; i < n; i++) {
+                    int p = at + 16 + astart + i * step;
+                    if (u32(xml, p + 8) == index || ((xml[p + 15] & 255) == 3
+                            && u32(xml, p + 16) == index)) {
+                        if (at != root || !("versionName".equals(strings[(int)u32(xml, p + 4)]))) {
+                            throw new IOException("Shared versionName string");
+                        }
+                        references++;
+                    }
+                }
+            }
+            at += size;
+        }
+        if (references == 0) throw new IOException("No versionName reference");
+        int poolAt = 8;
+        if (u16(xml, poolAt) != 1 || u16(xml, poolAt + 2) != 28
+                || (u32(xml, poolAt + 16) & 0x100) == 0) {
+            throw new IOException("Expected UTF-8 manifest string pool");
+        }
+        int poolEnd = poolAt + (int)u32(xml, poolAt + 4);
+        int data = poolAt + (int)u32(xml, poolAt + 20);
+        int stringAt = data + (int)u32(xml, poolAt + 28 + index * 4);
+        int[] chars = length(xml, stringAt, poolEnd);
+        int[] bytes = length(xml, chars[1], poolEnd);
+        byte[] replacement = versionName.getBytes(StandardCharsets.UTF_8);
+        if (versionName.length() != chars[0] || replacement.length != bytes[0]
+                || bytes[1] + bytes[0] >= poolEnd || xml[bytes[1] + bytes[0]] != 0) {
+            throw new IOException("versionName requires string-pool rebuild");
+        }
+        byte[] updated = xml.clone();
+        System.arraycopy(replacement, 0, updated, bytes[1], replacement.length);
+        readStrings(updated);
+        return updated;
+    }
+
     private static void put32(byte[] bytes, int at, int value) {
         bytes[at] = (byte)value;
         bytes[at + 1] = (byte)(value >>> 8);
