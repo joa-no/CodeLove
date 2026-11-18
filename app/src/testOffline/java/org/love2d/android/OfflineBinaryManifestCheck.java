@@ -11,6 +11,13 @@ public final class OfflineBinaryManifestCheck {
         if (strings.length != 1 || !"game".equals(strings[0])) {
             throw new AssertionError("Manifest string not decoded");
         }
+        byte[] utf16 = utf16Fixture("Jogo");
+        if (!"Jogo".equals(OfflineBinaryManifest.readStrings(utf16)[0])) {
+            throw new AssertionError("UTF-16 manifest string not decoded");
+        }
+        byte[] brokenUtf16 = utf16.clone();
+        brokenUtf16[50] = 1;
+        reject(brokenUtf16);
         byte[] badHeader = valid.clone();
         badHeader[0] = 0;
         reject(badHeader);
@@ -75,6 +82,24 @@ public final class OfflineBinaryManifestCheck {
         bytes[40] = (byte)value.length();
         bytes[41] = (byte)text.length;
         System.arraycopy(text, 0, bytes, 42, text.length);
+        return bytes;
+    }
+
+    private static byte[] utf16Fixture(String value) {
+        int padded = (28 + 4 + 2 + value.length() * 2 + 2 + 3) & ~3;
+        byte[] bytes = new byte[8 + padded];
+        put16(bytes, 0, 3);
+        put16(bytes, 2, 8);
+        put32(bytes, 4, bytes.length);
+        put16(bytes, 8, 1);
+        put16(bytes, 10, 28);
+        put32(bytes, 12, padded);
+        put32(bytes, 16, 1);
+        put32(bytes, 28, 32);
+        put16(bytes, 40, value.length());
+        for (int i = 0; i < value.length(); i++) {
+            put16(bytes, 42 + i * 2, value.charAt(i));
+        }
         return bytes;
     }
 
