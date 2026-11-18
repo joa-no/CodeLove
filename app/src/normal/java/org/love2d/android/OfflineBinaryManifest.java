@@ -126,6 +126,61 @@ final class OfflineBinaryManifest {
         return java.util.Arrays.copyOf(types, count);
     }
 
+    /**
+     * Inspect root manifest attributes without changing the APK. Binary XML
+     * attributes contain both a raw string index and a typed value.
+     */
+    static String[] rootAttributes(byte[] xml) throws IOException {
+        String[] pool = readStrings(xml);
+        int at = 8;
+        while (at < xml.length) {
+            int type = u16(xml, at);
+            int header = u16(xml, at + 2);
+            long size = u32(xml, at + 4);
+            if (header < 8 || size < header || size > xml.length - at
+                    || (size & 3) != 0) {
+                throw new IOException("Invalid XML chunk at " + at);
+            }
+            if (type == 0x0102) {
+                if (header < 36) throw new IOException("Invalid start-element header");
+                long nameIndex = u32(xml, at + 20);
+                if (nameIndex >= pool.length || !"manifest".equals(pool[(int)nameIndex])) {
+                    throw new IOException("First XML element is not manifest");
+                }
+                int attributeStart = u16(xml, at + 24);
+                int attributeSize = u16(xml, at + 26);
+                int attributeCount = u16(xml, at + 28);
+                long first = 16L + attributeStart;
+                if (attributeSize < 20 || first < header
+                        || first + (long)attributeSize * attributeCount > size) {
+                    throw new IOException("Invalid manifest attribute table");
+                }
+                String[] attributes = new String[attributeCount];
+                for (int i = 0; i < attributeCount; i++) {
+                    int pos = at + (int)(first + (long)i * attributeSize);
+                    long name = u32(xml, pos + 4);
+                    long raw = u32(xml, pos + 8);
+                    int valueSize = u16(xml, pos + 12);
+                    int valueType = xml[pos + 15] & 255;
+                    long value = u32(xml, pos + 16);
+                    if (name >= pool.length || valueSize != 8
+                            || (raw != 0xffffffffL && raw >= pool.length)
+                            || (valueType == 3 && value >= pool.length)) {
+                        throw new IOException("Invalid manifest attribute at " + i);
+                    }
+                    String display = raw != 0xffffffffL ? pool[(int)raw]
+                            : valueType == 3 ? pool[(int)value]
+                            : "type=0x" + Integer.toHexString(valueType)
+                              + ",data=" + value;
+                    attributes[i] = pool[(int)name] + "=" + display;
+                }
+                return attributes;
+            }
+            at += (int)size;
+        }
+        throw new IOException("No manifest start element found");
+    }
+
     private static int[] utf16Length(byte[] data, int at, int end) throws IOException {
         if (at > end - 2) throw new IOException("Truncated UTF-16 length");
         int first = u16(data, at);
