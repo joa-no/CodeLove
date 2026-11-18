@@ -318,22 +318,36 @@ final class OfflineBinaryManifest {
         }
         if (references == 0) throw new IOException("No versionName reference");
         int poolAt = 8;
-        if (u16(xml, poolAt) != 1 || u16(xml, poolAt + 2) != 28
-                || (u32(xml, poolAt + 16) & 0x100) == 0) {
-            throw new IOException("Expected UTF-8 manifest string pool");
+        if (u16(xml, poolAt) != 1 || u16(xml, poolAt + 2) != 28) {
+            throw new IOException("Unsupported manifest string pool");
         }
+        boolean utf8 = (u32(xml, poolAt + 16) & 0x100) != 0;
         int poolEnd = poolAt + (int)u32(xml, poolAt + 4);
         int data = poolAt + (int)u32(xml, poolAt + 20);
         int stringAt = data + (int)u32(xml, poolAt + 28 + index * 4);
-        int[] chars = length(xml, stringAt, poolEnd);
-        int[] bytes = length(xml, chars[1], poolEnd);
-        byte[] replacement = versionName.getBytes(StandardCharsets.UTF_8);
-        if (versionName.length() != chars[0] || replacement.length != bytes[0]
-                || bytes[1] + bytes[0] >= poolEnd || xml[bytes[1] + bytes[0]] != 0) {
-            throw new IOException("versionName requires string-pool rebuild");
-        }
         byte[] updated = xml.clone();
-        System.arraycopy(replacement, 0, updated, bytes[1], replacement.length);
+        if (utf8) {
+            int[] chars = length(xml, stringAt, poolEnd);
+            int[] bytes = length(xml, chars[1], poolEnd);
+            byte[] replacement = versionName.getBytes(StandardCharsets.UTF_8);
+            if (versionName.length() != chars[0] || replacement.length != bytes[0]
+                    || bytes[1] + bytes[0] >= poolEnd || xml[bytes[1] + bytes[0]] != 0) {
+                throw new IOException("versionName requires string-pool rebuild");
+            }
+            System.arraycopy(replacement, 0, updated, bytes[1], replacement.length);
+        } else {
+            int[] chars = utf16Length(xml, stringAt, poolEnd);
+            int valueAt = chars[1];
+            if (versionName.length() != chars[0]
+                    || valueAt + chars[0] * 2 + 2 > poolEnd
+                    || u16(xml, valueAt + chars[0] * 2) != 0) {
+                throw new IOException("versionName requires string-pool rebuild");
+            }
+            for (int i = 0; i < versionName.length(); i++) {
+                updated[valueAt + i * 2] = (byte)versionName.charAt(i);
+                updated[valueAt + i * 2 + 1] = (byte)(versionName.charAt(i) >>> 8);
+            }
+        }
         readStrings(updated);
         return updated;
     }
