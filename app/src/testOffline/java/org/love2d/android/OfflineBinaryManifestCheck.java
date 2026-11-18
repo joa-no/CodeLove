@@ -18,6 +18,13 @@ public final class OfflineBinaryManifestCheck {
         byte[] brokenUtf16 = utf16.clone();
         brokenUtf16[50] = 1;
         reject(brokenUtf16);
+        if (OfflineBinaryManifest.chunkTypes(valid).length != 1
+                || OfflineBinaryManifest.chunkTypes(valid)[0] != 1) {
+            throw new AssertionError("Unexpected binary XML chunk stream");
+        }
+        byte[] badChunk = valid.clone();
+        badChunk[12] = 0; // String pool chunk size becomes invalid.
+        rejectChunks(badChunk);
         byte[] badHeader = valid.clone();
         badHeader[0] = 0;
         reject(badHeader);
@@ -46,6 +53,11 @@ public final class OfflineBinaryManifestCheck {
                     }
                     real = output.toByteArray();
                 }
+                int[] chunks = OfflineBinaryManifest.chunkTypes(real);
+                if (chunks.length < 2) {
+                    throw new AssertionError("Real manifest lacks XML element chunks");
+                }
+                System.out.println("Real template manifest chunks validated: " + chunks.length);
                 String[] decoded = OfflineBinaryManifest.readStrings(real);
                 if (decoded.length == 0) {
                     throw new AssertionError("Real Android manifest has no strings");
@@ -54,6 +66,15 @@ public final class OfflineBinaryManifestCheck {
             }
         }
         System.out.println("Binary manifest string pool checks passed");
+    }
+
+    private static void rejectChunks(byte[] bytes) throws Exception {
+        try {
+            OfflineBinaryManifest.chunkTypes(bytes);
+        } catch (IOException expected) {
+            return;
+        }
+        throw new AssertionError("Malformed chunk stream accepted");
     }
 
     private static void reject(byte[] bytes) throws Exception {
