@@ -18,7 +18,7 @@ public final class OfflineBinaryManifestCheck {
         badLength[40] = 5; // UTF-16 length must be four, not five.
         reject(badLength);
         byte[] badTerminator = valid.clone();
-        badTerminator[47] = 1;
+        badTerminator[46] = 1;
         reject(badTerminator);
         System.out.println("Binary manifest string pool checks passed");
     }
@@ -34,7 +34,7 @@ public final class OfflineBinaryManifestCheck {
 
     private static byte[] fixture(String value) {
         byte[] text = value.getBytes(StandardCharsets.UTF_8);
-        int poolSize = 28 + 4 + 3 + text.length + 1;
+        int poolSize = 28 + 4 + 2 + text.length + 1;
         int padded = (poolSize + 3) & ~3;
         byte[] bytes = new byte[8 + padded];
         put16(bytes, 0, 3);
@@ -47,9 +47,8 @@ public final class OfflineBinaryManifestCheck {
         put32(bytes, 24, 0x100);
         put32(bytes, 28, 32);
         bytes[40] = (byte)value.length();
-        bytes[41] = 0; // second byte of UTF-16 length
-        bytes[42] = (byte)text.length;
-        System.arraycopy(text, 0, bytes, 43, text.length);
+        bytes[41] = (byte)text.length;
+        System.arraycopy(text, 0, bytes, 42, text.length);
         return bytes;
     }
 
