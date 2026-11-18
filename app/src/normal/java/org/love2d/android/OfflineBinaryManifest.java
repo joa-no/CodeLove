@@ -320,6 +320,84 @@ final class OfflineBinaryManifest {
     }
 
     /**
+     * Rewrite the manifest root package string only when its pool entry is
+     * not referenced by another XML attribute. Resource-table package IDs,
+     * component names and applicationId-derived authorities are not changed.
+     */
+    static byte[] withPackageName(byte[] xml, String packageName) throws IOException {
+        if (packageName == null || packageName.length() > 223
+                || !packageName.matches("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+")) {
+            throw new IOException("Invalid Android package name");
+        }
+        String[] strings = readStrings(xml);
+        chunkTypes(xml);
+        int root = -1;
+        int index = -1;
+        int references = 0;
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            int type = u16(xml, at);
+            int header = u16(xml, at + 2);
+            int size = (int)u32(xml, at + 4);
+            if (type != 0x0102) continue;
+            if (header != 16 || size < 36) throw new IOException("Invalid element header");
+            long elementName = u32(xml, at + 20);
+            if (elementName >= strings.length) throw new IOException("Invalid element name");
+            if (root < 0) {
+                if (!"manifest".equals(strings[(int)elementName])) {
+                    throw new IOException("Invalid manifest root");
+                }
+                root = at;
+            }
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            if (stride < 20 || 16L + start < 36
+                    || 16L + start + (long)stride * count > size) {
+                throw new IOException("Invalid XML attribute table");
+            }
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                long name = u32(xml, p + 4);
+                long raw = u32(xml, p + 8);
+                long typed = u32(xml, p + 16);
+                int valueType = xml[p + 15] & 255;
+                if (name >= strings.length || u16(xml, p + 12) != 8
+                        || (raw != 0xffffffffL && raw >= strings.length)
+                        || (valueType == 3 && typed >= strings.length)) {
+                    throw new IOException("Invalid XML attribute");
+                }
+                if (at == root && "package".equals(strings[(int)name])) {
+                    if (index >= 0 || valueType != 3 || typed >= strings.length
+                            || (raw != 0xffffffffL && raw != typed)) {
+                        throw new IOException("Unsupported package attribute");
+                    }
+                    index = (int)typed;
+                }
+            }
+        }
+        if (index < 0) throw new IOException("Missing package attribute");
+        // Refuse to alter a string shared by any unrelated attribute.
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            if (u16(xml, at) != 0x0102) continue;
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                if (u32(xml, p + 8) == index
+                        || ((xml[p + 15] & 255) == 3 && u32(xml, p + 16) == index)) {
+                    long name = u32(xml, p + 4);
+                    if (at != root || name >= strings.length
+                            || !"package".equals(strings[(int)name])) {
+                        throw new IOException("Package string is shared by another attribute");
+                    }
+                    references++;
+                }
+            }
+        }
+        if (references == 0) throw new IOException("Package string has no references");
+        return replacePoolString(xml, strings, index, packageName);
+    }
+
+    /**
      * Rebuild an unstyled Android binary XML string pool while keeping all
      * string indices stable. Only the pool bytes and root XML size change.
      */
