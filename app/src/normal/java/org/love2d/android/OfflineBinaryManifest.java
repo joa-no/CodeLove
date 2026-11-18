@@ -100,6 +100,32 @@ final class OfflineBinaryManifest {
         return values;
     }
 
+    /**
+     * Read-only inspection of the binary XML chunk stream. This establishes
+     * safe chunk boundaries before any manifest attribute can be rewritten.
+     */
+    static int[] chunkTypes(byte[] xml) throws IOException {
+        readStrings(xml);
+        int[] types = new int[xml.length / 8];
+        int count = 0;
+        int at = 8;
+        while (at < xml.length) {
+            if (at > xml.length - 8) {
+                throw new IOException("Truncated binary XML chunk header");
+            }
+            int type = u16(xml, at);
+            int header = u16(xml, at + 2);
+            long size = u32(xml, at + 4);
+            if (header < 8 || size < header || size > xml.length - at
+                    || (size & 3) != 0) {
+                throw new IOException("Invalid binary XML chunk at offset " + at);
+            }
+            types[count++] = type;
+            at += (int) size;
+        }
+        return java.util.Arrays.copyOf(types, count);
+    }
+
     private static int[] utf16Length(byte[] data, int at, int end) throws IOException {
         if (at > end - 2) throw new IOException("Truncated UTF-16 length");
         int first = u16(data, at);
