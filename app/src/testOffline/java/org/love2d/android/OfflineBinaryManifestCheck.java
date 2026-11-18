@@ -20,6 +20,32 @@ public final class OfflineBinaryManifestCheck {
         byte[] badTerminator = valid.clone();
         badTerminator[46] = 1;
         reject(badTerminator);
+        if (args.length == 1) {
+            try (java.util.zip.ZipFile apk = new java.util.zip.ZipFile(args[0])) {
+                java.util.zip.ZipEntry entry = apk.getEntry("AndroidManifest.xml");
+                if (entry == null || entry.getSize() > 4 * 1024 * 1024) {
+                    throw new AssertionError("Missing or oversized real Android manifest");
+                }
+                byte[] real;
+                try (java.io.InputStream input = apk.getInputStream(entry);
+                     java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[8192];
+                    int n;
+                    while ((n = input.read(buffer)) != -1) {
+                        output.write(buffer, 0, n);
+                        if (output.size() > 4 * 1024 * 1024) {
+                            throw new AssertionError("Manifest exceeds limit");
+                        }
+                    }
+                    real = output.toByteArray();
+                }
+                String[] decoded = OfflineBinaryManifest.readStrings(real);
+                if (decoded.length == 0) {
+                    throw new AssertionError("Real Android manifest has no strings");
+                }
+                System.out.println("Real template manifest strings decoded: " + decoded.length);
+            }
+        }
         System.out.println("Binary manifest string pool checks passed");
     }
 
