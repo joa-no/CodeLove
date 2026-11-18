@@ -63,6 +63,13 @@ public final class OfflineBinaryManifestCheck {
                     throw new AssertionError("Real Android manifest has no strings");
                 }
                 System.out.println("Real template manifest strings decoded: " + decoded.length);
+                String[] root = OfflineBinaryManifest.rootAttributes(real);
+                if (root.length == 0) {
+                    throw new AssertionError("Manifest root has no attributes");
+                }
+                for (String attribute : root) {
+                    System.out.println("Manifest root: " + attribute);
+                }
             }
         }
         System.out.println("Binary manifest string pool checks passed");
