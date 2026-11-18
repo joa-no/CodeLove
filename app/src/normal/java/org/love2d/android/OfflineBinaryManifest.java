@@ -31,11 +31,16 @@ final class OfflineBinaryManifest {
         long styles = u32(xml, offset + 12);
         long flags = u32(xml, offset + 16);
         long stringsStart = u32(xml, offset + 20);
+        long stylesStart = u32(xml, offset + 24);
         if (headerSize != 28 || chunkSize < headerSize || count > MAX_STRINGS
-                || styles != 0 || (flags & UTF8) == 0
+                || styles != 0 || stylesStart != 0
                 || (flags & ~UTF8) != 0 || stringsStart < 28 + count * 4
                 || chunkSize > xml.length - offset) {
-            throw new IOException("Unsupported binary manifest string pool");
+            throw new IOException("Unsupported binary manifest string pool"
+                    + " (header=" + headerSize + ", count=" + count
+                    + ", styles=" + styles + ", flags=0x"
+                    + Long.toHexString(flags) + ", stringsStart=" + stringsStart
+                    + ", stylesStart=" + stylesStart + ", chunk=" + chunkSize + ")");
         }
         int end = offset + (int) chunkSize;
         int dataStart = offset + (int) stringsStart;
@@ -47,23 +52,60 @@ final class OfflineBinaryManifest {
                 throw new IOException("String offset outside pool");
             }
             int at = dataStart + (int) relative;
-            int[] utf16Length = length(xml, at, end);
-            int[] byteLength = length(xml, utf16Length[1], end);
-            int size = byteLength[0];
-            at = byteLength[1];
-            if (size < 0 || at >= end || size >= end - at
-                    || xml[at + size] != 0) {
-                throw new IOException("Malformed UTF-8 manifest string");
-            }
-            String value = new String(xml, at, size, StandardCharsets.UTF_8);
-            if (value.length() != utf16Length[0]
-                    || !java.util.Arrays.equals(value.getBytes(StandardCharsets.UTF_8),
-                            java.util.Arrays.copyOfRange(xml, at, at + size))) {
-                throw new IOException("Malformed or noncanonical manifest string");
+            String value;
+            if ((flags & UTF8) != 0) {
+                int[] utf16Length = length(xml, at, end);
+                int[] byteLength = length(xml, utf16Length[1], end);
+                int size = byteLength[0];
+                at = byteLength[1];
+                if (size < 0 || at >= end || size >= end - at
+                        || xml[at + size] != 0) {
+                    throw new IOException("Malformed UTF-8 manifest string");
+                }
+                value = new String(xml, at, size, StandardCharsets.UTF_8);
+                if (value.length() != utf16Length[0]
+                        || !java.util.Arrays.equals(value.getBytes(StandardCharsets.UTF_8),
+                                java.util.Arrays.copyOfRange(xml, at, at + size))) {
+                    throw new IOException("Malformed or noncanonical manifest string");
+                }
+            } else {
+                int[] decodedLength = utf16Length(xml, at, end);
+                int chars = decodedLength[0];
+                at = decodedLength[1];
+                if (chars < 0 || chars > (end - at - 2) / 2) {
+                    throw new IOException("Invalid UTF-16 manifest string length");
+                }
+                int terminator = at + chars * 2;
+                if (u16(xml, terminator) != 0) {
+                    throw new IOException("Missing UTF-16 manifest string terminator");
+                }
+                char[] characters = new char[chars];
+                for (int j = 0; j < chars; j++) {
+                    characters[j] = (char) u16(xml, at + j * 2);
+                }
+                value = new String(characters);
+                for (int j = 0; j < value.length(); j++) {
+                    char c = value.charAt(j);
+                    if (Character.isHighSurrogate(c)) {
+                        if (++j >= value.length() || !Character.isLowSurrogate(value.charAt(j))) {
+                            throw new IOException("Malformed UTF-16 surrogate pair");
+                        }
+                    } else if (Character.isLowSurrogate(c)) {
+                        throw new IOException("Unpaired UTF-16 low surrogate");
+                    }
+                }
             }
             values[i] = value;
         }
         return values;
+    }
+
+    private static int[] utf16Length(byte[] data, int at, int end) throws IOException {
+        if (at > end - 2) throw new IOException("Truncated UTF-16 length");
+        int first = u16(data, at);
+        if ((first & 0x8000) == 0) return new int[] {first, at + 2};
+        if (at > end - 4) throw new IOException("Truncated extended UTF-16 length");
+        return new int[] {((first & 0x7fff) << 16) | u16(data, at + 2), at + 4};
     }
 
     // UTF-8 Android string pools encode both UTF-16 character count and
