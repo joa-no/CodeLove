@@ -91,6 +91,26 @@ public final class OfflineBinaryManifestCheck {
                 if (!shorterFound || shorter.length > real.length) {
                     throw new AssertionError("Shorter versionName rewrite failed");
                 }
+                byte[] repackaged = OfflineBinaryManifest.withPackageName(
+                        real, "org.example.exportedgame");
+                boolean packageFound = false;
+                for (String attribute : OfflineBinaryManifest.rootAttributes(repackaged)) {
+                    if ("package=org.example.exportedgame".equals(attribute)) {
+                        packageFound = true;
+                    }
+                }
+                if (!packageFound) {
+                    throw new AssertionError("Package rewrite failed");
+                }
+                if (OfflineBinaryManifest.chunkTypes(repackaged).length != chunks.length) {
+                    throw new AssertionError("Package rewrite changed XML chunk structure");
+                }
+                try {
+                    OfflineBinaryManifest.withPackageName(real, "invalid-package");
+                    throw new AssertionError("Invalid package accepted");
+                } catch (IOException expected) {
+                    // Invalid identifiers must be rejected.
+                }
                 byte[] updated = OfflineBinaryManifest.withVersionCode(real, 12345);
                 if (java.util.Arrays.equals(real, updated)) {
                     throw new AssertionError("versionCode was not changed");
