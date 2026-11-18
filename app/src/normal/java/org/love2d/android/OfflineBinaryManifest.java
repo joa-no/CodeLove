@@ -235,11 +235,10 @@ final class OfflineBinaryManifest {
     }
 
     /**
-     * Conservative versionName rewrite: only accepts an equally sized UTF-8
-     * replacement and a unique string-pool reference. Longer or shorter
-     * versions require rebuilding the pool and are deliberately rejected.
+     * Rewrite versionName with a rebuilt string pool, preserving existing
+     * string indices and rejecting shared references.
      */
-    static byte[] withVersionNameSameSize(byte[] xml, String versionName)
+    static byte[] withVersionName(byte[] xml, String versionName)
             throws IOException {
         if (versionName == null || !versionName.matches("[0-9A-Za-z][0-9A-Za-z._+-]{0,63}")) {
             throw new IOException("Invalid versionName");
@@ -317,39 +316,88 @@ final class OfflineBinaryManifest {
             at += size;
         }
         if (references == 0) throw new IOException("No versionName reference");
-        int poolAt = 8;
-        if (u16(xml, poolAt) != 1 || u16(xml, poolAt + 2) != 28) {
-            throw new IOException("Unsupported manifest string pool");
+        return replacePoolString(xml, strings, index, versionName);
+    }
+
+    /**
+     * Rebuild an unstyled Android binary XML string pool while keeping all
+     * string indices stable. Only the pool bytes and root XML size change.
+     */
+    private static byte[] replacePoolString(byte[] xml, String[] strings,
+                                             int index, String replacement)
+            throws IOException {
+        final int poolAt = 8;
+        if (u16(xml, poolAt) != 1 || u16(xml, poolAt + 2) != 28
+                || u32(xml, poolAt + 12) != 0 || u32(xml, poolAt + 24) != 0
+                || u32(xml, poolAt + 16) != 0
+                   && u32(xml, poolAt + 16) != 0x100) {
+            throw new IOException("Unsupported styled or flagged string pool");
         }
-        boolean utf8 = (u32(xml, poolAt + 16) & 0x100) != 0;
-        int poolEnd = poolAt + (int)u32(xml, poolAt + 4);
-        int data = poolAt + (int)u32(xml, poolAt + 20);
-        int stringAt = data + (int)u32(xml, poolAt + 28 + index * 4);
-        byte[] updated = xml.clone();
-        if (utf8) {
-            int[] chars = length(xml, stringAt, poolEnd);
-            int[] bytes = length(xml, chars[1], poolEnd);
-            byte[] replacement = versionName.getBytes(StandardCharsets.UTF_8);
-            if (versionName.length() != chars[0] || replacement.length != bytes[0]
-                    || bytes[1] + bytes[0] >= poolEnd || xml[bytes[1] + bytes[0]] != 0) {
-                throw new IOException("versionName requires string-pool rebuild");
+        boolean utf8 = u32(xml, poolAt + 16) == 0x100;
+        int oldSize = (int)u32(xml, poolAt + 4);
+        int offsetsStart = 28;
+        int dataStart = offsetsStart + strings.length * 4;
+        java.io.ByteArrayOutputStream data = new java.io.ByteArrayOutputStream();
+        int[] offsets = new int[strings.length];
+        for (int i = 0; i < strings.length; i++) {
+            offsets[i] = data.size();
+            String value = i == index ? replacement : strings[i];
+            if (utf8) {
+                byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+                writeLength8(data, value.length());
+                writeLength8(data, bytes.length);
+                data.write(bytes, 0, bytes.length);
+                data.write(0);
+            } else {
+                writeLength16(data, value.length());
+                for (int j = 0; j < value.length(); j++) {
+                    int c = value.charAt(j);
+                    data.write(c & 255);
+                    data.write(c >>> 8);
+                }
+                data.write(0);
+                data.write(0);
             }
-            System.arraycopy(replacement, 0, updated, bytes[1], replacement.length);
+        }
+        int poolSize = (dataStart + data.size() + 3) & ~3;
+        long total = (long)xml.length - oldSize + poolSize;
+        if (total > 4L * 1024 * 1024) {
+            throw new IOException("Manifest string pool exceeds size limit");
+        }
+        byte[] result = new byte[(int)total];
+        System.arraycopy(xml, 0, result, 0, poolAt + 28);
+        put32(result, poolAt + 4, poolSize);
+        put32(result, poolAt + 20, dataStart);
+        for (int i = 0; i < offsets.length; i++) {
+            put32(result, poolAt + offsetsStart + i * 4, offsets[i]);
+        }
+        byte[] encoded = data.toByteArray();
+        System.arraycopy(encoded, 0, result, poolAt + dataStart, encoded.length);
+        System.arraycopy(xml, poolAt + oldSize, result, poolAt + poolSize,
+                xml.length - poolAt - oldSize);
+        put32(result, 4, result.length);
+        if (!replacement.equals(readStrings(result)[index])) {
+            throw new IOException("Rewritten string pool failed verification");
+        }
+        chunkTypes(result);
+        return result;
+    }
+
+    private static void writeLength8(java.io.ByteArrayOutputStream out, int n)
+            throws IOException {
+        if (n < 0 || n > 32767) throw new IOException("UTF-8 string too long");
+        if (n < 128) out.write(n);
+        else { out.write((n >>> 8) | 128); out.write(n & 255); }
+    }
+
+    private static void writeLength16(java.io.ByteArrayOutputStream out, int n) {
+        if (n < 32768) {
+            out.write(n & 255); out.write(n >>> 8);
         } else {
-            int[] chars = utf16Length(xml, stringAt, poolEnd);
-            int valueAt = chars[1];
-            if (versionName.length() != chars[0]
-                    || valueAt + chars[0] * 2 + 2 > poolEnd
-                    || u16(xml, valueAt + chars[0] * 2) != 0) {
-                throw new IOException("versionName requires string-pool rebuild");
-            }
-            for (int i = 0; i < versionName.length(); i++) {
-                updated[valueAt + i * 2] = (byte)versionName.charAt(i);
-                updated[valueAt + i * 2 + 1] = (byte)(versionName.charAt(i) >>> 8);
-            }
+            int first = (n >>> 16) | 0x8000;
+            out.write(first & 255); out.write(first >>> 8);
+            out.write(n & 255); out.write((n >>> 8) & 255);
         }
-        readStrings(updated);
-        return updated;
     }
 
     private static void put32(byte[] bytes, int at, int value) {
