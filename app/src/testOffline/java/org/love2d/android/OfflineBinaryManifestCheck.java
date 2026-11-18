@@ -67,6 +67,13 @@ public final class OfflineBinaryManifestCheck {
                 if (root.length == 0) {
                     throw new AssertionError("Manifest root has no attributes");
                 }
+                String[] components = OfflineBinaryManifest.componentReferences(real);
+                if (components.length == 0) {
+                    throw new AssertionError("No Android components found in template");
+                }
+                for (String component : components) {
+                    System.out.println("Template component: " + component);
+                }
                 byte[] renamed = OfflineBinaryManifest.withVersionName(real, "2.3.4");
                 boolean renamedFound = false;
                 for (String attribute : OfflineBinaryManifest.rootAttributes(renamed)) {
