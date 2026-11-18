@@ -183,6 +183,59 @@ final class OfflineBinaryManifest {
         throw new IOException("No manifest start element found");
     }
 
+    /** Read-only inventory of component names and provider authorities. */
+    static String[] componentReferences(byte[] xml) throws IOException {
+        String[] pool = readStrings(xml);
+        chunkTypes(xml);
+        java.util.ArrayList<String> references = new java.util.ArrayList<>();
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            if (u16(xml, at) != 0x0102) continue;
+            if (u16(xml, at + 2) != 16 || u32(xml, at + 4) < 36) {
+                throw new IOException("Invalid component element header");
+            }
+            long elementIndex = u32(xml, at + 20);
+            if (elementIndex >= pool.length) throw new IOException("Invalid component element");
+            String element = pool[(int)elementIndex];
+            boolean component = "activity".equals(element) || "activity-alias".equals(element)
+                    || "service".equals(element) || "receiver".equals(element)
+                    || "provider".equals(element) || "instrumentation".equals(element);
+            if (!component) continue;
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            long size = u32(xml, at + 4);
+            if (stride < 20 || 16L + start < 36
+                    || 16L + start + (long)stride * count > size) {
+                throw new IOException("Invalid component attributes");
+            }
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                long name = u32(xml, p + 4), raw = u32(xml, p + 8);
+                long typed = u32(xml, p + 16);
+                if (name >= pool.length || u16(xml, p + 12) != 8) {
+                    throw new IOException("Invalid component attribute");
+                }
+                String attribute = pool[(int)name];
+                if (!"name".equals(attribute) && !"targetActivity".equals(attribute)
+                        && !"authorities".equals(attribute) && !"permission".equals(attribute)
+                        && !"readPermission".equals(attribute)
+                        && !"writePermission".equals(attribute)) continue;
+                String value;
+                if (raw != 0xffffffffL) {
+                    if (raw >= pool.length) throw new IOException("Invalid raw component string");
+                    value = pool[(int)raw];
+                } else if ((xml[p + 15] & 255) == 3) {
+                    if (typed >= pool.length) throw new IOException("Invalid component string");
+                    value = pool[(int)typed];
+                } else {
+                    value = "type=0x" + Integer.toHexString(xml[p + 15] & 255)
+                            + ",data=" + typed;
+                }
+                references.add(element + "." + attribute + "=" + value);
+            }
+        }
+        return references.toArray(new String[0]);
+    }
+
     /**
      * Rewrite only the manifest's integer versionCode in a defensive copy.
      * Does not change the package, versionName, resource table or APK.
