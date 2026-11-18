@@ -183,6 +183,64 @@ final class OfflineBinaryManifest {
         throw new IOException("No manifest start element found");
     }
 
+    /**
+     * Rewrite only the manifest's integer versionCode in a defensive copy.
+     * Does not change the package, versionName, resource table or APK.
+     */
+    static byte[] withVersionCode(byte[] xml, int versionCode) throws IOException {
+        if (versionCode <= 0) throw new IOException("Invalid versionCode");
+        String[] pool = readStrings(xml);
+        byte[] result = xml.clone();
+        int at = 8;
+        while (at < result.length) {
+            int type = u16(result, at);
+            int header = u16(result, at + 2);
+            long size = u32(result, at + 4);
+            if (header < 8 || size < header || size > result.length - at
+                    || (size & 3) != 0) {
+                throw new IOException("Invalid XML chunk at " + at);
+            }
+            if (type == 0x0102) {
+                if (header != 16 || size < 36
+                        || u32(result, at + 20) >= pool.length
+                        || !"manifest".equals(pool[(int)u32(result, at + 20)])) {
+                    throw new IOException("Invalid manifest root element");
+                }
+                int start = u16(result, at + 24);
+                int stride = u16(result, at + 26);
+                int count = u16(result, at + 28);
+                long first = 16L + start;
+                if (stride < 20 || first < 36 || first + (long)stride * count > size) {
+                    throw new IOException("Invalid root attribute table");
+                }
+                int found = 0;
+                for (int i = 0; i < count; i++) {
+                    int p = at + (int)(first + (long)i * stride);
+                    long name = u32(result, p + 4);
+                    if (name >= pool.length) throw new IOException("Invalid attribute name");
+                    if (!"versionCode".equals(pool[(int)name])) continue;
+                    if (++found != 1 || u16(result, p + 12) != 8
+                            || (result[p + 15] & 255) != 0x10
+                            || u32(result, p + 8) != 0xffffffffL) {
+                        throw new IOException("Unsupported versionCode attribute");
+                    }
+                    put32(result, p + 16, versionCode);
+                }
+                if (found != 1) throw new IOException("Missing unique versionCode");
+                return result;
+            }
+            at += (int)size;
+        }
+        throw new IOException("Missing manifest element");
+    }
+
+    private static void put32(byte[] bytes, int at, int value) {
+        bytes[at] = (byte)value;
+        bytes[at + 1] = (byte)(value >>> 8);
+        bytes[at + 2] = (byte)(value >>> 16);
+        bytes[at + 3] = (byte)(value >>> 24);
+    }
+
     private static int[] utf16Length(byte[] data, int at, int end) throws IOException {
         if (at > end - 2) throw new IOException("Truncated UTF-16 length");
         int first = u16(data, at);
