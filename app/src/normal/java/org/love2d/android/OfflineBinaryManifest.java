@@ -47,7 +47,7 @@ final class OfflineBinaryManifest {
                 throw new IOException("String offset outside pool");
             }
             int at = dataStart + (int) relative;
-            int[] utf16Length = utf16Length(xml, at, end);
+            int[] utf16Length = length(xml, at, end);
             int[] byteLength = length(xml, utf16Length[1], end);
             int size = byteLength[0];
             at = byteLength[1];
@@ -66,16 +66,8 @@ final class OfflineBinaryManifest {
         return values;
     }
 
-    /** UTF-16 string length uses one or two little-endian 16-bit words. */
-    private static int[] utf16Length(byte[] data, int at, int end) throws IOException {
-        if (at + 2 > end) throw new IOException("Truncated UTF-16 length");
-        int first = u16(data, at);
-        at += 2;
-        if ((first & 0x8000) == 0) return new int[] {first, at};
-        if (at + 2 > end) throw new IOException("Truncated UTF-16 length");
-        return new int[] {((first & 0x7fff) << 16) | u16(data, at), at + 2};
-    }
-
+    // UTF-8 Android string pools encode both UTF-16 character count and
+    // UTF-8 byte count using the same one/two-byte length format.
     private static int[] length(byte[] data, int at, int end) throws IOException {
         if (at >= end) throw new IOException("Truncated manifest string length");
         int first = data[at++] & 255;
