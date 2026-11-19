@@ -12,6 +12,7 @@ on:
       - 'app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java'
       - 'app/src/normal/java/org/love2d/android/OfflineApkIdentity.java'
       - 'app/src/normal/java/org/love2d/android/OfflineApkIcon.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkIconResources.java'
       - 'app/src/normal/java/org/love2d/android/OfflineApkExportPipeline.java'
       - 'app/src/normal/java/org/love2d/android/GameExportApk.java'
       - 'tools/OfflineGameApkTest.java'
@@ -60,6 +61,7 @@ jobs:
             app/src/normal/java/org/love2d/android/OfflineGameApk.java \
             app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java \
             app/src/normal/java/org/love2d/android/OfflineApkIdentity.java \
+            app/src/normal/java/org/love2d/android/OfflineApkIconResources.java \
             tools/OfflineGameApkTest.java \
             app/src/normal/java/org/love2d/android/OfflineApkSigner.java \
             tools/OfflineApkSignerTest.java \

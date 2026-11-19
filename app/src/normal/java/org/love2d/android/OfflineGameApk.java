@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Set;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
@@ -23,7 +24,8 @@ import java.util.zip.ZipOutputStream;
  * No Android framework dependencies: suitable for running on the phone and in
  * an ordinary JVM test. The result is UNSIGNED. It must be signed with a
  * stable game-specific key before installation. The identity-aware direct-assets
- * overload rewrites the binary manifest; app label and icon remain unchanged.
+ * overload rewrites the binary manifest, including the app label. An icon-aware
+ * overload replaces launcher PNGs using resources.arsc lookup.
  *
  * The caller owns the temporary output location and must discard partial
  * output after an exception. writeUnsigned closes the output stream.
@@ -38,6 +40,7 @@ final class OfflineGameApk {
     private static final long MAX_MANIFEST_BYTES = 4L * 1024L * 1024L;
     private static final int MAX_ICON_BYTES = 4 * 1024 * 1024;
     private static final String[] ICON_DENSITIES = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};
+    private static final long MAX_RESOURCE_TABLE_BYTES = 8L * 1024L * 1024L;
     private static final int NATIVE_ALIGNMENT = 16 * 1024;
     private static final int OTHER_ALIGNMENT = 4;
     private static final int EXTRA_ID = 0xCAFE;
@@ -119,8 +122,8 @@ final class OfflineGameApk {
     }
 
     /**
-     * Changes package, versions and AndroidX Startup authority. Game label,
-     * icon and resources.arsc remain unchanged until separately implemented.
+     * Changes package, versions, application label and AndroidX Startup
+     * authority; the icon-aware overload handles launcher PNGs.
      */
     static void writeUnsignedAssets(File templateApk, File gameLove,
                                     OutputStream output, OfflineApkIdentity identity)
@@ -172,20 +175,44 @@ final class OfflineGameApk {
                 throw new IOException("Missing embedded game slot or Android manifest");
             }
 
+            Map<String, String> iconTargets = java.util.Collections.emptyMap();
             if (icons != null) {
                 Set<String> expected = new HashSet<>(Arrays.asList(ICON_DENSITIES));
                 if (identity == null || !expected.equals(icons.keySet())) {
                     throw new IOException("Missing or invalid game icon densities");
                 }
-                Set<String> actual = new HashSet<>();
-                for (String path : templateNames) {
-                    String density = iconDensity(path);
-                    if (density != null && !actual.add(density)) {
-                        throw new IOException("Duplicate icon density in APK");
+                ZipEntry arsc = template.getEntry("resources.arsc");
+                if (arsc == null || arsc.isDirectory() || arsc.getSize() <= 0
+                        || arsc.getSize() > MAX_RESOURCE_TABLE_BYTES) {
+                    throw new IOException("Missing or oversized Android resource table");
+                }
+                java.io.ByteArrayOutputStream table = new java.io.ByteArrayOutputStream();
+                try (InputStream input = template.getInputStream(arsc)) {
+                    byte[] chunk = new byte[BUFFER];
+                    int n;
+                    while ((n = input.read(chunk)) != -1) {
+                        if (n == 0) continue;
+                        if (table.size() > MAX_RESOURCE_TABLE_BYTES - n) {
+                            throw new IOException("Android resource table exceeds 8 MiB");
+                        }
+                        table.write(chunk, 0, n);
                     }
                 }
-                if (!expected.equals(actual)) {
-                    throw new IOException("APK template has unexpected icon paths");
+                if (table.size() != arsc.getSize()) {
+                    throw new IOException("Truncated Android resource table");
+                }
+                Map<String, String> mapped = OfflineApkIconResources.find(table.toByteArray());
+                if (!expected.equals(mapped.keySet())) {
+                    throw new IOException("Unexpected launcher icon densities");
+                }
+                iconTargets = new HashMap<>();
+                for (Map.Entry<String, String> mappedEntry : mapped.entrySet()) {
+                    String path = mappedEntry.getValue();
+                    ZipEntry image = template.getEntry(path);
+                    if (image == null || image.isDirectory() || !templateNames.contains(path)
+                            || iconTargets.put(path, mappedEntry.getKey()) != null) {
+                        throw new IOException("APK icon file is missing or duplicated: " + path);
+                    }
                 }
                 for (String density : ICON_DENSITIES) {
                     byte[] bytes = icons.get(density);
@@ -232,8 +259,8 @@ final class OfflineGameApk {
                     if (slot.equals(name) || isOldJarSignature(name)) continue;
                     if (rewrittenManifest != null && "AndroidManifest.xml".equals(name)) {
                         writeReplacementEntry(entry, name, rewrittenManifest, apk, counter);
-                    } else if (icons != null && iconDensity(name) != null) {
-                        writeReplacementEntry(entry, name, icons.get(iconDensity(name)), apk, counter);
+                    } else if (icons != null && iconTargets.containsKey(name)) {
+                        writeReplacementEntry(entry, name, icons.get(iconTargets.get(name)), apk, counter);
                     } else {
                         writeCopiedEntry(template, entry, name, apk, counter);
                     }
@@ -276,19 +303,6 @@ final class OfflineGameApk {
         xml = OfflineBinaryManifest.withVersionName(xml, identity.versionName);
         xml = OfflineBinaryManifest.withVersionCode(xml, identity.versionCode);
         return OfflineBinaryManifest.withApplicationLabel(xml, identity.displayName);
-    }
-
-    /** Match existing compiled resource paths; do not edit resources.arsc. */
-    private static String iconDensity(String path) {
-        if (!path.startsWith("res/drawable-") || !path.endsWith("/love.png")) return null;
-        String qualifier = path.substring("res/drawable-".length(),
-                path.length() - "/love.png".length());
-        for (String density : ICON_DENSITIES) {
-            if (qualifier.equals(density) || qualifier.matches(density + "-v[0-9]+")) {
-                return density;
-            }
-        }
-        return null;
     }
 
     private static void writeReplacementEntry(ZipEntry original, String path, byte[] bytes,

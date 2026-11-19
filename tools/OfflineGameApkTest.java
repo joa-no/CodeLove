@@ -255,21 +255,30 @@ public final class OfflineGameApkTest {
                 check("Prototype Test".equals(OfflineBinaryManifest.applicationLabel(xml)),
                         "Application label was not rewritten");
                 if (withIcon) {
+                    byte[] table;
+                    try (java.io.InputStream in =
+                            apk.getInputStream(apk.getEntry("resources.arsc"))) {
+                        table = in.readAllBytes();
+                    }
+                    Map<String, String> paths = OfflineApkIconResources.find(table);
+                    check(paths.keySet().equals(icons.keySet()),
+                            "Launcher icon density map was altered");
                     for (Map.Entry<String, byte[]> iconEntry : icons.entrySet()) {
-                        boolean found = false;
-                        java.util.Enumeration<? extends ZipEntry> items = apk.entries();
-                        while (items.hasMoreElements()) {
-                            ZipEntry item = items.nextElement();
-                            if (item.getName().startsWith("res/drawable-" + iconEntry.getKey())
-                                    && item.getName().endsWith("/love.png")) {
-                                try (java.io.InputStream input = apk.getInputStream(item)) {
-                                    check(Arrays.equals(input.readAllBytes(), iconEntry.getValue()),
-                                            "Launcher PNG was not replaced");
-                                }
-                                found = true;
-                            }
+                        String path = paths.get(iconEntry.getKey());
+                        ZipEntry item = apk.getEntry(path);
+                        check(item != null, "Missing compiled launcher icon: " + path);
+                        try (java.io.InputStream in = apk.getInputStream(item)) {
+                            check(Arrays.equals(in.readAllBytes(), iconEntry.getValue()),
+                                    "Launcher PNG not replaced: " + iconEntry.getKey());
                         }
-                        check(found, "Missing launcher icon density " + iconEntry.getKey());
+                    }
+                    byte[] corrupt = table.clone();
+                    corrupt[0] = 0;
+                    try {
+                        OfflineApkIconResources.find(corrupt);
+                        throw new AssertionError("Corrupt resource table was accepted");
+                    } catch (java.io.IOException expected) {
+                        // Fail closed if the template resource table is invalid.
                     }
                 }
             }
