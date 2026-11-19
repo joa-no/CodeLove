@@ -98,6 +98,26 @@ public final class OfflineBinaryManifestCheck {
                 if (!shorterFound || shorter.length > real.length) {
                     throw new AssertionError("Shorter versionName rewrite failed");
                 }
+                byte[] authorityUpdated = OfflineBinaryManifest.withStartupAuthority(
+                        real, "org.example.exportedgame");
+                boolean authorityFound = false;
+                for (String component : OfflineBinaryManifest.componentReferences(authorityUpdated)) {
+                    if ("provider.authorities=org.example.exportedgame.androidx-startup"
+                            .equals(component)) authorityFound = true;
+                }
+                if (!authorityFound) {
+                    throw new AssertionError("Startup authority rewrite failed");
+                }
+                byte[] fullyRepackaged = OfflineBinaryManifest.withPackageName(
+                        authorityUpdated, "org.example.exportedgame");
+                boolean finalAuthorityFound = false;
+                for (String component : OfflineBinaryManifest.componentReferences(fullyRepackaged)) {
+                    if ("provider.authorities=org.example.exportedgame.androidx-startup"
+                            .equals(component)) finalAuthorityFound = true;
+                }
+                if (!finalAuthorityFound) {
+                    throw new AssertionError("Combined package and authority rewrite failed");
+                }
                 byte[] repackaged = OfflineBinaryManifest.withPackageName(
                         real, "org.example.exportedgame");
                 boolean packageFound = false;
