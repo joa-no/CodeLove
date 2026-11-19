@@ -20,8 +20,8 @@ import java.util.zip.ZipOutputStream;
  *
  * No Android framework dependencies: suitable for running on the phone and in
  * an ordinary JVM test. The result is UNSIGNED. It must be signed with a
- * stable game-specific key before installation; changing the Android manifest,
- * app label, version or icon is NOT implemented here.
+ * stable game-specific key before installation. The identity-aware direct-assets
+ * overload rewrites the binary manifest; app label and icon remain unchanged.
  *
  * The caller owns the temporary output location and must discard partial
  * output after an exception. writeUnsigned closes the output stream.
@@ -33,6 +33,7 @@ final class OfflineGameApk {
     private static final int MAX_GAME_ENTRIES = 10000;
     private static final int MAX_APK_ENTRIES = 20000;
     private static final int BUFFER = 32768;
+    private static final long MAX_MANIFEST_BYTES = 4L * 1024L * 1024L;
     private static final int NATIVE_ALIGNMENT = 16 * 1024;
     private static final int OTHER_ALIGNMENT = 4;
     private static final int EXTRA_ID = 0xCAFE;
@@ -105,10 +106,21 @@ final class OfflineGameApk {
      * contents are preserved, and collisions are rejected rather than
      * silently overwriting runtime resources.
      *
-     * Output is aligned but UNSIGNED and has unchanged app identity.
+     * Output is aligned but UNSIGNED. This overload keeps the template
+     * identity for backward compatibility with earlier offline tests.
      */
     static void writeUnsignedAssets(File templateApk, File gameLove,
                                     OutputStream output) throws IOException {
+        writeUnsignedAssets(templateApk, gameLove, output, null);
+    }
+
+    /**
+     * Changes package, versions and AndroidX Startup authority. Game label,
+     * icon and resources.arsc remain unchanged until separately implemented.
+     */
+    static void writeUnsignedAssets(File templateApk, File gameLove,
+                                    OutputStream output, OfflineApkIdentity identity)
+            throws IOException {
         if (templateApk == null || gameLove == null || output == null
                 || !templateApk.isFile() || !gameLove.isFile()
                 || templateApk.getCanonicalFile().equals(gameLove.getCanonicalFile())) {
@@ -171,6 +183,8 @@ final class OfflineGameApk {
                 }
             }
 
+            // Preflight the rewritten manifest before writing any output bytes.
+            byte[] rewrittenManifest = identity == null ? null : rewriteManifest(template, identity);
             CountingStream counter = new CountingStream(output);
             try (ZipOutputStream apk = new ZipOutputStream(counter)) {
                 templates = template.entries();
@@ -178,7 +192,11 @@ final class OfflineGameApk {
                     ZipEntry entry = templates.nextElement();
                     String name = entry.getName();
                     if (slot.equals(name) || isOldJarSignature(name)) continue;
-                    writeCopiedEntry(template, entry, name, apk, counter);
+                    if (rewrittenManifest != null && "AndroidManifest.xml".equals(name)) {
+                        writeManifestEntry(entry, rewrittenManifest, apk, counter);
+                    } else {
+                        writeCopiedEntry(template, entry, name, apk, counter);
+                    }
                 }
                 gameEntries = game.entries();
                 while (gameEntries.hasMoreElements()) {
@@ -188,6 +206,52 @@ final class OfflineGameApk {
                 }
             }
         }
+    }
+
+    private static byte[] rewriteManifest(ZipFile template, OfflineApkIdentity identity)
+            throws IOException {
+        ZipEntry entry = template.getEntry("AndroidManifest.xml");
+        if (entry == null || entry.isDirectory() || entry.getSize() <= 0
+                || entry.getSize() > MAX_MANIFEST_BYTES) {
+            throw new IOException("Missing or oversized Android binary manifest");
+        }
+        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+        try (InputStream input = template.getInputStream(entry)) {
+            byte[] chunk = new byte[BUFFER];
+            int n;
+            while ((n = input.read(chunk)) != -1) {
+                if (n == 0) continue;
+                if (buffer.size() > MAX_MANIFEST_BYTES - n) {
+                    throw new IOException("Android manifest exceeds 4 MiB");
+                }
+                buffer.write(chunk, 0, n);
+            }
+        }
+        if (buffer.size() != entry.getSize()) throw new IOException("Truncated Android manifest");
+        // Rewrite authority first: it is derived from the original package.
+        // Preserve all hardcoded LÖVE and AndroidX component class names.
+        byte[] xml = OfflineBinaryManifest.withStartupAuthority(
+                buffer.toByteArray(), identity.packageName);
+        xml = OfflineBinaryManifest.withPackageName(xml, identity.packageName);
+        xml = OfflineBinaryManifest.withVersionName(xml, identity.versionName);
+        return OfflineBinaryManifest.withVersionCode(xml, identity.versionCode);
+    }
+
+    private static void writeManifestEntry(ZipEntry original, byte[] xml,
+                                           ZipOutputStream out, CountingStream counter)
+            throws IOException {
+        ZipEntry entry = copyEntry("AndroidManifest.xml", original);
+        if (entry.getMethod() == ZipEntry.STORED) {
+            CRC32 crc = new CRC32();
+            crc.update(xml);
+            entry.setSize(xml.length);
+            entry.setCrc(crc.getValue());
+            entry.setExtra(alignmentExtra(counter.count, "AndroidManifest.xml",
+                    OTHER_ALIGNMENT));
+        }
+        out.putNextEntry(entry);
+        out.write(xml);
+        out.closeEntry();
     }
 
     private static void writeCopiedEntry(ZipFile source, ZipEntry entry,

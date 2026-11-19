@@ -12,7 +12,8 @@ import java.security.GeneralSecurityException;
  *
  * Requires a provisioned unsigned embed template and an existing per-game
  * PKCS#12 identity. It never calls Gradle, downloads anything, or modifies
- * the SAF project. App identity in the template remains unchanged.
+ * the SAF project. Package and version are rewritten before signing; display
+ * name and icon are still pending, so this is not a user-facing exporter.
  */
 final class OfflineApkExportPipeline {
     private OfflineApkExportPipeline() {}
@@ -23,10 +24,11 @@ final class OfflineApkExportPipeline {
      */
     static OfflineApkSigner.Result export(
             Context context, File gameLove, File destination,
-            File gameKeyStore, char[] password, String alias)
+            File gameKeyStore, char[] password, String alias,
+            OfflineApkIdentity identity)
             throws IOException, GeneralSecurityException {
         if (context == null || gameLove == null || destination == null
-                || gameKeyStore == null || password == null) {
+                || gameKeyStore == null || password == null || identity == null) {
             throw new IOException("Missing offline export inputs");
         }
         File template = OfflineApkTemplateStore.get(context);
@@ -39,7 +41,7 @@ final class OfflineApkExportPipeline {
         try {
             // Direct assets are the preferred embedding format for LÖVE 11.4+.
             try (FileOutputStream output = new FileOutputStream(unsigned)) {
-                OfflineGameApk.writeUnsignedAssets(template, gameLove, output);
+                OfflineGameApk.writeUnsignedAssets(template, gameLove, output, identity);
             }
             try {
                 return OfflineApkSigner.sign(unsigned, destination,

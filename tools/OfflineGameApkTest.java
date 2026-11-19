@@ -207,6 +207,33 @@ public final class OfflineGameApkTest {
                     new File(args[1]), new File(args[2]), out);
             }
             System.out.println("Direct asset APK created: unsigned");
+        } else if (args.length == 7 && "--repack-assets-identity".equals(args[0])) {
+            OfflineApkIdentity identity = OfflineApkIdentity.create(
+                    args[4], "Prototype Test", args[5], Integer.parseInt(args[6]));
+            try (FileOutputStream out = new FileOutputStream(args[3])) {
+                OfflineGameApk.writeUnsignedAssets(
+                        new File(args[1]), new File(args[2]), out, identity);
+            }
+            try (ZipFile apk = new ZipFile(args[3])) {
+                ZipEntry manifest = apk.getEntry("AndroidManifest.xml");
+                check(manifest != null, "Personalized APK lost manifest");
+                byte[] xml;
+                try (java.io.InputStream input = apk.getInputStream(manifest)) {
+                    xml = input.readAllBytes();
+                }
+                check(Arrays.asList(OfflineBinaryManifest.rootAttributes(xml))
+                        .contains("package=" + identity.packageName), "Wrong package");
+                check(Arrays.asList(OfflineBinaryManifest.rootAttributes(xml))
+                        .contains("versionName=" + identity.versionName), "Wrong versionName");
+                check(Arrays.asList(OfflineBinaryManifest.rootAttributes(xml))
+                        .contains("versionCode=type=0x10,data=" + identity.versionCode),
+                        "Wrong versionCode");
+                check(Arrays.asList(OfflineBinaryManifest.componentReferences(xml))
+                        .contains("provider.authorities=" + identity.packageName
+                                + ".androidx-startup"), "Wrong Startup authority");
+                check(apk.getEntry("assets/main.lua") != null, "Embedded game missing");
+            }
+            System.out.println("Manifest rewrite in assembled APK verified");
         } else if (args.length == 0) {
             test();
         } else {

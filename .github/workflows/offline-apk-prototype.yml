@@ -53,6 +53,8 @@ jobs:
           javac --release 17 -cp "$RUNNER_TEMP/apksig.jar:$RUNNER_TEMP/bc/*" \
             -d "$RUNNER_TEMP/offline-jvm" \
             app/src/normal/java/org/love2d/android/OfflineGameApk.java \
+            app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java \
+            app/src/normal/java/org/love2d/android/OfflineApkIdentity.java \
             tools/OfflineGameApkTest.java \
             app/src/normal/java/org/love2d/android/OfflineApkSigner.java \
             tools/OfflineApkSignerTest.java \
@@ -131,6 +133,12 @@ jobs:
             org.love2d.android.OfflineGameApkTest --repack-assets \
             "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
             "$RUNNER_TEMP/offline-direct-unsigned.apk"
+          # Build a game-specific APK without Gradle using the real template.
+          java -cp "$RUNNER_TEMP/offline-jvm" \
+            org.love2d.android.OfflineGameApkTest --repack-assets-identity \
+            "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
+            "$RUNNER_TEMP/offline-personalized-unsigned.apk" \
+            org.example.offlineprototype 2.7.1 271
           unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/main.lua \
             | grep -F "Offline APK prototype"
           unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/scripts/helper.lua \
@@ -160,6 +168,7 @@ jobs:
           # without running zipalign to modify the APK.
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-java-unsigned.apk"
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-unsigned.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-personalized-unsigned.apk"
           # A game-scoped key is created by CodeLove's actual Java code.
           # The constant password is for a throwaway CI identity only.
           GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
@@ -186,6 +195,15 @@ jobs:
             "$RUNNER_TEMP/offline-direct-unsigned.apk" \
             "$RUNNER_TEMP/offline-direct-prototype.apk" \
             "$RUNNER_TEMP/offline-test-only.p12" game-key
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-personalized-unsigned.apk" \
+            "$RUNNER_TEMP/offline-personalized-prototype.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-personalized-prototype.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-personalized-prototype.apk"
           "$APKSIGNER" verify --verbose --print-certs \
             "$RUNNER_TEMP/offline-direct-prototype.apk"
           "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-prototype.apk"
@@ -245,7 +263,11 @@ jobs:
             "$RUNNER_TEMP/offline-badging.txt"
           grep -F "application-label:'CodeLove Offline Template'" \
             "$RUNNER_TEMP/offline-badging.txt"
-          echo "Offline ZIP replacement, alignment and test signature verified"
+          "$AAPT" dump badging "$RUNNER_TEMP/offline-personalized-prototype.apk" \
+            > "$RUNNER_TEMP/offline-personalized-badging.txt"
+          grep -F "name='org.example.offlineprototype' versionCode='271' versionName='2.7.1'" \
+            "$RUNNER_TEMP/offline-personalized-badging.txt"
+          echo "Manifest rewrite, ZIP alignment and test signature verified"
       - name: Upload prototype test APK (not ready for distribution)
         uses: actions/upload-artifact@v4
         with:
@@ -253,3 +275,4 @@ jobs:
           path: |
             ${{ runner.temp }}/offline-prototype-test.apk
             ${{ runner.temp }}/offline-direct-prototype.apk
+            ${{ runner.temp }}/offline-personalized-prototype.apk
