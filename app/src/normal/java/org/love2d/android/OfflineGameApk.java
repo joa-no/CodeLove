@@ -256,7 +256,10 @@ final class OfflineGameApk {
                 while (templates.hasMoreElements()) {
                     ZipEntry entry = templates.nextElement();
                     String name = entry.getName();
-                    if (slot.equals(name) || isOldJarSignature(name)) continue;
+                    // The Gradle-generated SCM provenance is diagnostic metadata only.
+                    // It is not needed to launch LÖVE or verify the signed game.
+                    if (slot.equals(name) || isOldJarSignature(name)
+                            || "META-INF/version-control-info.textproto".equals(name)) continue;
                     if (rewrittenManifest != null && "AndroidManifest.xml".equals(name)) {
                         writeReplacementEntry(entry, name, rewrittenManifest, apk, counter);
                     } else if (icons != null && iconTargets.containsKey(name)) {

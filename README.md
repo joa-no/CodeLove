@@ -39,11 +39,11 @@ O runtime nativo é mantido por submódulos Git. Não remova nem substitua os su
 .
 ├── .github/workflows/       # Compilação automatizada
 ├── app/
-│   ├── src/main/java/       # Editor, workspace e acesso SAF
+│   ├── src/main/java/       # Código compartilhado com o runtime LÖVE
 │   ├── src/main/cpp/        # Integração nativa e CMake
 │   ├── src/main/res/        # Recursos compartilhados
-│   ├── src/normal/          # Aplicativo CodeLove
-│   └── src/embed/           # Variante que incorpora um jogo
+│   ├── src/normal/          # Editor, workspace, SAF e exportador CodeLove
+│   └── src/embed/           # Runtime Android exclusivo dos jogos exportados
 ├── gradle/wrapper/          # Versão fixada do Gradle
 ├── app/build.gradle         # Configuração Android e dependências
 ├── build.gradle             # Configuração Gradle raiz
@@ -54,7 +54,7 @@ O runtime nativo é mantido por submódulos Git. Não remova nem substitua os su
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `GameActivity.java` | Integração entre Android e runtime LÖVE |
+| `GameActivity.java` | Integração Android/LÖVE em implementações separadas por variante |
 | `Workspace.java` | Interface e coordenação do ambiente de trabalho |
 | `CodeEditor.java` | Sora Editor, abas de arquivos e salvamento manual |
 | `LuaSyntax.java` | Reconhecimento léxico usado no destaque de sintaxe Lua |

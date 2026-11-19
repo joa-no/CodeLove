@@ -77,6 +77,8 @@ jobs:
         rm app/src/embed/assets/game.love
     - name: Verify bundled template is present
       run: test -s app/src/normal/assets/offline/embed-unsigned.apk
+    - name: Reject editor classes and resources in exported-game template
+      run: python3 tools/check_embed_template.py app/src/normal/assets/offline/embed-unsigned.apk
     - name: Validate real bundled binary manifest
       run: |
         java -cp "$RUNNER_TEMP/offline-manifest-classes" \

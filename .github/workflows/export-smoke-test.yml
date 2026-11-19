@@ -6,8 +6,8 @@ on:
       - '.github/workflows/export-smoke-test.yml'
       - 'tools/prepare_game_export.py'
       - 'tools/test_prepare_game_export.py'
-      - 'app/src/main/java/org/love2d/android/GameExportArchive.java'
-      - 'app/src/main/java/org/love2d/android/GameActivity.java'
+      - 'app/src/normal/java/org/love2d/android/GameExportArchive.java'
+      - 'app/src/embed/java/org/love2d/android/GameActivity.java'
       - 'app/build.gradle'
   workflow_dispatch:
 
