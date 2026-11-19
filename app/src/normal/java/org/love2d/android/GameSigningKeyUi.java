@@ -1,10 +1,11 @@
 package org.love2d.android;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Intent;
 import android.net.Uri;
+import android.provider.DocumentsContract;
+import android.util.Log;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
@@ -429,10 +430,11 @@ final class GameSigningKeyUi {
                             throw new java.io.IOException("Já existe uma chave para este jogo");
                         }
                         GameSigningKeyManager.generate(activity, projectId, password);
-                        activity.runOnUiThread(() -> new AlertDialog.Builder(activity)
-                            .setTitle("Chave criada")
-                            .setMessage("A chave foi criada. Faça agora o backup .p12 e guarde sua senha em local seguro. Sem ambos, futuras atualizações podem ficar impossíveis.")
-                            .setPositiveButton("Entendi", null).show());
+                        activity.runOnUiThread(() ->
+                            CodeLoveModal.message(activity, "Chave criada",
+                                "A chave foi criada. Faça agora o backup .p12 e guarde "
+                                + "sua senha em local seguro. Sem ambos, futuras "
+                                + "atualizações podem ficar impossíveis.", "Entendi"));
                     } catch (Exception e) {
                         activity.runOnUiThread(() -> toast(activity,
                             "Não foi possível criar a chave: " + e.getMessage()));
@@ -467,15 +469,41 @@ final class GameSigningKeyUi {
             }
             field.setText("");
             dialog.dismiss();
-            try {
-                Intent intent = action == 1
-                    ? GameSigningKeySaf.createBackupDocumentIntent(applicationId)
-                    : GameSigningKeySaf.openBackupDocumentIntent();
-                activity.startActivityForResult(intent,
-                    action == 1 ? REQUEST_BACKUP : REQUEST_RESTORE);
-            } catch (RuntimeException e) {
-                clearPending();
-                toast(activity, "Não foi possível abrir o seletor de arquivos");
+            if (action == 1) {
+                // ACTION_CREATE_DOCUMENT creates a document before any bytes are
+                // written. A bad password must be rejected BEFORE the picker.
+                new Thread(() -> {
+                    try {
+                        GameSigningKeyManager.inspect(activity, projectId, password);
+                        activity.runOnUiThread(() -> {
+                            if (activity.isFinishing() || activity.isDestroyed()) {
+                                clearPending();
+                                return;
+                            }
+                            try {
+                                activity.startActivityForResult(
+                                    GameSigningKeySaf.createBackupDocumentIntent(applicationId),
+                                    REQUEST_BACKUP);
+                            } catch (RuntimeException e) {
+                                clearPending();
+                                toast(activity, "Não foi possível abrir o seletor de arquivos");
+                            }
+                        });
+                    } catch (Exception e) {
+                        clearPending();
+                        activity.runOnUiThread(() ->
+                            toast(activity, "Senha incorreta ou chave inválida. "
+                                + "Nenhum arquivo de backup foi criado."));
+                    }
+                }, "CodeLove-KeyBackupPreflight").start();
+            } else {
+                try {
+                    activity.startActivityForResult(
+                        GameSigningKeySaf.openBackupDocumentIntent(), REQUEST_RESTORE);
+                } catch (RuntimeException e) {
+                    clearPending();
+                    toast(activity, "Não foi possível abrir o seletor de arquivos");
+                }
             }
         });
         showRoundedDialog(activity, dialog, layout, density, creating);
@@ -511,6 +539,19 @@ final class GameSigningKeyUi {
                 activity.runOnUiThread(() -> toast(activity,
                     request == REQUEST_BACKUP ? "Backup salvo" : "Chave restaurada"));
             } catch (Exception e) {
+                if (request == REQUEST_BACKUP) {
+                    // The picker has already created the document at this point.
+                    // Remove incomplete backups, including zero-byte placeholders.
+                    try {
+                        if (DocumentsContract.isDocumentUri(activity, uri)) {
+                            DocumentsContract.deleteDocument(
+                                activity.getContentResolver(), uri);
+                        }
+                    } catch (Exception cleanup) {
+                        Log.w("CodeLoveKeyBackup",
+                            "Unable to delete incomplete backup from provider", cleanup);
+                    }
+                }
                 activity.runOnUiThread(() -> toast(activity,
                     "Operação falhou: " + e.getMessage()));
             } finally {
