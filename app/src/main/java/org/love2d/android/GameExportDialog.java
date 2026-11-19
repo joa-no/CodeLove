@@ -35,6 +35,11 @@ final class GameExportDialog {
         void onPrepare(String name);
     }
 
+    interface ExportApkListener {
+        void onExport(String name, String packageName, String versionName,
+                      int versionCode, Uri icon);
+    }
+
     static final int REQUEST_ICON = 4103;
     private static final String PREFS = "codelove_game_export";
     private static final Pattern PACKAGE = Pattern.compile(
@@ -64,7 +69,8 @@ final class GameExportDialog {
     }
 
     static void show(Activity activity, String projectId, String projectName,
-                     PrepareListener onPrepareLove) {
+                     PrepareListener onPrepareLove,
+                     ExportApkListener onExportApk) {
         if (activity.isFinishing()) return;
         final SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         final String key = Integer.toHexString(projectId.hashCode()) + "_";
@@ -189,9 +195,14 @@ final class GameExportDialog {
         LinearLayout.LayoutParams loveParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         body.addView(prepareLove, loveParams);
+        LinearLayout prepareApk = secondaryAction(activity, "Gerar APK", "package");
+        LinearLayout.LayoutParams apkParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
+        apkParams.topMargin = Math.round(10*density);
+        body.addView(prepareApk, apkParams);
 
         TextView status = new TextView(activity);
-        status.setText(R.string.cl_export_disabled);
+        status.setText("Para gerar o APK, selecione um ícone e crie ou restaure a chave de assinatura do jogo.");
         status.setTextColor(Workspace.COLOR_MUTED);
         status.setTextSize(12);
         status.setGravity(Gravity.CENTER);
@@ -267,6 +278,23 @@ final class GameExportDialog {
             dialog.dismiss();
             if (onPrepareLove != null) onPrepareLove.onPrepare(value);
         });
+        prepareApk.setOnClickListener(v -> {
+            String value = saveFields(activity, prefs, key,
+                name, pack, version, versionCode);
+            if (value == null) return;
+            String iconString = prefs.getString(key + "icon", "");
+            if (iconString.isEmpty()) {
+                Toast.makeText(activity, "Selecione o ícone do jogo antes de gerar o APK.",
+                    Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (onExportApk == null) return;
+            dialog.dismiss();
+            onExportApk.onExport(value, pack.getText().toString().trim(),
+                version.getText().toString().trim(),
+                Integer.parseInt(versionCode.getText().toString().trim()),
+                Uri.parse(iconString));
+        });
     }
 
     private static String saveFields(Activity activity, SharedPreferences prefs,
@@ -279,8 +307,10 @@ final class GameExportDialog {
         int number;
         try { number = Integer.parseInt(code); }
         catch (NumberFormatException ex) { number = 0; }
-        if (n.isEmpty() || n.contains("\n") || n.contains("\r")
-                || !PACKAGE.matcher(p).matches() || ver.isEmpty() || number < 1) {
+        if (n.isEmpty() || n.length() > 80 || n.contains("\n") || n.contains("\r")
+                || !PACKAGE.matcher(p).matches() || p.length() > 223
+                || !ver.matches("[0-9A-Za-z][0-9A-Za-z._+-]{0,63}")
+                || number < 1) {
             Toast.makeText(activity, R.string.cl_export_invalid, Toast.LENGTH_LONG).show();
             return null;
         }

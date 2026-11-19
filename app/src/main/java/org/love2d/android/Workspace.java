@@ -2172,6 +2172,29 @@ public final class Workspace {
                         return;
                     }
                     GameExportPackage.prepare(activity, storage, name);
+                }, (name, packageName, version, code, iconUri) -> {
+                    if (disposed || activeSafStorage != storage || activeProject == null
+                            || !sameFile(activeProject, project)) {
+                        toast(activity.getString(R.string.cl_export_love_project_changed));
+                        return;
+                    }
+                    if (editor != null && editor.hasUnsavedTabs()) {
+                        toast(activity.getString(R.string.cl_export_love_save_first));
+                        return;
+                    }
+                    if (BuildConfig.FLAVOR.startsWith("embed")) return;
+                    try {
+                        Class<?> type = Class.forName("org.love2d.android.GameExportApk");
+                        java.lang.reflect.Method method = type.getDeclaredMethod(
+                            "prepare", Activity.class, DirectSafStorage.class,
+                            String.class, String.class, String.class, int.class, Uri.class);
+                        method.setAccessible(true);
+                        method.invoke(null, activity, storage, name, packageName,
+                            version, code, iconUri);
+                    } catch (ReflectiveOperationException e) {
+                        Log.e(TAG, "Offline APK export handler unavailable", e);
+                        toast("Exportador de APK indisponível nesta versão.");
+                    }
                 });
         });
         ui.showMenu(anchor, labels, actions);
@@ -2209,6 +2232,19 @@ public final class Workspace {
         }
         if (GameExportDialog.handleIconResult(activity, requestCode, resultCode, data)) return;
         if (GameExportPackage.handleResult(activity, requestCode, resultCode, data)) return;
+        if (!BuildConfig.FLAVOR.startsWith("embed")) {
+            try {
+                Class<?> type = Class.forName("org.love2d.android.GameExportApk");
+                java.lang.reflect.Method handler = type.getDeclaredMethod(
+                    "handleResult", Activity.class, int.class, int.class, Intent.class);
+                handler.setAccessible(true);
+                if ((Boolean) handler.invoke(null, activity, requestCode, resultCode, data)) {
+                    return;
+                }
+            } catch (ReflectiveOperationException e) {
+                Log.w(TAG, "APK result handler unavailable", e);
+            }
+        }
         if (requestCode != REQUEST_ADD_PROJECT_TREE) return;
 
         Workspace workspace = currentInstance;
