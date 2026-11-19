@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
@@ -34,6 +36,8 @@ final class OfflineGameApk {
     private static final int MAX_APK_ENTRIES = 20000;
     private static final int BUFFER = 32768;
     private static final long MAX_MANIFEST_BYTES = 4L * 1024L * 1024L;
+    private static final int MAX_ICON_BYTES = 4 * 1024 * 1024;
+    private static final String[] ICON_DENSITIES = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};
     private static final int NATIVE_ALIGNMENT = 16 * 1024;
     private static final int OTHER_ALIGNMENT = 4;
     private static final int EXTRA_ID = 0xCAFE;
@@ -121,6 +125,13 @@ final class OfflineGameApk {
     static void writeUnsignedAssets(File templateApk, File gameLove,
                                     OutputStream output, OfflineApkIdentity identity)
             throws IOException {
+        writeUnsignedAssets(templateApk, gameLove, output, identity, null);
+    }
+
+    /** Supply all five Android launcher PNG densities to replace the LÖVE icon. */
+    static void writeUnsignedAssets(File templateApk, File gameLove,
+                                    OutputStream output, OfflineApkIdentity identity,
+                                    Map<String, byte[]> icons) throws IOException {
         if (templateApk == null || gameLove == null || output == null
                 || !templateApk.isFile() || !gameLove.isFile()
                 || templateApk.getCanonicalFile().equals(gameLove.getCanonicalFile())) {
@@ -161,6 +172,33 @@ final class OfflineGameApk {
                 throw new IOException("Missing embedded game slot or Android manifest");
             }
 
+            if (icons != null) {
+                Set<String> expected = new HashSet<>(Arrays.asList(ICON_DENSITIES));
+                if (identity == null || !expected.equals(icons.keySet())) {
+                    throw new IOException("Missing or invalid game icon densities");
+                }
+                Set<String> actual = new HashSet<>();
+                for (String path : templateNames) {
+                    String density = iconDensity(path);
+                    if (density != null && !actual.add(density)) {
+                        throw new IOException("Duplicate icon density in APK");
+                    }
+                }
+                if (!expected.equals(actual)) {
+                    throw new IOException("APK template has unexpected icon paths");
+                }
+                for (String density : ICON_DENSITIES) {
+                    byte[] bytes = icons.get(density);
+                    if (bytes == null || bytes.length < 8 || bytes.length > MAX_ICON_BYTES
+                            || (bytes[0] & 255) != 137 || bytes[1] != 80
+                            || bytes[2] != 78 || bytes[3] != 71
+                            || bytes[4] != 13 || bytes[5] != 10
+                            || bytes[6] != 26 || bytes[7] != 10) {
+                        throw new IOException("Invalid PNG icon: " + density);
+                    }
+                }
+            }
+
             // No game file may overwrite or shadow an asset supplied by the
             // engine. Also reject file-versus-directory prefix conflicts.
             Enumeration<? extends ZipEntry> gameEntries = game.entries();
@@ -193,7 +231,9 @@ final class OfflineGameApk {
                     String name = entry.getName();
                     if (slot.equals(name) || isOldJarSignature(name)) continue;
                     if (rewrittenManifest != null && "AndroidManifest.xml".equals(name)) {
-                        writeManifestEntry(entry, rewrittenManifest, apk, counter);
+                        writeReplacementEntry(entry, name, rewrittenManifest, apk, counter);
+                    } else if (icons != null && iconDensity(name) != null) {
+                        writeReplacementEntry(entry, name, icons.get(iconDensity(name)), apk, counter);
                     } else {
                         writeCopiedEntry(template, entry, name, apk, counter);
                     }
@@ -234,23 +274,36 @@ final class OfflineGameApk {
                 buffer.toByteArray(), identity.packageName);
         xml = OfflineBinaryManifest.withPackageName(xml, identity.packageName);
         xml = OfflineBinaryManifest.withVersionName(xml, identity.versionName);
-        return OfflineBinaryManifest.withVersionCode(xml, identity.versionCode);
+        xml = OfflineBinaryManifest.withVersionCode(xml, identity.versionCode);
+        return OfflineBinaryManifest.withApplicationLabel(xml, identity.displayName);
     }
 
-    private static void writeManifestEntry(ZipEntry original, byte[] xml,
-                                           ZipOutputStream out, CountingStream counter)
+    /** Match existing compiled resource paths; do not edit resources.arsc. */
+    private static String iconDensity(String path) {
+        if (!path.startsWith("res/drawable-") || !path.endsWith("/love.png")) return null;
+        String qualifier = path.substring("res/drawable-".length(),
+                path.length() - "/love.png".length());
+        for (String density : ICON_DENSITIES) {
+            if (qualifier.equals(density) || qualifier.matches(density + "-v[0-9]+")) {
+                return density;
+            }
+        }
+        return null;
+    }
+
+    private static void writeReplacementEntry(ZipEntry original, String path, byte[] bytes,
+                                               ZipOutputStream out, CountingStream counter)
             throws IOException {
-        ZipEntry entry = copyEntry("AndroidManifest.xml", original);
+        ZipEntry entry = copyEntry(path, original);
         if (entry.getMethod() == ZipEntry.STORED) {
             CRC32 crc = new CRC32();
-            crc.update(xml);
-            entry.setSize(xml.length);
+            crc.update(bytes);
+            entry.setSize(bytes.length);
             entry.setCrc(crc.getValue());
-            entry.setExtra(alignmentExtra(counter.count, "AndroidManifest.xml",
-                    OTHER_ALIGNMENT));
+            entry.setExtra(alignmentExtra(counter.count, path, OTHER_ALIGNMENT));
         }
         out.putNextEntry(entry);
-        out.write(xml);
+        out.write(bytes);
         out.closeEntry();
     }
 

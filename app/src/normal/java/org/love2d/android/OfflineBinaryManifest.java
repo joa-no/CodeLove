@@ -236,6 +236,87 @@ final class OfflineBinaryManifest {
         return references.toArray(new String[0]);
     }
 
+
+    static String applicationLabel(byte[] xml) throws IOException {
+        String[] pool = readStrings(xml);
+        return pool[applicationLabelIndex(xml, pool)];
+    }
+
+    static byte[] withApplicationLabel(byte[] xml, String label) throws IOException {
+        if (label == null || label.trim().isEmpty() || label.length() > 80) {
+            throw new IOException("Invalid Android app label");
+        }
+        for (int i = 0; i < label.length(); i++) {
+            if (Character.isISOControl(label.charAt(i))) {
+                throw new IOException("App label contains controls");
+            }
+        }
+        String[] pool = readStrings(xml);
+        return replacePoolString(xml, pool, applicationLabelIndex(xml, pool), label);
+    }
+
+    /** Locate one literal application label and reject shared pool strings. */
+    private static int applicationLabelIndex(byte[] xml, String[] pool) throws IOException {
+        chunkTypes(xml);
+        int index = -1, labels = 0;
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            if (u16(xml, at) != 0x0102) continue;
+            if (u16(xml, at + 2) != 16 || u32(xml, at + 4) < 36) {
+                throw new IOException("Invalid element header");
+            }
+            long element = u32(xml, at + 20);
+            if (element >= pool.length) throw new IOException("Invalid element");
+            if (!"application".equals(pool[(int)element])) continue;
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            if (stride < 20 || 16L + start < 36
+                    || 16L + start + (long)stride * count > u32(xml, at + 4)) {
+                throw new IOException("Invalid application attributes");
+            }
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                long name = u32(xml, p + 4);
+                if (name >= pool.length || u16(xml, p + 12) != 8) {
+                    throw new IOException("Invalid app attribute");
+                }
+                if (!"label".equals(pool[(int)name])) continue;
+                long raw = u32(xml, p + 8), typed = u32(xml, p + 16);
+                if (++labels != 1 || (xml[p + 15] & 255) != 3
+                        || typed >= pool.length
+                        || (raw != 0xffffffffL && raw != typed)) {
+                    throw new IOException("Unsupported application label");
+                }
+                index = (int)typed;
+            }
+        }
+        if (labels != 1) throw new IOException("Missing unique app label");
+        int references = 0;
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            if (u16(xml, at) != 0x0102) continue;
+            long element = u32(xml, at + 20);
+            if (element >= pool.length) throw new IOException("Invalid element");
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            if (stride < 20 || 16L + start < 36
+                    || 16L + start + (long)stride * count > u32(xml, at + 4)) {
+                throw new IOException("Invalid attribute table");
+            }
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                long raw = u32(xml, p + 8), typed = u32(xml, p + 16);
+                if (raw != index && !((xml[p + 15] & 255) == 3 && typed == index)) continue;
+                long name = u32(xml, p + 4);
+                if (name >= pool.length || !"application".equals(pool[(int)element])
+                        || !"label".equals(pool[(int)name])) {
+                    throw new IOException("Shared application label string");
+                }
+                references++;
+            }
+        }
+        if (references != 1) throw new IOException("Ambiguous app label references");
+        return index;
+    }
+
     /**
      * Rewrite only the manifest's integer versionCode in a defensive copy.
      * Does not change the package, versionName, resource table or APK.

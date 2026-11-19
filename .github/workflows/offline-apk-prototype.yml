@@ -135,7 +135,7 @@ jobs:
             "$RUNNER_TEMP/offline-direct-unsigned.apk"
           # Build a game-specific APK without Gradle using the real template.
           java -cp "$RUNNER_TEMP/offline-jvm" \
-            org.love2d.android.OfflineGameApkTest --repack-assets-identity \
+            org.love2d.android.OfflineGameApkTest --repack-assets-identity-icon \
             "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
             "$RUNNER_TEMP/offline-personalized-unsigned.apk" \
             org.example.offlineprototype 2.7.1 271
@@ -266,6 +266,8 @@ jobs:
           "$AAPT" dump badging "$RUNNER_TEMP/offline-personalized-prototype.apk" \
             > "$RUNNER_TEMP/offline-personalized-badging.txt"
           grep -F "name='org.example.offlineprototype' versionCode='271' versionName='2.7.1'" \
+            "$RUNNER_TEMP/offline-personalized-badging.txt"
+          grep -F "application-label:'Prototype Test'" \
             "$RUNNER_TEMP/offline-personalized-badging.txt"
           echo "Manifest rewrite, ZIP alignment and test signature verified"
       - name: Upload prototype test APK (not ready for distribution)

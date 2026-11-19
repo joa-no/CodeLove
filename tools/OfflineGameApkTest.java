@@ -6,6 +6,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -207,12 +211,28 @@ public final class OfflineGameApkTest {
                     new File(args[1]), new File(args[2]), out);
             }
             System.out.println("Direct asset APK created: unsigned");
-        } else if (args.length == 7 && "--repack-assets-identity".equals(args[0])) {
+        } else if (args.length == 7 && ("--repack-assets-identity".equals(args[0])
+                || "--repack-assets-identity-icon".equals(args[0]))) {
             OfflineApkIdentity identity = OfflineApkIdentity.create(
                     args[4], "Prototype Test", args[5], Integer.parseInt(args[6]));
+            boolean withIcon = "--repack-assets-identity-icon".equals(args[0]);
+            Map<String, byte[]> icons = null;
+            if (withIcon) {
+                icons = new LinkedHashMap<>();
+                String[] densities = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};
+                int[] sizes = {48, 72, 96, 144, 192};
+                for (int i = 0; i < densities.length; i++) {
+                    BufferedImage image = new BufferedImage(
+                            sizes[i], sizes[i], BufferedImage.TYPE_INT_ARGB);
+                    image.setRGB(0, 0, 0xff4488ff);
+                    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                    check(ImageIO.write(image, "png", bytes), "Cannot encode test PNG");
+                    icons.put(densities[i], bytes.toByteArray());
+                }
+            }
             try (FileOutputStream out = new FileOutputStream(args[3])) {
                 OfflineGameApk.writeUnsignedAssets(
-                        new File(args[1]), new File(args[2]), out, identity);
+                        new File(args[1]), new File(args[2]), out, identity, icons);
             }
             try (ZipFile apk = new ZipFile(args[3])) {
                 ZipEntry manifest = apk.getEntry("AndroidManifest.xml");
@@ -232,6 +252,26 @@ public final class OfflineGameApkTest {
                         .contains("provider.authorities=" + identity.packageName
                                 + ".androidx-startup"), "Wrong Startup authority");
                 check(apk.getEntry("assets/main.lua") != null, "Embedded game missing");
+                check("Prototype Test".equals(OfflineBinaryManifest.applicationLabel(xml)),
+                        "Application label was not rewritten");
+                if (withIcon) {
+                    for (Map.Entry<String, byte[]> iconEntry : icons.entrySet()) {
+                        boolean found = false;
+                        java.util.Enumeration<? extends ZipEntry> items = apk.entries();
+                        while (items.hasMoreElements()) {
+                            ZipEntry item = items.nextElement();
+                            if (item.getName().startsWith("res/drawable-" + iconEntry.getKey())
+                                    && item.getName().endsWith("/love.png")) {
+                                try (java.io.InputStream input = apk.getInputStream(item)) {
+                                    check(Arrays.equals(input.readAllBytes(), iconEntry.getValue()),
+                                            "Launcher PNG was not replaced");
+                                }
+                                found = true;
+                            }
+                        }
+                        check(found, "Missing launcher icon density " + iconEntry.getKey());
+                    }
+                }
             }
             System.out.println("Manifest rewrite in assembled APK verified");
         } else if (args.length == 0) {
