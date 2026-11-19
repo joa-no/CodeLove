@@ -451,6 +451,98 @@ final class OfflineBinaryManifest {
     }
 
     /**
+     * Rewrite only AndroidX Startup's provider authority. Component class
+     * names remain unchanged; ambiguous or shared strings are rejected.
+     */
+    static byte[] withStartupAuthority(byte[] xml, String newPackage) throws IOException {
+        if (newPackage == null || newPackage.length() > 223
+                || !newPackage.matches("[A-Za-z_][A-Za-z0-9_]*([.][A-Za-z_][A-Za-z0-9_]*)+")) {
+            throw new IOException("Invalid package name");
+        }
+        String[] strings = readStrings(xml);
+        chunkTypes(xml);
+        String originalPackage = null;
+        for (String attribute : rootAttributes(xml)) {
+            if (attribute.startsWith("package=")) {
+                if (originalPackage != null) throw new IOException("Duplicate manifest package");
+                originalPackage = attribute.substring(8);
+            }
+        }
+        if (originalPackage == null) throw new IOException("Missing manifest package");
+        String oldAuthority = originalPackage + ".androidx-startup";
+        int index = -1;
+        int providerCount = 0;
+        int references = 0;
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            if (u16(xml, at) != 0x0102) continue;
+            if (u16(xml, at + 2) != 16 || u32(xml, at + 4) < 36) {
+                throw new IOException("Invalid element header");
+            }
+            long elementName = u32(xml, at + 20);
+            if (elementName >= strings.length) throw new IOException("Invalid element name");
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            if (stride < 20 || 16L + start < 36
+                    || 16L + start + (long)stride * count > u32(xml, at + 4)) {
+                throw new IOException("Invalid attribute table");
+            }
+            boolean provider = "provider".equals(strings[(int)elementName]);
+            boolean startupProvider = false;
+            int authorityIndex = -1;
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                long name = u32(xml, p + 4), raw = u32(xml, p + 8);
+                long typed = u32(xml, p + 16);
+                if (name >= strings.length || u16(xml, p + 12) != 8) {
+                    throw new IOException("Invalid attribute");
+                }
+                if ((xml[p + 15] & 255) != 3) continue;
+                if (typed >= strings.length || (raw != 0xffffffffL && raw != typed)) {
+                    throw new IOException("Unsupported string attribute");
+                }
+                String attribute = strings[(int)name];
+                if (provider && "name".equals(attribute)
+                        && "androidx.startup.InitializationProvider".equals(strings[(int)typed])) {
+                    startupProvider = true;
+                }
+                if (provider && "authorities".equals(attribute)) {
+                    if (authorityIndex >= 0) throw new IOException("Duplicate provider authorities");
+                    authorityIndex = (int)typed;
+                }
+            }
+            if (provider && startupProvider) {
+                if (++providerCount != 1 || authorityIndex < 0
+                        || !oldAuthority.equals(strings[authorityIndex])) {
+                    throw new IOException("Unexpected AndroidX Startup authority");
+                }
+                index = authorityIndex;
+            }
+        }
+        if (providerCount != 1) throw new IOException("Missing unique AndroidX Startup provider");
+        // Check all XML attribute string references before rewriting a pool entry.
+        for (int at = 8; at < xml.length; at += (int)u32(xml, at + 4)) {
+            if (u16(xml, at) != 0x0102) continue;
+            int start = u16(xml, at + 24), stride = u16(xml, at + 26);
+            int count = u16(xml, at + 28);
+            long elementName = u32(xml, at + 20);
+            for (int i = 0; i < count; i++) {
+                int p = at + 16 + start + i * stride;
+                long raw = u32(xml, p + 8), typed = u32(xml, p + 16);
+                if (raw != index && !((xml[p + 15] & 255) == 3 && typed == index)) continue;
+                long name = u32(xml, p + 4);
+                if (elementName >= strings.length || name >= strings.length
+                        || !"provider".equals(strings[(int)elementName])
+                        || !"authorities".equals(strings[(int)name])) {
+                    throw new IOException("Shared provider authority string");
+                }
+                references++;
+            }
+        }
+        if (references != 1) throw new IOException("Ambiguous provider authority references");
+        return replacePoolString(xml, strings, index, newPackage + ".androidx-startup");
+    }
+
+    /**
      * Rebuild an unstyled Android binary XML string pool while keeping all
      * string indices stable. Only the pool bytes and root XML size change.
      */
