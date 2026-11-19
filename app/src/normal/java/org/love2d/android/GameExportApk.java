@@ -1,13 +1,10 @@
 package org.love2d.android;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.DocumentsContract;
-import android.text.InputType;
 import android.util.Log;
-import android.widget.EditText;
 import android.widget.Toast;
 
 import java.io.File;
@@ -58,27 +55,9 @@ final class GameExportApk {
                 return;
             }
         }
-        EditText input = new EditText(activity);
-        input.setSingleLine(true);
-        input.setTextColor(Workspace.COLOR_TEXT);
-        input.setHintTextColor(Workspace.COLOR_MUTED);
-        input.setHint("Senha da chave de assinatura");
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        int pad = Math.round(16 * activity.getResources().getDisplayMetrics().density);
-        input.setPadding(pad, pad, pad, pad);
-        new AlertDialog.Builder(activity)
-                .setTitle("Gerar APK")
-                .setMessage("Digite a senha da chave deste jogo. A exportação será totalmente offline.")
-                .setView(input)
-                .setNegativeButton("Cancelar", null)
-                .setPositiveButton("Gerar", (dlg, which) -> {
-                    char[] password = input.getText().toString().toCharArray();
-                    input.setText("");
-                    if (password.length == 0) {
-                        Arrays.fill(password, '\0');
-                        notifyUser(activity, "Digite a senha da chave de assinatura.");
-                        return;
-                    }
+        CodeLoveModal.password(activity, "Gerar APK",
+                "Digite a senha da chave deste jogo. A exportação será totalmente offline.",
+                "Gerar", password -> {
                     synchronized (LOCK) {
                         if (busy) {
                             Arrays.fill(password, '\0');
@@ -92,7 +71,7 @@ final class GameExportApk {
                     notifyUser(activity, "Montando e assinando o APK offline...");
                     new Thread(() -> build(activity, storage, identity, iconUri,
                             signingKey, password), "CodeLove-ApkExport").start();
-                }).show();
+                });
     }
 
     private static void build(Activity activity, DirectSafStorage storage,
