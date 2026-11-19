@@ -9,12 +9,12 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 
 /**
- * Internal offline APK assembly pipeline. This is not yet exposed in the UI.
+ * Offline APK assembly used by the CodeLove export UI.
  *
- * Requires a provisioned unsigned embed template and an existing per-game
+ * Requires a bundled unsigned embed template and an existing per-game
  * PKCS#12 identity. It never calls Gradle, downloads anything, or modifies
- * the SAF project. Package and version are rewritten before signing; display
- * name and icon are rewritten before signing; the user-facing flow is pending.
+ * the SAF project. Package, version, display name and icon are personalized
+ * before signing.
  */
 final class OfflineApkExportPipeline {
     private OfflineApkExportPipeline() {}

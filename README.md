@@ -63,6 +63,15 @@ O runtime nativo é mantido por submódulos Git. Não remova nem substitua os su
 | `DirectSafStorage.java` | Operações diretas sobre documentos e diretórios SAF |
 | `FileOps.java` | Operações auxiliares com arquivos locais |
 
+
+## Exportação offline de jogos Android
+
+No painel **Exportar APK**, o usuário configura nome, pacote, versão e ícone do jogo, cria ou restaura sua chave de assinatura e gera um APK independente, diretamente no Android. O motor LÖVE necessário é incluído em cada jogo; não é preciso instalar o CodeLove no dispositivo de destino.
+
+**Guarde uma cópia do arquivo .p12 e a senha da chave.** Eles são necessários para continuar assinando atualizações após a perda dos dados do CodeLove.
+
+O gerador de APK está funcional e já foi testado no dispositivo. A compatibilidade com todos os jogos e o fluxo completo de atualização/recuperação ainda exigem validação. Consulte o [estado do exportador e os testes pendentes](docs/exportacao-apk.md).
+
 ## Preparar o ambiente
 
 Requisitos usados pela configuração atual:

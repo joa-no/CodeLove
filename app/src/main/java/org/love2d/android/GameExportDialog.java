@@ -27,8 +27,8 @@ import android.view.View;
 import java.util.regex.Pattern;
 
 /**
- * Configuration-only UI. This intentionally does NOT claim to compile an APK.
- * The compiler transport and game signing still need to be implemented.
+ * Android game-export configuration UI for the CodeLove editor.
+ * Delegates packaging and signing to the offline export coordinator.
  */
 final class GameExportDialog {
     interface PrepareListener {

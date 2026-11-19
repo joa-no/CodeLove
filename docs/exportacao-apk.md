@@ -1,54 +1,61 @@
-# CodeLove — exportação Android totalmente offline
+# CodeLove — exportação de jogos Android offline
 
-## Objetivo e restrições
+## Estado atual (19/11/2026)
 
-O usuário deve poder gerar um APK independente de seu jogo LÖVE2D **diretamente no CodeLove no Android**, sem servidor, hospedagem, acesso obrigatório à internet, ferramentas instaladas separadamente ou credenciais GitHub.
+O CodeLove permite **gerar e assinar APKs independentes de jogos LÖVE2D no próprio Android**, sem hospedagem, servidor de compilação ou ferramentas de desenvolvimento adicionais instaladas no dispositivo.
 
-A variante Android `embed` do LÖVE2D permite empacotar um jogo. Na documentação oficial do LÖVE 11.4+, o formato recomendado é incluir **`assets/main.lua` e demais arquivos diretamente em `assets/`**. O método `assets/game.love` continua reconhecido pelo fork, mas é legado e não será o formato definitivo.
+A interface **Exportar APK** está integrada ao editor e permite configurar nome do jogo, identificador de pacote, versão, código de versão e ícone, gerenciar uma chave PKCS#12 por identificador de pacote e salvar o APK pelo seletor de documentos do Android.
 
-O processo deve **reutilizar um APK-base já compilado**, sem levar Gradle/SDK/NDK para o dispositivo. GitHub Actions participa dos builds e testes do CodeLove, não da exportação dos usuários.
+O fluxo principal foi validado por testes automatizados e em dispositivo real. Isso **não garante compatibilidade com todos os jogos, versões de Android ou situações de instalação/atualização**. A versão pública 1.0.0 ainda não foi lançada.
 
-## Componentes implementados
+## Arquitetura do exportador
 
-- **Interface de configurações:** `GameExportDialog.java` permite configurar nome, applicationId, versão, versionCode e ícone, e salvar preferências por projeto. Não tem botão de APK funcional.
-- **Empacotamento do projeto salvo:** `GameExportArchive.java` lê arquivos via SAF, valida `main.lua`, limita arquivos/profundidade/tamanho e produz `.love`. `GameExportPackage.java` oferece a opção de salvá-lo pelo seletor Android.
-- **Montador offline:** `app/src/normal/java/org/love2d/android/OfflineGameApk.java` não depende das APIs Android e produz ZIP APK **não assinado**. A classe preserva as bibliotecas nativas e seu alinhamento de 16 KiB, valida o ZIP e remove assinaturas antigas.
-  - `writeUnsigned`: substitui `assets/game.love`, método legado, mantido como referência funcional.
-  - `writeUnsignedAssets`: lê o `.love` e incorpora `assets/main.lua`, scripts e recursos **diretamente**, conforme o formato recomendado. Aceita um APK-base com um único placeholder `assets/game.love` ou `assets/main.lua`, e rejeita colisões com os assets do runtime.
-- **Assinador isolado:** `OfflineApkSigner.java` usa `apksig` e uma chave PKCS#12 fornecida pelo chamador; gera e verifica assinaturas v1/v2/v3 e compara certificados. A dependência foi limitada ao flavor `normal` do CodeLove, não aos APKs dos jogos.
-- **Testes:** `tools/OfflineGameApkTest.java`, `tools/OfflineApkSignerTest.java`, `tools/test_offline_apk_prototype.py` e `.github/workflows/offline-apk-prototype.yml`.
+1. **Template:** o GitHub Actions compila uma variante `embed` não assinada do runtime LÖVE Android e a inclui nos assets do aplicativo CodeLove. O usuário não precisa ter Gradle, SDK, NDK ou acesso à internet.
+2. **Arquivos do jogo:** `GameExportArchive` lê o projeto diretamente do SAF, exige `main.lua`, valida caminhos e limites e prepara os arquivos `.love` em cache temporário.
+3. **Montagem:** `OfflineGameApk.writeUnsignedAssets` incorpora o conteúdo do projeto diretamente em `assets/`, substitui o placeholder do template, atualiza o manifesto binário e os recursos do ícone, e preserva o alinhamento das bibliotecas nativas.
+4. **Assinatura:** `OfflineApkSigner` assina o APK com a identidade PKCS#12 específica do jogo e verifica a assinatura antes de disponibilizar o arquivo final.
+5. **Salvamento:** `GameExportApk` abre o seletor Android para salvar o APK assinado no destino escolhido pelo usuário. O CodeLove não modifica os arquivos originais do projeto.
 
-## Resultados de testes
+Os componentes ficam em `app/src/normal/java/org/love2d/android/`, com entrada de interface em `GameExportDialog.java` e empacotamento SAF em `GameExportArchive.java`.
 
-- **Teste offline #4: aprovado.** Substituição de `game.love`, alinhamento nativo, assinatura de teste e verificação do APK real.
-- **Teste offline #6: assinatura Java v1/v2/v3 aprovada em dois APKs, com o mesmo certificado.** O job foi marcado como falho porque um `grep` procurava um texto incompatível com a saída atual do `apksigner`. A comparação foi corrigida sem alterar o algoritmo de assinatura.
-- **Teste offline #12:** os testes unitários da montagem Java e da integração do assinador passaram. O teste completo do APK real, agora com os assets diretos, ainda não tinha resultado final na última consulta.
+## Assinatura e backup .p12
 
-**Não há comprovação de instalação e execução no celular**, e ainda não foi testado o assinador dentro do processo Android do CodeLove. Um teste no JVM do GitHub Actions não prova compatibilidade no dispositivo.
+- A chave é associada ao **identificador de pacote Android**; renomear ou mover a pasta do projeto não altera essa associação.
+- A senha da chave deve ter **pelo menos 12 caracteres** na criação. O CodeLove não armazena essa senha.
+- O armazenamento primário fica no diretório privado `getNoBackupFilesDir()/game-signing-keys`, excluído do backup automático do Android.
+- **É obrigatório fazer backup manual do .p12 e guardar a senha**. Desinstalar o CodeLove ou limpar seus dados elimina a cópia local; sem a chave anterior, a atualização de um jogo já distribuído pode se tornar impossível.
+- Uma chave existente não é substituída automaticamente. A restauração só é admitida quando o pacote ainda não tem uma chave local.
+- O backup valida a senha **antes** de abrir `ACTION_CREATE_DOCUMENT`, para não criar arquivos vazios quando a senha está errada. Em erros posteriores de gravação, o CodeLove também tenta excluir o documento incompleto (sujeito às permissões e ao provedor de arquivos).
 
-## Chaves de assinatura: geração, armazenamento e recuperação
+## Estado dos testes
 
-A etapa de **criação e backup offline** foi adicionada, ainda sem interface:
+| Validação | Estado |
+| --- | --- |
+| Compilação CodeLove Debug/Release | Aprovada: GitHub Actions #44619884516 |
+| Montagem, personalização, alinhamento e assinatura de exemplo | Aprovados no workflow `offline-apk-prototype` (#44602896192) |
+| Criação de chave, backup e senha incorreta no Android | Testados pelo usuário, sem problemas após correções da build #44619884516 |
+| Exportação de APK independente e inicialização de jogo no Android | Confirmadas pelo usuário |
+| Projeto com imagens e sons (Star Guard) | APK exportado e tela inicial executada; partida completa ainda não certificada |
+| Instalar uma nova versão sobre a anterior, com a mesma chave | **Pendente: teste real no Android** |
+| Restaurar .p12 e exportar atualização com certificado preservado | **Pendente: teste integrado real** |
+| Jogos com vários dispositivos, versões Android, permissões e recursos | **Cobertura ainda parcial** |
 
-- `GameSigningKeyStore.java`: cria um par RSA de 3072 bits e um certificado X.509 próprio do jogo, salva o material em PKCS#12 protegido por senha de no mínimo 12 caracteres, confere a chave privada e permite exportar e restaurar o mesmo certificado por `InputStream`/`OutputStream`. Uma chave existente nunca é substituída automaticamente.
-- `GameSigningKeyManager.java`: usa exclusivamente `Context.getNoBackupFilesDir()/game-signing-keys`, com nome derivado por SHA-256 do **ID estável do projeto SAF**, não do nome editável do jogo. Nenhuma senha é salva nas preferências. O diretório é privado e excluído do backup automático do Android.
-- `tools/GameSigningKeyStoreTest.java` e `game-signing-key-tests.yml`: verificam no JVM geração, senha errada, backup, restauração, identidade preservada, chaves distintas e compatibilidade com o formato de KeyStore usado pelo assinador. **Teste #1 aprovado.**
-- Dependências Bouncy Castle `bcprov-jdk18on:1.86` e `bcpkix-jdk18on:1.86` limitadas à variante `normal`, pois o Android não disponibiliza uma API pública completa para emitir certificados de chaves de software exportáveis. O mecanismo de assinatura usa `apksig` separadamente.
+O aviso de compatibilidade do LÖVE, quando `t.version` em `conf.lua` difere da versão do runtime, pertence ao motor e **não significa falha de empacotamento**. O exportador não altera automaticamente `conf.lua`.
 
-**Atenção:** o armazenamento privado protege os arquivos de outros apps comuns, mas não equivale a uma chave não exportável de hardware. O formato PKCS#12 permite backup; a senha e o arquivo de backup precisam ser guardados pelo usuário. **Desinstalar o CodeLove ou limpar seus dados apaga a cópia local**. Sem o backup e a senha, uma nova versão do jogo não poderá ser instalada como atualização com a mesma assinatura.
+## Plano para estabilizar a 1.0.0
 
-`GameSigningKeyManager` ainda não está conectado ao seletor SAF, painel ou exportação real. A compatibilidade de geração, PKCS#12 e assinatura **dentro de um dispositivo Android** também precisa ser validada antes de disponibilizar a função.
+1. **Teste de atualização:** gerar um jogo com pacote e assinatura fixos; instalar versão 1 (código de versão 1), exportar versão 2 (código de versão maior) e instalar sobre a anterior, sem desinstalar. Confirmar que a atualização funciona e que os dados do jogo são preservados.
+2. **Teste de recuperação:** guardar backup .p12 e senha, restaurar a mesma identidade em cenário seguro, gerar atualização e confirmar que o certificado é o mesmo. Não destruir uma chave única sem ter backup verificado.
+3. **Regressão:** validar APKs com imagens, sons, pastas aninhadas, entradas, salvamento e erros de exportação, nos formatos vertical e horizontal aplicáveis ao CodeLove.
+4. **Higienização posterior do template de jogos:** revisar classes, recursos e metadados dispensáveis do editor no APK exportado, preservando integralmente o runtime, as dependências e as licenças obrigatórias. Esta etapa foi deliberadamente adiada.
+5. **Preparação da release:** revisar documentação, licenças, identidade e assinatura da versão distribuída, validar os APKs finais e preparar a publicação inicial no GitHub.
 
-## Pendências obrigatórias antes de habilitar “Gerar APK”
+A exportação **AAB para lojas** é uma evolução futura, não um pré-requisito para a primeira versão distribuída via GitHub. O workflow pode gerar AABs em ambiente CI, mas **o exportador no dispositivo atualmente gera APKs, não AABs**.
 
-1. Validar o novo empacotamento direto em um APK real, incluindo alinhamento de 16 KiB, assinatura verificável e execução no Android.
-2. Integrar a chave por jogo ao painel e ao SAF, incluindo criação, backup manual, importação e solicitação segura da senha; confirmar a geração e assinatura no Android real. Nunca reutilizar a chave do CodeLove nem chaves efêmeras de CI.
-3. Implementar personalização confiável do `applicationId`, nome, versão, versionCode e ícone no APK compilado. Isso requer tratar corretamente manifesto binário e recursos; não presumir que um simples ZIP resolve.
-4. Incorporar o APK-base ao CodeLove de forma offline, sem acesso à rede do usuário ou compilações por projeto.
-5. Integrar empacotamento, assinatura e salvamento do APK por SAF num fluxo assíncrono seguro; testar instalação e **atualização** sem desinstalar os jogos.
+## Regras de manutenção
 
-As implementações experimentais devem permanecer isoladas e reversíveis. Quando algo falhar, corrigir ou restaurar a última abordagem validada em vez de acumular protótipos.
-
-## Histórico de limpeza
-
-Foi descartada a proposta de compilação remota. Removidos o pacote de solicitações `codelove.android-build.v1`, `GameExportBuildRequest.java`, `tools/game_build_request.py`, `tools/test_game_build_request.py`, `tools/build_export_apk.py` e a opção de UI para prepará-lo. Os componentes úteis para exportação offline foram preservados.
+- Preservar a arquitetura offline e o acesso direto ao projeto via SAF.
+- Não adicionar hospedagem, compilação remota nem dependência de contas externas.
+- Não trocar o runtime LÖVE em função de um aviso de versão emitido por um jogo antigo; acompanhar atualizações do motor como tarefa separada, com testes de compatibilidade.
+- Restaurar a implementação funcional anterior quando uma tentativa de correção falhar, antes de testar alternativa.
+- **Não iniciar GitHub Actions sem autorização explícita**.

@@ -4,9 +4,9 @@ import java.io.IOException;
 import java.util.regex.Pattern;
 
 /**
- * Validated Android identity for a future offline manifest/resource rewrite.
- * This class does not mutate an APK. Do not report the template's fixed
- * package/name/version as personalized until the rewrite is implemented.
+ * Validated Android identity for the offline manifest and resource rewrite.
+ * This value object does not mutate an APK; OfflineGameApk applies it
+ * before the game APK is signed.
  */
 final class OfflineApkIdentity {
     private static final Pattern SEGMENT =
