@@ -452,20 +452,39 @@ public final class Workspace {
     // Montagem da tela
     // ------------------------------------------------------------------
 
+    private final ArrayList<Runnable> appearanceBindings = new ArrayList<Runnable>();
+
+    private void bindAppearance(Runnable update) {
+        appearanceBindings.add(update);
+        update.run();
+    }
+
+    private IconView appearanceIcon(int kind, java.util.function.IntSupplier color) {
+        IconView icon = new IconView(activity, kind, color.getAsInt());
+        bindAppearance(() -> icon.setAppearanceColor(color.getAsInt()));
+        return icon;
+    }
+
+    private void refreshWorkspaceAppearance() {
+        for (Runnable update : appearanceBindings) update.run();
+        if (editor != null) editor.applyAppearance();
+        if (treeBox != null) refreshTreeAppearance();
+    }
+
     private void build() {
-        root.setBackgroundColor(COLOR_OUTER);
+        bindAppearance(() -> root.setBackgroundColor(COLOR_OUTER));
         ui = new OverlayUi(activity, root);
 
         panel = new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(box(COLOR_PANEL, 0, false));
+        bindAppearance(() -> panel.setBackground(box(COLOR_PANEL, 0, false)));
         panel.setPadding(dp(12), dp(12), dp(12), dp(12));
 
         panel.addView(buildHeader(), new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         View divider = new View(activity);
-        divider.setBackgroundColor(COLOR_BORDER);
+        bindAppearance(() -> divider.setBackgroundColor(COLOR_BORDER));
         LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
         dividerLp.setMargins(0, dp(10), 0, dp(10));
@@ -486,7 +505,7 @@ public final class Workspace {
 
         // Rodape do painel: botoes de acao (perto dos dedos).
         View footerDivider = new View(activity);
-        footerDivider.setBackgroundColor(COLOR_BORDER);
+        bindAppearance(() -> footerDivider.setBackgroundColor(COLOR_BORDER));
         LinearLayout.LayoutParams footerDividerLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
         footerDividerLp.setMargins(0, dp(8), 0, dp(10));
@@ -507,10 +526,10 @@ public final class Workspace {
 
         // Barra flutuante herdada: so para a Activity com superficie SDL.
         // A EditorActivity usa exclusivamente os botoes integrados ao editor.
-        playIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
+        playIcon = appearanceIcon(IconView.PLAY, () -> COLOR_TEXT);
         playButton = new LinearLayout(activity);
         playButton.setGravity(Gravity.CENTER);
-        playButton.setBackground(box(COLOR_FIELD, 22, false));
+        bindAppearance(() -> playButton.setBackground(box(COLOR_FIELD, 22, false)));
         playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         playButton.setOnClickListener(v -> togglePlayback());
 
@@ -518,16 +537,16 @@ public final class Workspace {
         resetButton = new TextView(activity);
         resetButton.setText("\u21BA");
         resetButton.setGravity(Gravity.CENTER);
-        resetButton.setTextColor(COLOR_TEXT);
+        bindAppearance(() -> resetButton.setTextColor(COLOR_TEXT));
         resetButton.setTextSize(20);
-        resetButton.setBackground(box(COLOR_FIELD, 22, false));
+        bindAppearance(() -> resetButton.setBackground(box(COLOR_FIELD, 22, false)));
         resetButton.setOnClickListener(v -> resetScene());
 
         // Tela cheia continua sendo um controle separado da barra do editor.
-        fullscreenIcon = new IconView(activity, IconView.FULLSCREEN, COLOR_TEXT);
+        fullscreenIcon = appearanceIcon(IconView.FULLSCREEN, () -> COLOR_TEXT);
         LinearLayout fullscreenButton = new LinearLayout(activity);
         fullscreenButton.setGravity(Gravity.CENTER);
-        fullscreenButton.setBackground(box(COLOR_FIELD, 22, false));
+        bindAppearance(() -> fullscreenButton.setBackground(box(COLOR_FIELD, 22, false)));
         fullscreenButton.addView(fullscreenIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
 
@@ -535,7 +554,7 @@ public final class Workspace {
         controlsBar = new LinearLayout(activity);
         controlsBar.setOrientation(LinearLayout.HORIZONTAL);
         controlsBar.setGravity(Gravity.CENTER_VERTICAL);
-        controlsBar.setBackground(box(COLOR_PANEL, 30, true));
+        bindAppearance(() -> controlsBar.setBackground(box(COLOR_PANEL, 30, true)));
         controlsBar.setPadding(dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP));
         controlsBar.setVisibility(View.GONE);
         controlsBar.addView(playButton, barButtonParams(true));
@@ -547,8 +566,8 @@ public final class Workspace {
         // No modo vertical, oferece uma saida visivel da visualizacao do jogo.
         closePlaybackButton = new LinearLayout(activity);
         closePlaybackButton.setGravity(Gravity.CENTER);
-        closePlaybackButton.setBackground(box(COLOR_PANEL, 22, true));
-        closePlaybackButton.addView(new IconView(activity, IconView.CLOSE, COLOR_TEXT),
+        bindAppearance(() -> closePlaybackButton.setBackground(box(COLOR_PANEL, 22, true)));
+        closePlaybackButton.addView(appearanceIcon(IconView.CLOSE, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
         setButtonHint(closePlaybackButton, activity.getString(R.string.cl_exit_visual));
         closePlaybackButton.setOnClickListener(v -> exitPlaybackToFiles());
@@ -556,10 +575,10 @@ public final class Workspace {
 
         // Play no topo do editor, inclusive com a area vazia e nenhum arquivo aberto.
         // A acao e a mesma do Play original, sem salvar arquivos automaticamente.
-        headerPlayIcon = new IconView(activity, IconView.PLAY, COLOR_TEXT);
+        headerPlayIcon = appearanceIcon(IconView.PLAY, () -> COLOR_TEXT);
         headerPlayButton = new LinearLayout(activity);
         headerPlayButton.setGravity(Gravity.CENTER);
-        headerPlayButton.setBackground(box(COLOR_FIELD, 10, false));
+        bindAppearance(() -> headerPlayButton.setBackground(box(COLOR_FIELD, 10, false)));
         headerPlayButton.addView(headerPlayIcon,
             new LinearLayout.LayoutParams(dp(20), dp(20)));
         setButtonHint(headerPlayButton, activity.getString(R.string.cl_run_project));
@@ -567,10 +586,10 @@ public final class Workspace {
 
         placeholder = buildPlaceholder();
 
-        saveIcon = new IconView(activity, IconView.SAVE, COLOR_TEXT);
+        saveIcon = appearanceIcon(IconView.SAVE, () -> COLOR_TEXT);
         LinearLayout saveButton = new LinearLayout(activity);
         saveButton.setGravity(Gravity.CENTER);
-        saveButton.setBackground(box(COLOR_FIELD, 22, false));
+        bindAppearance(() -> saveButton.setBackground(box(COLOR_FIELD, 22, false)));
         saveButton.addView(saveIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
         setButtonHint(saveButton, activity.getString(R.string.cl_save_codelove));
         saveButton.setOnClickListener(v -> saveCurrentFile());
@@ -654,13 +673,13 @@ public final class Workspace {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        header.addView(new IconView(activity, IconView.FOLDER, COLOR_FOLDER),
+        header.addView(appearanceIcon(IconView.FOLDER, () -> COLOR_FOLDER),
             new LinearLayout.LayoutParams(dp(22), dp(22)));
 
         TextView name = new TextView(activity);
         projectTitle = name;
         name.setText(activeProject != null ? activeProject.getName() : "CodeLove");
-        name.setTextColor(COLOR_TEXT);
+        bindAppearance(() -> name.setTextColor(COLOR_TEXT));
         name.setTextSize(15);
         // Do not push the project name to a second line when adding export.
         // Auto-fit the name on Android 8+; older devices retain ellipsis.
@@ -682,12 +701,12 @@ public final class Workspace {
         exportButton.setGravity(Gravity.CENTER);
         exportButton.setPadding(dp(6), 0, dp(6), 0);
         // Subtle neutral style matching the Settings control.
-        exportButton.setBackground(box(COLOR_FIELD, 10, false));
-        exportButton.addView(new IconView(activity, IconView.ANDROID, COLOR_TEXT),
+        bindAppearance(() -> exportButton.setBackground(box(COLOR_FIELD, 10, false)));
+        exportButton.addView(appearanceIcon(IconView.ANDROID, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(22), dp(22)));
         TextView exportText = new TextView(activity);
         exportText.setText(R.string.cl_export_button);
-        exportText.setTextColor(COLOR_TEXT);
+        bindAppearance(() -> exportText.setTextColor(COLOR_TEXT));
         exportText.setTextSize(13);
         exportText.setTypeface(Typeface.DEFAULT_BOLD);
         exportText.setSingleLine(true);
@@ -706,8 +725,8 @@ public final class Workspace {
         // Configuracoes permanece ao lado do botao Exportar.
         LinearLayout settingsButton = new LinearLayout(activity);
         settingsButton.setGravity(Gravity.CENTER);
-        settingsButton.setBackground(box(COLOR_FIELD, 10, false));
-        settingsButton.addView(new IconView(activity, IconView.SETTINGS, COLOR_TEXT),
+        bindAppearance(() -> settingsButton.setBackground(box(COLOR_FIELD, 10, false)));
+        settingsButton.addView(appearanceIcon(IconView.SETTINGS, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
         setButtonHint(settingsButton, activity.getString(R.string.cl_settings));
         settingsButton.setClickable(true);
@@ -1350,8 +1369,8 @@ public final class Workspace {
     private LinearLayout footerIconButton(int kind, View.OnClickListener listener) {
         LinearLayout button = new LinearLayout(activity);
         button.setGravity(Gravity.CENTER);
-        button.setBackground(box(COLOR_FIELD, 12, false));
-        button.addView(new IconView(activity, kind, COLOR_TEXT),
+        bindAppearance(() -> button.setBackground(box(COLOR_FIELD, 12, false)));
+        button.addView(appearanceIcon(kind, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
         button.setOnClickListener(listener);
         return button;
@@ -1361,9 +1380,9 @@ public final class Workspace {
         TextView button = new TextView(activity);
         button.setText(glyph);
         button.setGravity(Gravity.CENTER);
-        button.setTextColor(COLOR_TEXT);
+        bindAppearance(() -> button.setTextColor(COLOR_TEXT));
         button.setTextSize(20);
-        button.setBackground(box(COLOR_FIELD, 12, false));
+        bindAppearance(() -> button.setBackground(box(COLOR_FIELD, 12, false)));
         button.setOnClickListener(listener);
         return button;
     }
@@ -1427,11 +1446,11 @@ public final class Workspace {
     private View buildSearch() {
         search = new EditText(activity);
         search.setHint(activity.getString(R.string.cl_search_files));
-        search.setHintTextColor(COLOR_MUTED);
-        search.setTextColor(COLOR_TEXT);
+        bindAppearance(() -> search.setHintTextColor(COLOR_MUTED));
+        bindAppearance(() -> search.setTextColor(COLOR_TEXT));
         search.setTextSize(14);
         search.setSingleLine(true);
-        search.setBackground(box(COLOR_FIELD, 12, true));
+        bindAppearance(() -> search.setBackground(box(COLOR_FIELD, 12, true)));
         search.setPadding(dp(12), dp(8), dp(12), dp(8));
         // Sem a tela cheia de edicao do teclado na horizontal.
         search.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_DONE);
@@ -3262,20 +3281,20 @@ public final class Workspace {
         LinearLayout box = new LinearLayout(activity);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER);
-        box.setBackgroundColor(COLOR_OUTER);
+        bindAppearance(() -> box.setBackgroundColor(COLOR_OUTER));
         box.setClickable(true); // nao deixa o toque passar para o jogo escondido
         box.setVisibility(activeProject == null ? View.VISIBLE : View.GONE);
 
         TextView title = new TextView(activity);
         title.setText(activity.getString(R.string.cl_none_selected));
-        title.setTextColor(COLOR_TEXT);
+        bindAppearance(() -> title.setTextColor(COLOR_TEXT));
         title.setTextSize(18);
         title.setGravity(Gravity.CENTER);
         box.addView(title);
 
         TextView hint = new TextView(activity);
         hint.setText(activity.getString(R.string.cl_select_project_hint));
-        hint.setTextColor(COLOR_MUTED);
+        bindAppearance(() -> hint.setTextColor(COLOR_MUTED));
         hint.setTextSize(14);
         hint.setGravity(Gravity.CENTER);
         hint.setPadding(0, dp(6), 0, 0);
@@ -3336,6 +3355,11 @@ public final class Workspace {
             paint.setStrokeWidth(1.8f); // em unidades da grade 24x24
             paint.setColor(color);
             setKind(kind);
+        }
+
+        void setAppearanceColor(int color) {
+            paint.setColor(color);
+            invalidate();
         }
 
         /** Troca o desenho do icone. */
