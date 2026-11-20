@@ -203,6 +203,7 @@ public final class Workspace {
     private IconView saveIcon;
     private LinearLayout projectNotice;
     private LinearLayout treeBox;
+    private final ArrayList<Row> visibleTreeRows = new ArrayList<Row>();
     private EditText search;
 
     private boolean fullscreen = false;
@@ -1844,6 +1845,7 @@ public final class Workspace {
 
     private void renderTree() {
         treeBox.removeAllViews();
+        visibleTreeRows.clear();
 
         File treeRoot = activeSafStorage != null
             ? activeProject
@@ -1873,10 +1875,28 @@ public final class Workspace {
             return;
         }
 
-        for (Row row : rows) {
+        visibleTreeRows.addAll(rows);
+        appendVisibleTreeRows();
+    }
+
+    private void appendVisibleTreeRows() {
+        for (Row row : visibleTreeRows) {
             treeBox.addView(buildRow(row), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(ROW_HEIGHT_DP)));
         }
+    }
+
+    /** Refreshes only the rendered file list; never enumerates storage. */
+    private void refreshTreeAppearance() {
+        if (visibleTreeRows.isEmpty()) {
+            for (int i = 0; i < treeBox.getChildCount(); i++) {
+                View child = treeBox.getChildAt(i);
+                if (child instanceof TextView) ((TextView) child).setTextColor(COLOR_MUTED);
+            }
+            return;
+        }
+        treeBox.removeAllViews();
+        appendVisibleTreeRows();
     }
 
     /** Monta a lista de linhas visiveis, usando SAF direto quando o projeto externo esta aberto. */
