@@ -42,33 +42,33 @@ final class GameExportApk {
             String keyId = GameSigningKeyManager.projectIdForPackage(identity.packageName);
             signingKey = GameSigningKeyManager.privateKeyFile(activity, keyId);
             if (!signingKey.isFile()) {
-                notifyUser(activity, "Crie ou restaure a chave de assinatura deste jogo antes de gerar o APK.");
+                notifyUser(activity, activity.getString(R.string.cl_locale_sign_43));
                 return;
             }
         } catch (GeneralSecurityException | IOException e) {
-            notifyUser(activity, "Dados do APK inválidos: " + e.getMessage());
+            notifyUser(activity, activity.getString(R.string.cl_locale_sign_62, e.getMessage()));
             return;
         }
         synchronized (LOCK) {
             if (busy) {
-                notifyUser(activity, "Uma exportação de APK já está em andamento.");
+                notifyUser(activity, activity.getString(R.string.cl_locale_sign_44));
                 return;
             }
         }
-        CodeLoveModal.password(activity, "Gerar APK",
-                "Digite a senha da chave deste jogo. A exportação será totalmente offline.",
-                "Gerar", password -> {
+        CodeLoveModal.password(activity, activity.getString(R.string.cl_locale_export_10),
+                activity.getString(R.string.cl_locale_sign_45),
+                activity.getString(R.string.cl_locale_sign_46), password -> {
                     synchronized (LOCK) {
                         if (busy) {
                             Arrays.fill(password, '\0');
-                            notifyUser(activity, "Uma exportação de APK já está em andamento.");
+                            notifyUser(activity, activity.getString(R.string.cl_locale_sign_44));
                             return;
                         }
                         busy = true;
                         owner = activity;
                         stagedApk = null;
                     }
-                    notifyUser(activity, "Montando e assinando o APK offline...");
+                    notifyUser(activity, activity.getString(R.string.cl_locale_sign_47));
                     new Thread(() -> build(activity, storage, identity, iconUri,
                             signingKey, password), "CodeLove-ApkExport").start();
                 });
@@ -115,7 +115,7 @@ final class GameExportApk {
                 } catch (RuntimeException e) {
                     Log.e(TAG, "Cannot open destination picker", e);
                     finish(activity, ready);
-                    notifyUser(activity, "Não foi possível abrir o seletor de arquivos.");
+                    notifyUser(activity, activity.getString(R.string.cl_locale_sign_48));
                 }
             });
         } catch (Exception e) {
@@ -123,7 +123,7 @@ final class GameExportApk {
             Log.e(TAG, "Could not assemble signed game APK", e);
             activity.runOnUiThread(() -> {
                 finish(activity, null);
-                notifyUser(activity, "Falha na exportação: " + e.getMessage());
+                notifyUser(activity, activity.getString(R.string.cl_locale_sign_63, e.getMessage()));
             });
         } finally {
             Arrays.fill(password, '\0');
@@ -180,8 +180,8 @@ final class GameExportApk {
                 boolean ok = successful;
                 finish(activity, ready);
                 activity.runOnUiThread(() -> notifyUser(activity,
-                        ok ? "APK gerado, assinado e salvo."
-                           : "Não foi possível salvar o APK."));
+                        ok ? activity.getString(R.string.cl_locale_sign_49)
+                           : activity.getString(R.string.cl_locale_sign_50)));
             }
         }, "CodeLove-ApkSave").start();
         return true;

@@ -47,7 +47,7 @@ final class CodeLoveModal {
         field.setTextSize(15);
         field.setTextColor(Workspace.COLOR_TEXT);
         field.setHintTextColor(Workspace.COLOR_MUTED);
-        field.setHint("Senha da chave de assinatura");
+        field.setHint(activity.getString(R.string.cl_locale_sign_51));
         field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         field.setPadding(dp(activity, 14), 0, dp(activity, 14), 0);
         field.setBackground(background(activity, Workspace.COLOR_FIELD, 12, true));
@@ -63,7 +63,7 @@ final class CodeLoveModal {
 
         LinearLayout actions = new LinearLayout(activity);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        TextView cancel = button(activity, "Cancelar", false);
+        TextView cancel = button(activity, activity.getString(R.string.cl_cancel), false);
         TextView confirm = button(activity, label, true);
         LinearLayout.LayoutParams cancelParams =
                 new LinearLayout.LayoutParams(0, dp(activity, 46), 1f);
@@ -79,7 +79,7 @@ final class CodeLoveModal {
         confirm.setOnClickListener(v -> {
             char[] secret = field.getText().toString().toCharArray();
             if (secret.length == 0) {
-                error.setText("Informe a senha da chave.");
+                error.setText(activity.getString(R.string.cl_locale_sign_52));
                 Arrays.fill(secret, '\0');
                 return;
             }

@@ -37,7 +37,7 @@ final class GameSigningKeyUi {
         try {
             projectId = GameSigningKeyManager.projectIdForPackage(applicationId);
         } catch (Exception e) {
-            toast(activity, "Identificador do aplicativo inválido");
+            toast(activity, activity.getString(R.string.cl_locale_sign_1));
             return;
         }
         final float density = activity.getResources().getDisplayMetrics().density;
@@ -51,27 +51,25 @@ final class GameSigningKeyUi {
         panel.setBackground(background);
 
         TextView heading = new TextView(activity);
-        heading.setText("Chaves de assinatura");
+        heading.setText(activity.getString(R.string.cl_locale_sign_2));
         heading.setTextSize(20);
         heading.setTypeface(Typeface.DEFAULT_BOLD);
         heading.setTextColor(Workspace.COLOR_TEXT);
         panel.addView(heading);
 
         TextView explanation = new TextView(activity);
-        explanation.setText("A chave é associada ao identificador " + applicationId
-            + ". Guarde o backup .p12 e sua senha: sem eles não será possível"
-            + " atualizar um jogo já publicado após perder os dados do CodeLove.");
+        explanation.setText(activity.getString(R.string.cl_locale_sign_53, applicationId));
         explanation.setTextSize(13);
         explanation.setTextColor(Workspace.COLOR_MUTED);
         explanation.setPadding(0, (int)(12 * density), 0, (int)(14 * density));
         panel.addView(explanation);
 
         final Dialog dialog = new Dialog(activity);
-        String[] labels = {"Criar chave", "Salvar backup .p12", "Restaurar backup .p12"};
+        String[] labels = {activity.getString(R.string.cl_locale_sign_3), activity.getString(R.string.cl_locale_sign_4), activity.getString(R.string.cl_locale_sign_5)};
         String[] descriptions = {
-            "Gerar uma nova identidade de assinatura",
-            "Guardar uma cópia de segurança da chave",
-            "Recuperar uma chave de um backup existente"
+            activity.getString(R.string.cl_locale_sign_6),
+            activity.getString(R.string.cl_locale_sign_7),
+            activity.getString(R.string.cl_locale_sign_8)
         };
         for (int i = 0; i < labels.length; i++) {
             final int action = i;
@@ -165,7 +163,7 @@ final class GameSigningKeyUi {
         }
 
         TextView cancel = new TextView(activity);
-        cancel.setText("Cancelar");
+        cancel.setText(activity.getString(R.string.cl_cancel));
         cancel.setTextSize(15);
         cancel.setTextColor(0xFFA78BFA);
         cancel.setGravity(android.view.Gravity.CENTER);
@@ -238,18 +236,17 @@ final class GameSigningKeyUi {
         // Arredondar o conteudo rolavel cria uma emenda visivel sobre o rodape.
         content.setBackgroundColor(Workspace.COLOR_PANEL);
 
-        TextView title = text(activity, creating ? "Criar chave de assinatura" :
-            action == 1 ? "Salvar backup .p12" : "Restaurar backup .p12",
+        TextView title = text(activity, creating ? activity.getString(R.string.cl_locale_sign_9) :
+            action == 1 ? activity.getString(R.string.cl_locale_sign_4) : activity.getString(R.string.cl_locale_sign_5),
             20, Workspace.COLOR_TEXT);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         content.addView(title);
 
         TextView info = text(activity, creating
-            ? "Esta chave será a identidade digital de " + applicationId
-                + " e será necessária para publicar atualizações do jogo."
+            ? activity.getString(R.string.cl_locale_sign_54, applicationId)
             : action == 1
-                ? "Salve uma cópia da chave fora do CodeLove. Você precisará deste arquivo e da senha para recuperar a identidade do jogo."
-                : "A restauração só é permitida quando este jogo ainda não possui uma chave. O backup deve corresponder à identidade usada nas versões anteriores.",
+                ? activity.getString(R.string.cl_locale_sign_10)
+                : activity.getString(R.string.cl_locale_sign_11),
             13, Workspace.COLOR_MUTED);
         info.setPadding(0, (int)(12 * density), 0, (int)(12 * density));
         content.addView(info);
@@ -264,12 +261,11 @@ final class GameSigningKeyUi {
             warningBg.setStroke(Math.max(1, (int)density), 0xFFB78B42);
             warningBg.setCornerRadius(12 * density);
             warningPanel.setBackground(warningBg);
-            TextView warningTitle = text(activity, "⚠  Antes de continuar", 15, 0xFFFFCB78);
+            TextView warningTitle = text(activity, activity.getString(R.string.cl_locale_sign_12), 15, 0xFFFFCB78);
             warningTitle.setTypeface(Typeface.DEFAULT_BOLD);
             warningPanel.addView(warningTitle);
             TextView warningBody = text(activity,
-                "Depois que um jogo for distribuído, a chave utilizada para assiná-lo deverá ser preservada. "
-                + "Perder essa chave pode impedir a atualização do mesmo aplicativo.",
+                activity.getString(R.string.cl_locale_sign_55),
                 // The warning stays dark in both themes: always use a readable
                 // light foreground instead of the theme-dependent COLOR_TEXT.
                 14, 0xFFFFEED7);
@@ -281,18 +277,18 @@ final class GameSigningKeyUi {
             content.addView(warningPanel, warningParams);
         }
 
-        TextView passwordLabel = text(activity, "Senha da chave", 15, Workspace.COLOR_TEXT);
+        TextView passwordLabel = text(activity, activity.getString(R.string.cl_locale_sign_13), 15, Workspace.COLOR_TEXT);
         passwordLabel.setTypeface(Typeface.DEFAULT_BOLD);
         content.addView(passwordLabel);
-        EditText field = passwordInput(activity, creating ? "Mínimo 12 caracteres" : "Digite a senha");
+        EditText field = passwordInput(activity, creating ? activity.getString(R.string.cl_locale_sign_14) : activity.getString(R.string.cl_locale_sign_15));
         LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(52*density));
         inputParams.topMargin = (int)(10*density);
         content.addView(field, inputParams);
 
         TextView guidance = text(activity, creating
-            ? "Use uma senha forte e exclusiva, preferencialmente com 16 caracteres ou mais."
-            : "A senha não é armazenada pelo CodeLove.",
+            ? activity.getString(R.string.cl_locale_sign_16)
+            : activity.getString(R.string.cl_locale_sign_17),
             13, Workspace.COLOR_MUTED);
         guidance.setPadding(0, (int)(10*density), 0, (int)(18*density));
         content.addView(guidance);
@@ -301,16 +297,16 @@ final class GameSigningKeyUi {
         EditText confirmation = null;
         CheckBox acknowledged = null;
         if (creating) {
-            TextView confirmationLabel = text(activity, "Confirmar senha", 15, Workspace.COLOR_TEXT);
+            TextView confirmationLabel = text(activity, activity.getString(R.string.cl_locale_sign_18), 15, Workspace.COLOR_TEXT);
             confirmationLabel.setTypeface(Typeface.DEFAULT_BOLD);
             content.addView(confirmationLabel);
-            confirmation = passwordInput(activity, "Digite a senha novamente");
+            confirmation = passwordInput(activity, activity.getString(R.string.cl_locale_sign_19));
             LinearLayout.LayoutParams confirmParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int)(52*density));
             confirmParams.topMargin = (int)(10*density);
             content.addView(confirmation, confirmParams);
 
-            TextView optional = text(activity, "Informações do certificado (opcional)  ▾",
+            TextView optional = text(activity, activity.getString(R.string.cl_locale_sign_59) + "  ▾",
                 15, Workspace.COLOR_TEXT);
             optional.setPadding(0, (int)(18*density), 0, (int)(12*density));
             optional.setTypeface(Typeface.DEFAULT_BOLD);
@@ -320,11 +316,11 @@ final class GameSigningKeyUi {
             details.setVisibility(View.GONE);
             content.addView(details);
             TextView privacy = text(activity,
-                "Não é necessário preencher estes campos. Os dados informados serão públicos no certificado do APK. Evite informações pessoais sensíveis.",
+                activity.getString(R.string.cl_locale_sign_20),
                 13, Workspace.COLOR_MUTED);
             details.addView(privacy);
-            String[] hints = {"Nome do desenvolvedor (CN)", "Organização (O)",
-                "Unidade organizacional (OU)", "Cidade (L)", "Estado (ST)", "País (C, ex.: BR)"};
+            String[] hints = {activity.getString(R.string.cl_locale_sign_21), activity.getString(R.string.cl_locale_sign_22),
+                activity.getString(R.string.cl_locale_sign_23), activity.getString(R.string.cl_locale_sign_24), activity.getString(R.string.cl_locale_sign_25), activity.getString(R.string.cl_locale_sign_26)};
             for (int i = 0; i < hints.length; i++) {
                 EditText entry = passwordInput(activity, hints[i]);
                 entry.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
@@ -340,12 +336,11 @@ final class GameSigningKeyUi {
             optional.setOnClickListener(v -> {
                 boolean open = details.getVisibility() != View.VISIBLE;
                 details.setVisibility(open ? View.VISIBLE : View.GONE);
-                optional.setText("Informações do certificado (opcional)  " + (open ? "▴" : "▾"));
+                optional.setText(activity.getString(R.string.cl_locale_sign_59) + "  " + (open ? "▴" : "▾"));
             });
 
             TextView backupNotice = text(activity,
-                "ⓘ  Após criar a chave, salve uma cópia de segurança .p12 fora do CodeLove "
-                + "e guarde a senha separadamente. Desinstalar o aplicativo apaga a chave local.",
+                activity.getString(R.string.cl_locale_sign_56),
                 13, Workspace.COLOR_MUTED);
             backupNotice.setPadding(0, (int)(18*density), 0, (int)(18*density));
             content.addView(backupNotice);
@@ -380,7 +375,7 @@ final class GameSigningKeyUi {
             checkParams.rightMargin = (int)(10*density);
             checkRow.addView(checkbox, checkParams);
             TextView checkLabel = text(activity,
-                "Li e compreendi os riscos de perder minha chave.", 13, Workspace.COLOR_TEXT);
+                activity.getString(R.string.cl_locale_sign_27), 13, Workspace.COLOR_TEXT);
             checkRow.addView(checkLabel, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
             checkLabel.setOnClickListener(v -> checkbox.setChecked(!checkbox.isChecked()));
@@ -391,7 +386,7 @@ final class GameSigningKeyUi {
         }
 
         TextView error = text(activity, "", 12, 0xFFFFA6A6);
-        TextView confirm = text(activity, creating ? "Criar chave de assinatura" : "Continuar",
+        TextView confirm = text(activity, creating ? activity.getString(R.string.cl_locale_sign_9) : activity.getString(R.string.cl_locale_sign_28),
             15, Workspace.COLOR_ACCENT_TEXT);
         confirm.setTypeface(Typeface.DEFAULT_BOLD);
         confirm.setGravity(Gravity.CENTER);
@@ -408,7 +403,7 @@ final class GameSigningKeyUi {
         footer.setBackgroundColor(Workspace.COLOR_PANEL);
         footer.addView(error);
         footer.addView(confirm, buttonParams);
-        TextView cancel = text(activity, "Cancelar", 15, Workspace.COLOR_FOLDER);
+        TextView cancel = text(activity, activity.getString(R.string.cl_cancel), 15, Workspace.COLOR_FOLDER);
         cancel.setGravity(Gravity.CENTER);
         footer.addView(cancel, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density)));
@@ -439,7 +434,7 @@ final class GameSigningKeyUi {
         confirm.setOnClickListener(v -> {
             char[] password = field.getText().toString().toCharArray();
             if (password.length == 0 || (creating && password.length < 12)) {
-                error.setText(creating ? "A senha deve ter pelo menos 12 caracteres." : "Informe a senha.");
+                error.setText(creating ? activity.getString(R.string.cl_locale_sign_29) : activity.getString(R.string.cl_locale_sign_30));
                 Arrays.fill(password, '\0');
                 return;
             }
@@ -448,12 +443,12 @@ final class GameSigningKeyUi {
                 boolean matches = Arrays.equals(password, repeated);
                 Arrays.fill(repeated, '\0');
                 if (!matches) {
-                    error.setText("As senhas não coincidem.");
+                    error.setText(activity.getString(R.string.cl_locale_sign_31));
                     Arrays.fill(password, '\0');
                     return;
                 }
                 if (!check.isChecked()) {
-                    error.setText("Confirme que leu os avisos antes de continuar.");
+                    error.setText(activity.getString(R.string.cl_locale_sign_32));
                     Arrays.fill(password, '\0');
                     return;
                 }
@@ -464,7 +459,7 @@ final class GameSigningKeyUi {
                 try {
                     GameSigningKeyStore.certificateSubject(details);
                 } catch (java.security.GeneralSecurityException e) {
-                    error.setText("Verifique os dados do certificado. O país deve ter duas letras (ex.: BR).");
+                    error.setText(activity.getString(R.string.cl_locale_sign_33));
                     Arrays.fill(password, '\0');
                     return;
                 }
@@ -474,17 +469,15 @@ final class GameSigningKeyUi {
                 new Thread(() -> {
                     try {
                         if (GameSigningKeyManager.hasKey(activity, projectId)) {
-                            throw new java.io.IOException("Já existe uma chave para este jogo");
+                            throw new java.io.IOException(activity.getString(R.string.cl_locale_sign_34));
                         }
                         GameSigningKeyManager.generate(activity, projectId, password, details);
                         activity.runOnUiThread(() ->
-                            CodeLoveModal.message(activity, "Chave criada",
-                                "A chave foi criada. Faça agora o backup .p12 e guarde "
-                                + "sua senha em local seguro. Sem ambos, futuras "
-                                + "atualizações podem ficar impossíveis.", "Entendi"));
+                            CodeLoveModal.message(activity, activity.getString(R.string.cl_locale_sign_35),
+                                activity.getString(R.string.cl_locale_sign_57), activity.getString(R.string.cl_locale_sign_36)));
                     } catch (Exception e) {
                         activity.runOnUiThread(() -> toast(activity,
-                            "Não foi possível criar a chave: " + e.getMessage()));
+                            activity.getString(R.string.cl_locale_sign_60, e.getMessage())));
                     } finally {
                         Arrays.fill(password, '\0');
                     }
@@ -494,12 +487,12 @@ final class GameSigningKeyUi {
             if (action == 1) {
                 try {
                     if (!GameSigningKeyManager.hasKey(activity, projectId)) {
-                        error.setText("Crie uma chave antes de salvar o backup.");
+                        error.setText(activity.getString(R.string.cl_locale_sign_37));
                         Arrays.fill(password, '\0');
                         return;
                     }
                 } catch (Exception e) {
-                    error.setText("Não foi possível localizar a chave.");
+                    error.setText(activity.getString(R.string.cl_locale_sign_38));
                     Arrays.fill(password, '\0');
                     return;
                 }
@@ -507,7 +500,7 @@ final class GameSigningKeyUi {
             synchronized (GameSigningKeyUi.class) {
                 if (busy) {
                     Arrays.fill(password, '\0');
-                    error.setText("Já existe uma operação em andamento.");
+                    error.setText(activity.getString(R.string.cl_locale_sign_39));
                     return;
                 }
                 busy = true;
@@ -533,14 +526,13 @@ final class GameSigningKeyUi {
                                     REQUEST_BACKUP);
                             } catch (RuntimeException e) {
                                 clearPending();
-                                toast(activity, "Não foi possível abrir o seletor de arquivos");
+                                toast(activity, activity.getString(R.string.cl_locale_sign_40));
                             }
                         });
                     } catch (Exception e) {
                         clearPending();
                         activity.runOnUiThread(() ->
-                            toast(activity, "Senha incorreta ou chave inválida. "
-                                + "Nenhum arquivo de backup foi criado."));
+                            toast(activity, activity.getString(R.string.cl_locale_sign_58)));
                     }
                 }, "CodeLove-KeyBackupPreflight").start();
             } else {
@@ -549,7 +541,7 @@ final class GameSigningKeyUi {
                         GameSigningKeySaf.openBackupDocumentIntent(), REQUEST_RESTORE);
                 } catch (RuntimeException e) {
                     clearPending();
-                    toast(activity, "Não foi possível abrir o seletor de arquivos");
+                    toast(activity, activity.getString(R.string.cl_locale_sign_40));
                 }
             }
         });
@@ -584,7 +576,7 @@ final class GameSigningKeyUi {
                     GameSigningKeySaf.restoreFromDocument(activity, project, password, uri);
                 }
                 activity.runOnUiThread(() -> toast(activity,
-                    request == REQUEST_BACKUP ? "Backup salvo" : "Chave restaurada"));
+                    request == REQUEST_BACKUP ? activity.getString(R.string.cl_locale_sign_41) : activity.getString(R.string.cl_locale_sign_42)));
             } catch (Exception e) {
                 if (request == REQUEST_BACKUP) {
                     // The picker has already created the document at this point.
@@ -600,7 +592,7 @@ final class GameSigningKeyUi {
                     }
                 }
                 activity.runOnUiThread(() -> toast(activity,
-                    "Operação falhou: " + e.getMessage()));
+                    activity.getString(R.string.cl_locale_sign_61, e.getMessage())));
             } finally {
                 Arrays.fill(password, '\0');
                 clearPending();
