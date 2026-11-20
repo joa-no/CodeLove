@@ -1187,6 +1187,13 @@ public final class Workspace {
 
     private void changeLanguage(String selected) {
         if (prefs.getString(PREF_LANGUAGE, "auto").equals(selected)) return;
+        if (surface == null && projectNotice == null && editor != null
+                && activity instanceof EditorActivity) {
+            prefs.edit().putString(PREF_LANGUAGE, selected).apply();
+            ((EditorActivity) activity).updateLanguageResources(selected);
+            refreshWorkspaceLanguage();
+            return;
+        }
         if (editor != null && editor.hasUnsavedTabs()) {
             toast(activity.getString(R.string.cl_save_tabs_language));
             return;
