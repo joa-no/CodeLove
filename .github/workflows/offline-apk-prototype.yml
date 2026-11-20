@@ -277,6 +277,7 @@ jobs:
           grep -F "application-label:'Prototype Test'" \
             "$RUNNER_TEMP/offline-personalized-badging.txt"
           echo "Manifest rewrite, ZIP alignment and test signature verified"
+      # CI check for the new unobtrusive attribution in each signed and unsigned export.
       - name: Verify CodeLove stamp survives APK signing
         run: |
           python3 - <<'PY'
