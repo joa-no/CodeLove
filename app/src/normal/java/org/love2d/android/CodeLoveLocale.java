@@ -11,6 +11,11 @@ final class CodeLoveLocale {
     static Context wrap(Context base) {
         String selected = base.getSharedPreferences("codelove", Context.MODE_PRIVATE)
             .getString("workspace_language", "auto");
+        return forLanguage(base, selected);
+    }
+
+    /** Creates localized resources from an unlocalized host context. */
+    static Context forLanguage(Context base, String selected) {
         if (!"pt".equals(selected) && !"en".equals(selected) && !"es".equals(selected)) {
             return base; // Usa automaticamente o idioma do Android.
         }
