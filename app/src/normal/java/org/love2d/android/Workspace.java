@@ -452,6 +452,23 @@ public final class Workspace {
     // Montagem da tela
     // ------------------------------------------------------------------
 
+    private final ArrayList<Runnable> languageBindings = new ArrayList<Runnable>();
+    private TextView treeLanguageNote;
+    private int treeLanguageNoteRes;
+
+    private void bindLanguage(Runnable update) {
+        languageBindings.add(update);
+        update.run();
+    }
+
+    private void refreshWorkspaceLanguage() {
+        for (Runnable update : languageBindings) update.run();
+        if (editor != null) editor.applyLanguage();
+        if (treeLanguageNote != null) {
+            treeLanguageNote.setText(activity.getString(treeLanguageNoteRes));
+        }
+    }
+
     private final ArrayList<Runnable> appearanceBindings = new ArrayList<Runnable>();
 
     private void bindAppearance(Runnable update) {
@@ -519,7 +536,7 @@ public final class Workspace {
             applyLayout();
             saveState();
         });
-        setButtonHint(movePanelButton, activity.getString(R.string.cl_move_panel));
+        bindLanguage(() -> setButtonHint(movePanelButton, activity.getString(R.string.cl_move_panel)));
         footer.addView(movePanelButton, footerButtonParams(false));
         panel.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
@@ -569,7 +586,7 @@ public final class Workspace {
         bindAppearance(() -> closePlaybackButton.setBackground(box(COLOR_PANEL, 22, true)));
         closePlaybackButton.addView(appearanceIcon(IconView.CLOSE, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(closePlaybackButton, activity.getString(R.string.cl_exit_visual));
+        bindLanguage(() -> setButtonHint(closePlaybackButton, activity.getString(R.string.cl_exit_visual)));
         closePlaybackButton.setOnClickListener(v -> exitPlaybackToFiles());
         closePlaybackButton.setVisibility(View.GONE);
 
@@ -581,7 +598,7 @@ public final class Workspace {
         bindAppearance(() -> headerPlayButton.setBackground(box(COLOR_FIELD, 10, false)));
         headerPlayButton.addView(headerPlayIcon,
             new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(headerPlayButton, activity.getString(R.string.cl_run_project));
+        bindLanguage(() -> setButtonHint(headerPlayButton, activity.getString(R.string.cl_run_project)));
         headerPlayButton.setOnClickListener(v -> togglePlayback());
 
         placeholder = buildPlaceholder();
@@ -591,7 +608,7 @@ public final class Workspace {
         saveButton.setGravity(Gravity.CENTER);
         bindAppearance(() -> saveButton.setBackground(box(COLOR_FIELD, 22, false)));
         saveButton.addView(saveIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(saveButton, activity.getString(R.string.cl_save_codelove));
+        bindLanguage(() -> setButtonHint(saveButton, activity.getString(R.string.cl_save_codelove)));
         saveButton.setOnClickListener(v -> saveCurrentFile());
 
         editor = new CodeEditor(activity, new CodeEditor.Listener() {
@@ -705,7 +722,7 @@ public final class Workspace {
         exportButton.addView(appearanceIcon(IconView.ANDROID, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(22), dp(22)));
         TextView exportText = new TextView(activity);
-        exportText.setText(R.string.cl_export_button);
+        bindLanguage(() -> exportText.setText(activity.getString(R.string.cl_export_button)));
         bindAppearance(() -> exportText.setTextColor(COLOR_TEXT));
         exportText.setTextSize(13);
         exportText.setTypeface(Typeface.DEFAULT_BOLD);
@@ -714,7 +731,7 @@ public final class Workspace {
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         exportTextLp.leftMargin = dp(4);
         exportButton.addView(exportText, exportTextLp);
-        setButtonHint(exportButton, activity.getString(R.string.cl_export_title));
+        bindLanguage(() -> setButtonHint(exportButton, activity.getString(R.string.cl_export_title)));
         exportButton.setClickable(true);
         exportButton.setFocusable(true);
         exportButton.setOnClickListener(v -> showExportDialog());
@@ -728,7 +745,7 @@ public final class Workspace {
         bindAppearance(() -> settingsButton.setBackground(box(COLOR_FIELD, 10, false)));
         settingsButton.addView(appearanceIcon(IconView.SETTINGS, () -> COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(20), dp(20)));
-        setButtonHint(settingsButton, activity.getString(R.string.cl_settings));
+        bindLanguage(() -> setButtonHint(settingsButton, activity.getString(R.string.cl_settings)));
         settingsButton.setClickable(true);
         settingsButton.setFocusable(true);
         settingsButton.setOnClickListener(v -> showSettings());
@@ -1454,7 +1471,7 @@ public final class Workspace {
 
     private View buildSearch() {
         search = new EditText(activity);
-        search.setHint(activity.getString(R.string.cl_search_files));
+        bindLanguage(() -> search.setHint(activity.getString(R.string.cl_search_files)));
         bindAppearance(() -> search.setHintTextColor(COLOR_MUTED));
         bindAppearance(() -> search.setTextColor(COLOR_TEXT));
         search.setTextSize(14);
@@ -1874,6 +1891,8 @@ public final class Workspace {
     private void renderTree() {
         treeBox.removeAllViews();
         visibleTreeRows.clear();
+        treeLanguageNote = null;
+        treeLanguageNoteRes = 0;
 
         File treeRoot = activeSafStorage != null
             ? activeProject
@@ -1881,7 +1900,9 @@ public final class Workspace {
 
         if (treeRoot == null) {
             TextView note = new TextView(activity);
-            note.setText(activity.getString(R.string.cl_folder_unavailable));
+            treeLanguageNote = note;
+            treeLanguageNoteRes = R.string.cl_folder_unavailable;
+            note.setText(activity.getString(treeLanguageNoteRes));
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -1895,7 +1916,9 @@ public final class Workspace {
 
         if (rows.isEmpty()) {
             TextView note = new TextView(activity);
-            note.setText(query.isEmpty() ? activity.getString(R.string.cl_no_files) : activity.getString(R.string.cl_no_results));
+            treeLanguageNote = note;
+            treeLanguageNoteRes = query.isEmpty() ? R.string.cl_no_files : R.string.cl_no_results;
+            note.setText(activity.getString(treeLanguageNoteRes));
             note.setTextColor(COLOR_MUTED);
             note.setTextSize(13);
             note.setPadding(dp(4), dp(4), dp(4), dp(4));
@@ -3295,14 +3318,14 @@ public final class Workspace {
         box.setVisibility(activeProject == null ? View.VISIBLE : View.GONE);
 
         TextView title = new TextView(activity);
-        title.setText(activity.getString(R.string.cl_none_selected));
+        bindLanguage(() -> title.setText(activity.getString(R.string.cl_none_selected)));
         bindAppearance(() -> title.setTextColor(COLOR_TEXT));
         title.setTextSize(18);
         title.setGravity(Gravity.CENTER);
         box.addView(title);
 
         TextView hint = new TextView(activity);
-        hint.setText(activity.getString(R.string.cl_select_project_hint));
+        bindLanguage(() -> hint.setText(activity.getString(R.string.cl_select_project_hint)));
         bindAppearance(() -> hint.setTextColor(COLOR_MUTED));
         hint.setTextSize(14);
         hint.setGravity(Gravity.CENTER);
