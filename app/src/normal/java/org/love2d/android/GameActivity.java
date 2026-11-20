@@ -64,6 +64,18 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
+    // Temporary orientation diagnostics, visible in the preview console only.
+    private final StringBuilder orientationTrace = new StringBuilder();
+
+    private synchronized void traceOrientation(String message) {
+        if (orientationTrace.length() > 8192) orientationTrace.delete(0, orientationTrace.length() - 4096);
+        orientationTrace.append("[orientation] ").append(message).append('\n');
+        Log.d(TAG, message);
+    }
+
+    private synchronized String orientationDiagnostics() {
+        return orientationTrace.toString();
+    }
     /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
     private final boolean exportedGame = BuildConfig.FLAVOR.startsWith("embed");
     private CodeLoveConsolePanel standaloneConsole;
@@ -138,6 +150,8 @@ public class GameActivity extends SDLActivity {
             }
         }
 
+        if (standaloneRuntime) traceOrientation("startup requested=" + getRequestedOrientation()
+            + " configuration=" + getResources().getConfiguration().orientation);
         super.onCreate(savedInstanceState);
         // Tema da UI do executor (botao de voltar), sem alterar o jogo SDL.
         if (!exportedGame) {
@@ -328,6 +342,8 @@ public class GameActivity extends SDLActivity {
         if (value == null) {
             value = CodeLoveLocale.wrap(this).getString(R.string.cl_console_waiting);
         }
+        value = orientationDiagnostics() + "[orientation] current requested=" + getRequestedOrientation()
+            + " configuration=" + getResources().getConfiguration().orientation + "\n\n" + value;
         if (!value.equals(lastStandaloneConsole)) {
             lastStandaloneConsole = value;
             standaloneConsole.setOutput(value);
@@ -389,7 +405,11 @@ public class GameActivity extends SDLActivity {
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
         if (exportedGame || standaloneRuntime) {
+            if (standaloneRuntime) traceOrientation("SDL width=" + w + " height=" + h
+                + " resizable=" + resizable + " hint=" + hint);
             super.setOrientationBis(w, h, resizable, hint);
+            if (standaloneRuntime) traceOrientation("after SDL requested=" + getRequestedOrientation()
+                + " configuration=" + getResources().getConfiguration().orientation);
             return;
         }
         SharedPreferences preferences = getSharedPreferences("codelove", MODE_PRIVATE);
