@@ -476,8 +476,9 @@ final class GameSigningKeyUi {
                             CodeLoveModal.message(activity, activity.getString(R.string.cl_locale_sign_35),
                                 activity.getString(R.string.cl_locale_sign_57), activity.getString(R.string.cl_locale_sign_36)));
                     } catch (Exception e) {
+                        android.util.Log.w("CodeLove", "Key creation failed", e);
                         activity.runOnUiThread(() -> toast(activity,
-                            activity.getString(R.string.cl_locale_sign_60, e.getMessage())));
+                            activity.getString(R.string.cl_locale_sign_60)));
                     } finally {
                         Arrays.fill(password, '\0');
                     }
@@ -591,8 +592,9 @@ final class GameSigningKeyUi {
                             "Unable to delete incomplete backup from provider", cleanup);
                     }
                 }
+                android.util.Log.w("CodeLove", "Key operation failed", e);
                 activity.runOnUiThread(() -> toast(activity,
-                    activity.getString(R.string.cl_locale_sign_61, e.getMessage())));
+                    activity.getString(R.string.cl_locale_sign_61)));
             } finally {
                 Arrays.fill(password, '\0');
                 clearPending();

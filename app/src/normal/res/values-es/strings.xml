@@ -221,8 +221,8 @@
     <string name="cl_locale_sign_57">La clave se ha creado. Guarda ahora la copia .p12 y la contraseña en un lugar seguro. Sin ambas, las actualizaciones podrían ser imposibles.</string>
     <string name="cl_locale_sign_58">Contraseña incorrecta o clave no válida. No se creó ninguna copia.</string>
     <string name="cl_locale_sign_59">Información del certificado (opcional)</string>
-    <string name="cl_locale_sign_60">No se pudo crear la clave: %1$s</string>
-    <string name="cl_locale_sign_61">Error en la operación: %1$s</string>
-    <string name="cl_locale_sign_62">Datos del APK no válidos: %1$s</string>
-    <string name="cl_locale_sign_63">Error de exportación: %1$s</string>
+    <string name="cl_locale_sign_60">No se pudo crear la clave.</string>
+    <string name="cl_locale_sign_61">Error en la operación.</string>
+    <string name="cl_locale_sign_62">Datos del APK no válidos.</string>
+    <string name="cl_locale_sign_63">Error de exportación.</string>
 </resources>

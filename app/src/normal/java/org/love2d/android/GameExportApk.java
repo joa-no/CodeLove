@@ -46,7 +46,8 @@ final class GameExportApk {
                 return;
             }
         } catch (GeneralSecurityException | IOException e) {
-            notifyUser(activity, activity.getString(R.string.cl_locale_sign_62, e.getMessage()));
+            Log.w(TAG, "Invalid APK data", e);
+            notifyUser(activity, activity.getString(R.string.cl_locale_sign_62));
             return;
         }
         synchronized (LOCK) {
@@ -123,7 +124,7 @@ final class GameExportApk {
             Log.e(TAG, "Could not assemble signed game APK", e);
             activity.runOnUiThread(() -> {
                 finish(activity, null);
-                notifyUser(activity, activity.getString(R.string.cl_locale_sign_63, e.getMessage()));
+                notifyUser(activity, activity.getString(R.string.cl_locale_sign_63));
             });
         } finally {
             Arrays.fill(password, '\0');

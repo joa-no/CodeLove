@@ -221,8 +221,8 @@
     <string name="cl_locale_sign_57">A chave foi criada. Faça agora o backup .p12 e guarde sua senha em local seguro. Sem ambos, futuras atualizações podem ficar impossíveis.</string>
     <string name="cl_locale_sign_58">Senha incorreta ou chave inválida. Nenhum arquivo de backup foi criado.</string>
     <string name="cl_locale_sign_59">Informações do certificado (opcional)</string>
-    <string name="cl_locale_sign_60">Não foi possível criar a chave: %1$s</string>
-    <string name="cl_locale_sign_61">Operação falhou: %1$s</string>
-    <string name="cl_locale_sign_62">Dados do APK inválidos: %1$s</string>
-    <string name="cl_locale_sign_63">Falha na exportação: %1$s</string>
+    <string name="cl_locale_sign_60">Não foi possível criar a chave.</string>
+    <string name="cl_locale_sign_61">Operação falhou.</string>
+    <string name="cl_locale_sign_62">Dados do APK inválidos.</string>
+    <string name="cl_locale_sign_63">Falha na exportação.</string>
 </resources>

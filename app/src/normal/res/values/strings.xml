@@ -221,8 +221,8 @@
     <string name="cl_locale_sign_57">The key was created. Back up the .p12 now and keep the password safe. Without both, future updates may be impossible.</string>
     <string name="cl_locale_sign_58">Incorrect password or invalid key. No backup file was created.</string>
     <string name="cl_locale_sign_59">Certificate information (optional)</string>
-    <string name="cl_locale_sign_60">Could not create the key: %1$s</string>
-    <string name="cl_locale_sign_61">Operation failed: %1$s</string>
-    <string name="cl_locale_sign_62">Invalid APK data: %1$s</string>
-    <string name="cl_locale_sign_63">Export failed: %1$s</string>
+    <string name="cl_locale_sign_60">Could not create the key.</string>
+    <string name="cl_locale_sign_61">Operation failed.</string>
+    <string name="cl_locale_sign_62">Invalid APK data.</string>
+    <string name="cl_locale_sign_63">Export failed.</string>
 </resources>

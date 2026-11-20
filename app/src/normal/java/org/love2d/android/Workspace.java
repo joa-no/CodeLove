@@ -2547,7 +2547,8 @@ public final class Workspace {
             saveState();
             toast(activity.getString(R.string.cl_locale_export_14));
         } catch (IOException e) {
-            toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_move) : e.getMessage());
+            Log.w(TAG, "File operation failed", e);
+            toast(activity.getString(R.string.cl_cannot_move));
             renderTree();
         }
     }
@@ -2587,7 +2588,8 @@ public final class Workspace {
                     try {
                         file = activeSafStorage.createFile(folder, name).file;
                     } catch (IOException e) {
-                        toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_create_file) : e.getMessage());
+                        Log.w(TAG, "File operation failed", e);
+            toast(activity.getString(R.string.cl_cannot_create_file));
                         return;
                     }
                 } else {
@@ -2620,7 +2622,8 @@ public final class Workspace {
                     try {
                         folder = activeSafStorage.createDirectory(parent, text).file;
                     } catch (IOException e) {
-                        toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_create_folder) : e.getMessage());
+                        Log.w(TAG, "File operation failed", e);
+            toast(activity.getString(R.string.cl_cannot_create_folder));
                         return;
                     }
                 } else {
@@ -2711,7 +2714,8 @@ public final class Workspace {
             if (editedFile != null && sameFile(editedFile, target)) openInEditor(dest);
             saveState();
         } catch (IOException e) {
-            toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_rename) : e.getMessage());
+            Log.w(TAG, "File operation failed", e);
+            toast(activity.getString(R.string.cl_cannot_rename));
         }
     }
 
@@ -3062,9 +3066,7 @@ public final class Workspace {
             Log.w(TAG, "Falha ao preparar o projeto para execucao", e);
             if (announceFailure) {
                 activity.runOnUiThread(() -> toast(
-                    e.getMessage() == null
-                        ? activity.getString(R.string.cl_locale_export_15)
-                        : e.getMessage()));
+                    activity.getString(R.string.cl_locale_export_15)));
             }
             return false;
         }
