@@ -362,6 +362,17 @@ function love.draw()
 end
 
 -- Entradas (toque, teclado...): so chegam ao projeto quando ele esta jogando.
+-- Window changes must reach the project even while playback is paused.
+function love.resize(w, h)
+  if host.project and not host.errorText then
+    local fn = callback("resize")
+    if fn then
+      local ok, err = xpcall(fn, debug.traceback, w, h)
+      if not ok then fail(err) end
+    end
+  end
+end
+
 local forwarded = {
   "keypressed", "keyreleased", "textinput",
   "mousepressed", "mousereleased", "mousemoved", "wheelmoved",
