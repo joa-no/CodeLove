@@ -261,100 +261,7 @@ final class CodeEditor {
         soraInput.setInputType(InputType.TYPE_CLASS_TEXT
             | InputType.TYPE_TEXT_FLAG_MULTI_LINE
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        io.github.rosemoe.sora.widget.schemes.EditorColorScheme soraColors =
-            new io.github.rosemoe.sora.widget.schemes.EditorColorScheme();
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.WHOLE_BACKGROUND,
-            Workspace.COLOR_PANEL);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER_BACKGROUND,
-            Workspace.COLOR_PANEL);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_NORMAL,
-            Workspace.COLOR_TEXT);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER,
-            Workspace.COLOR_MUTED);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER_CURRENT,
-            Workspace.COLOR_FOLDER);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTION_INSERT,
-            Workspace.COLOR_FOLDER);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTED_TEXT_BACKGROUND,
-            Workspace.isLightTheme() ? 0x447751BC : 0x66A78BFA);
-        // Janela de autocomplete: reutiliza a paleta real do CodeLove,
-        // inclusive quando a aparencia estiver no tema claro/automatico.
-        // O layout padrao do Sora ja suporta bordas arredondadas (8dp).
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_BACKGROUND,
-            Workspace.COLOR_FIELD);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_CORNER,
-            Workspace.COLOR_BORDER);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_PRIMARY,
-            Workspace.COLOR_TEXT);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_SECONDARY,
-            Workspace.COLOR_MUTED);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_MATCHED,
-            Workspace.COLOR_FOLDER);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_ITEM_CURRENT,
-            Workspace.isLightTheme() ? 0xFFECE4FA : 0xFF33274D);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTION_HANDLE,
-            Workspace.COLOR_FOLDER);
-        soraColors.setColor(CodeLoveLuaLanguage.KEYWORD_COLOR_ID, COLOR_KEYWORD);
-        soraColors.setColor(CodeLoveLuaLanguage.NUMBER_COLOR_ID, COLOR_NUMBER);
-        soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
-        soraColors.setColor(CodeLoveLuaLanguage.COMMENT_COLOR_ID, COLOR_COMMENT);
-        // Paleta neutra para controles utilitarios; roxo reservado a destaques.
-        // Cores compartilhadas entre o tema Sora e os indicadores arredondados.
-        final int scrollNormalColor = Workspace.isLightTheme() ? 0xFF747B8E : 0xFF6F6985;
-        final int scrollPressedColor = Workspace.isLightTheme() ? 0xFF5F677D : 0xFF8A7CB0;
-        final int actionIconColor = Workspace.isLightTheme() ? 0xFF596173 : 0xFFC9CEDA;
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB,
-            scrollNormalColor);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB_PRESSED,
-            scrollPressedColor);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_TRACK,
-            Workspace.isLightTheme() ? 0xFFE5E0EF : 0xFF252738);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND,
-            Workspace.COLOR_FIELD);
-        soraColors.setColor(
-            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR,
-            actionIconColor);
-        soraInput.setColorScheme(soraColors);
-        // Mantem o scroll arrastavel do Sora, com indicador neutro arredondado.
-        StateListDrawable scrollbarThumb = new StateListDrawable();
-        scrollbarThumb.addState(new int[]{android.R.attr.state_pressed},
-            roundedScrollThumb(scrollPressedColor));
-        scrollbarThumb.addState(new int[]{},
-            roundedScrollThumb(scrollNormalColor));
-        soraInput.setVerticalScrollbarThumbDrawable(scrollbarThumb);
-        StateListDrawable horizontalThumb = new StateListDrawable();
-        horizontalThumb.addState(new int[]{android.R.attr.state_pressed},
-            roundedScrollThumb(scrollPressedColor));
-        horizontalThumb.addState(new int[]{},
-            roundedScrollThumb(scrollNormalColor));
-        soraInput.setHorizontalScrollbarThumbDrawable(horizontalThumb);
-        // Reutiliza o painel de selecao do Sora: mesmos comandos e gestos,
-        // somente a superficie e os botoes sao tematizados.
-        io.github.rosemoe.sora.widget.component.EditorTextActionWindow selectionWindow =
-            soraInput.getComponent(
-                io.github.rosemoe.sora.widget.component.EditorTextActionWindow.class);
-        GradientDrawable selectionBackground = box(Workspace.COLOR_FIELD, 14, true);
-        selectionWindow.getView().setBackground(selectionBackground);
-        selectionWindow.getView().setElevation(dp(7));
-        styleSelectionActions(selectionWindow.getView());
+        applySoraAppearance();
         // Restaura o design compacto do autocomplete do CodeLove sobre
         // o mecanismo de sugestoes do Sora, sem acionar o EditText legado.
         soraInput.replaceComponent(
@@ -908,6 +815,104 @@ final class CodeEditor {
     }
 
     /** Indicadores arredondados, sem alterar o gesto de arrastar do Sora. */
+    /** Updates the existing Sora instance without replacing its document or listeners. */
+    void applySoraAppearance() {
+        io.github.rosemoe.sora.widget.schemes.EditorColorScheme soraColors =
+            new io.github.rosemoe.sora.widget.schemes.EditorColorScheme();
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.WHOLE_BACKGROUND,
+            Workspace.COLOR_PANEL);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER_BACKGROUND,
+            Workspace.COLOR_PANEL);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_NORMAL,
+            Workspace.COLOR_TEXT);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER,
+            Workspace.COLOR_MUTED);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.LINE_NUMBER_CURRENT,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTION_INSERT,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTED_TEXT_BACKGROUND,
+            Workspace.isLightTheme() ? 0x447751BC : 0x66A78BFA);
+        // Janela de autocomplete: reutiliza a paleta real do CodeLove,
+        // inclusive quando a aparencia estiver no tema claro/automatico.
+        // O layout padrao do Sora ja suporta bordas arredondadas (8dp).
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_BACKGROUND,
+            Workspace.COLOR_FIELD);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_CORNER,
+            Workspace.COLOR_BORDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_PRIMARY,
+            Workspace.COLOR_TEXT);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_SECONDARY,
+            Workspace.COLOR_MUTED);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_TEXT_MATCHED,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.COMPLETION_WND_ITEM_CURRENT,
+            Workspace.isLightTheme() ? 0xFFECE4FA : 0xFF33274D);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SELECTION_HANDLE,
+            Workspace.COLOR_FOLDER);
+        soraColors.setColor(CodeLoveLuaLanguage.KEYWORD_COLOR_ID, COLOR_KEYWORD);
+        soraColors.setColor(CodeLoveLuaLanguage.NUMBER_COLOR_ID, COLOR_NUMBER);
+        soraColors.setColor(CodeLoveLuaLanguage.STRING_COLOR_ID, COLOR_STRING);
+        soraColors.setColor(CodeLoveLuaLanguage.COMMENT_COLOR_ID, COLOR_COMMENT);
+        // Paleta neutra para controles utilitarios; roxo reservado a destaques.
+        // Cores compartilhadas entre o tema Sora e os indicadores arredondados.
+        final int scrollNormalColor = Workspace.isLightTheme() ? 0xFF747B8E : 0xFF6F6985;
+        final int scrollPressedColor = Workspace.isLightTheme() ? 0xFF5F677D : 0xFF8A7CB0;
+        final int actionIconColor = Workspace.isLightTheme() ? 0xFF596173 : 0xFFC9CEDA;
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB,
+            scrollNormalColor);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_THUMB_PRESSED,
+            scrollPressedColor);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.SCROLL_BAR_TRACK,
+            Workspace.isLightTheme() ? 0xFFE5E0EF : 0xFF252738);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_BACKGROUND,
+            Workspace.COLOR_FIELD);
+        soraColors.setColor(
+            io.github.rosemoe.sora.widget.schemes.EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR,
+            actionIconColor);
+        soraInput.setColorScheme(soraColors);
+        // Mantem o scroll arrastavel do Sora, com indicador neutro arredondado.
+        StateListDrawable scrollbarThumb = new StateListDrawable();
+        scrollbarThumb.addState(new int[]{android.R.attr.state_pressed},
+            roundedScrollThumb(scrollPressedColor));
+        scrollbarThumb.addState(new int[]{},
+            roundedScrollThumb(scrollNormalColor));
+        soraInput.setVerticalScrollbarThumbDrawable(scrollbarThumb);
+        StateListDrawable horizontalThumb = new StateListDrawable();
+        horizontalThumb.addState(new int[]{android.R.attr.state_pressed},
+            roundedScrollThumb(scrollPressedColor));
+        horizontalThumb.addState(new int[]{},
+            roundedScrollThumb(scrollNormalColor));
+        soraInput.setHorizontalScrollbarThumbDrawable(horizontalThumb);
+        // Reutiliza o painel de selecao do Sora: mesmos comandos e gestos,
+        // somente a superficie e os botoes sao tematizados.
+        io.github.rosemoe.sora.widget.component.EditorTextActionWindow selectionWindow =
+            soraInput.getComponent(
+                io.github.rosemoe.sora.widget.component.EditorTextActionWindow.class);
+        GradientDrawable selectionBackground = box(Workspace.COLOR_FIELD, 14, true);
+        selectionWindow.getView().setBackground(selectionBackground);
+        selectionWindow.getView().setElevation(dp(7));
+        styleSelectionActions(selectionWindow.getView());
+    }
+
     private GradientDrawable roundedScrollThumb(int color) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);
