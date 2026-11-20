@@ -50,17 +50,18 @@ final class GameExportDialog {
 
     static boolean handleIconResult(Activity activity, int request, int result, Intent data) {
         if (request != REQUEST_ICON) return false;
-        if (result != Activity.RESULT_OK || data == null || data.getData() == null) return true;
-        Uri uri = data.getData();
-        if (!"content".equals(uri.getScheme())) return true;
         SharedPreferences preferences = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String key = preferences.getString("pending_icon_key", "");
-        if (key.isEmpty()) return true;
+        // Clear even on cancellation; never reuse a stale pending picker request.
+        preferences.edit().remove("pending_icon_key").apply();
+        if (result != Activity.RESULT_OK || data == null || data.getData() == null
+                || key.isEmpty()) return true;
+        Uri uri = data.getData();
+        if (!"content".equals(uri.getScheme())) return true;
         try {
             int flags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
             if (flags != 0) activity.getContentResolver().takePersistableUriPermission(uri, flags);
-            preferences.edit().putString(key + "icon", uri.toString())
-                .remove("pending_icon_key").apply();
+            preferences.edit().putString(key + "icon", uri.toString()).apply();
             Toast.makeText(activity, R.string.cl_export_icon_selected, Toast.LENGTH_SHORT).show();
         } catch (SecurityException ex) {
             Toast.makeText(activity, R.string.cl_export_icon_failed, Toast.LENGTH_LONG).show();
@@ -237,6 +238,18 @@ final class GameExportDialog {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         Dialog dialog = new Dialog(activity);
+        // The document picker must not close this form or discard unsaved fields.
+        // Refresh the icon status when the picker returns and preferences update.
+        SharedPreferences.OnSharedPreferenceChangeListener iconListener = (shared, changed) -> {
+            if (!(key + "icon").equals(changed)) return;
+            boolean chosen = !shared.getString(key + "icon", "").isEmpty();
+            iconValue.setText(chosen ? R.string.cl_export_icon_selected
+                : R.string.cl_export_icon_none);
+            iconValue.setVisibility(chosen ? View.VISIBLE : View.GONE);
+        };
+        prefs.registerOnSharedPreferenceChangeListener(iconListener);
+        dialog.setOnDismissListener(d ->
+            prefs.unregisterOnSharedPreferenceChangeListener(iconListener));
         dialog.setContentView(panel);
         dialog.show();
         if (dialog.getWindow() != null) {
@@ -251,7 +264,6 @@ final class GameExportDialog {
 
         icon.setOnClickListener(v -> {
             prefs.edit().putString("pending_icon_key", key).apply();
-            dialog.dismiss();
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.setType("image/*");
             intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -260,6 +272,7 @@ final class GameExportDialog {
             try {
                 activity.startActivityForResult(intent, REQUEST_ICON);
             } catch (Exception ex) {
+                prefs.edit().remove("pending_icon_key").apply();
                 Toast.makeText(activity, R.string.cl_export_icon_failed, Toast.LENGTH_LONG).show();
             }
         });

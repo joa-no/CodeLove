@@ -1025,16 +1025,24 @@ public final class Workspace {
     /** Idioma do Android ou escolha manual. Sem alterar os comandos Lua. */
     private void showLanguageChooser() {
         if (activity.isFinishing()) return;
-        LinearLayout content = new LinearLayout(activity);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(20), dp(18), dp(20), dp(20));
-        content.setBackground(box(COLOR_PANEL, 18, false));
+
+        // The header and Cancel stay anchored; only the language options scroll.
+        LinearLayout panel = new LinearLayout(activity);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(box(COLOR_PANEL, 18, false));
+        panel.setClipToOutline(true);
+
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(20), dp(18), dp(20), dp(8));
+
         TextView brand = new TextView(activity);
         brand.setText("CODELOVE");
         brand.setTextColor(COLOR_FOLDER);
         brand.setTextSize(11);
         brand.setTypeface(Typeface.DEFAULT_BOLD);
-        content.addView(brand);
+        header.addView(brand);
+
         TextView title = new TextView(activity);
         title.setText(activity.getString(R.string.cl_language));
         title.setTextColor(COLOR_TEXT);
@@ -1042,8 +1050,14 @@ public final class Workspace {
         title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        titleLp.setMargins(0, dp(8), 0, dp(12));
-        content.addView(title, titleLp);
+        titleLp.setMargins(0, dp(8), 0, dp(4));
+        header.addView(title, titleLp);
+        panel.addView(header, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout options = new LinearLayout(activity);
+        options.setOrientation(LinearLayout.VERTICAL);
+        options.setPadding(dp(20), dp(4), dp(20), dp(8));
 
         String[] values = {"auto", "pt", "en", "es"};
         int[] names = {R.string.cl_theme_auto, R.string.cl_language_pt,
@@ -1090,8 +1104,19 @@ public final class Workspace {
             LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (i != 0) rowLp.topMargin = dp(8);
-            content.addView(row, rowLp);
+            options.addView(row, rowLp);
         }
+
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setFillViewport(false);
+        scroll.addView(options, new ScrollView.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        panel.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        LinearLayout footer = new LinearLayout(activity);
+        footer.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        footer.setPadding(dp(20), dp(8), dp(20), dp(16));
         TextView cancel = new TextView(activity);
         cancel.setText(activity.getString(R.string.cl_cancel));
         cancel.setTextColor(COLOR_MUTED);
@@ -1099,15 +1124,15 @@ public final class Workspace {
         cancel.setGravity(Gravity.CENTER);
         cancel.setPadding(dp(12), dp(10), dp(12), dp(10));
         cancel.setBackground(box(COLOR_FIELD, 10, false));
-        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cancelLp.gravity = Gravity.END;
-        cancelLp.topMargin = dp(14);
-        content.addView(cancel, cancelLp);
+        cancel.setClickable(true);
+        cancel.setFocusable(true);
+        footer.addView(cancel, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         cancel.setOnClickListener(v -> dialog.dismiss());
-        ScrollView scroll = new ScrollView(activity);
-        scroll.addView(content);
-        dialog.setContentView(scroll);
+        panel.addView(footer, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        dialog.setContentView(panel);
         dialog.setCancelable(true);
         dialog.setCanceledOnTouchOutside(true);
         dialog.show();

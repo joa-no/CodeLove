@@ -270,7 +270,9 @@ final class GameSigningKeyUi {
             TextView warningBody = text(activity,
                 "Depois que um jogo for distribuído, a chave utilizada para assiná-lo deverá ser preservada. "
                 + "Perder essa chave pode impedir a atualização do mesmo aplicativo.",
-                14, Workspace.COLOR_TEXT);
+                // The warning stays dark in both themes: always use a readable
+                // light foreground instead of the theme-dependent COLOR_TEXT.
+                14, 0xFFFFEED7);
             warningBody.setPadding(0, (int)(10*density), 0, 0);
             warningPanel.addView(warningBody);
             LinearLayout.LayoutParams warningParams = new LinearLayout.LayoutParams(
