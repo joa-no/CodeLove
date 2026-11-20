@@ -330,6 +330,15 @@ final class CodeEditor {
     }
 
     /** Refreshes editor-owned chrome without replacing the editor or its document. */
+    /** Refresh localized editor chrome without replacing the document. */
+    void applyLanguage() {
+        filesMenuButton.setContentDescription(activity.getString(R.string.cl_open_files));
+        emptyTitle.setText(activity.getString(R.string.cl_empty_open));
+        emptyHint.setText(activity.getString(verticalTabsLayout
+            ? R.string.cl_empty_hint : R.string.cl_empty_hint_horizontal));
+        if (tabsEnabled) renderTabStrip();
+    }
+
     void applyAppearance() {
         view.setBackground(box(Workspace.COLOR_PANEL, 0, false));
         filesMenuButton.setTextColor(Workspace.COLOR_TEXT);
