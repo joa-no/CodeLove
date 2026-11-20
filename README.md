@@ -72,7 +72,7 @@ Cada APK exportado inclui uma identificação discreta em `META-INF/CODELOVE.txt
 
 **Guarde uma cópia do arquivo .p12 e a senha da chave.** Eles são necessários para continuar assinando atualizações após a perda dos dados do CodeLove.
 
-O gerador de APK está funcional e já foi testado no dispositivo. A compatibilidade com todos os jogos e o fluxo completo de atualização/recuperação ainda exigem validação. Consulte o [estado do exportador e os testes pendentes](docs/exportacao-apk.md).
+O gerador de APK está funcional e já foi testado no dispositivo, incluindo atualizações sem desinstalação e recuperação de uma identidade `.p12`. A cobertura em diferentes jogos e versões de Android ainda é parcial; a nova identificação interna do APK aguarda teste de regressão. Consulte o [estado do exportador e os testes pendentes](docs/exportacao-apk.md).
 
 ## Preparar o ambiente
 
