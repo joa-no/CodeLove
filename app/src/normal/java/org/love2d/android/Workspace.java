@@ -103,10 +103,7 @@ public final class Workspace {
     static void configureTheme(Context context) {
         String selected = context.getSharedPreferences("codelove", Context.MODE_PRIVATE)
             .getString(PREF_APPEARANCE, "dark");
-        boolean systemLight = (context.getResources().getConfiguration().uiMode
-            & Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES;
-        lightThemeActive = "light".equals(selected)
-            || ("auto".equals(selected) && systemLight);
+        lightThemeActive = resolveLightTheme(selected, context);
         if (lightThemeActive) {
             COLOR_OUTER = 0xFFF3F5F9;
             COLOR_PANEL = 0xFFFFFFFF;
@@ -135,6 +132,12 @@ public final class Workspace {
             COLOR_ACCENT_TEXT = 0xFF0D0F16;
         }
         CodeEditor.configureSyntaxTheme(lightThemeActive);
+    }
+
+    private static boolean resolveLightTheme(String selected, Context context) {
+        boolean systemLight = (context.getResources().getConfiguration().uiMode
+            & Configuration.UI_MODE_NIGHT_MASK) != Configuration.UI_MODE_NIGHT_YES;
+        return "light".equals(selected) || ("auto".equals(selected) && systemLight);
     }
 
     static boolean isLightTheme() {
@@ -1164,6 +1167,12 @@ public final class Workspace {
     private void changeAppearance(String selected) {
         String previous = prefs.getString(PREF_APPEARANCE, "dark");
         if (previous.equals(selected)) return;
+
+        // A preference change does not require a new Activity if the effective palette is unchanged.
+        if (resolveLightTheme(selected, activity) == lightThemeActive) {
+            prefs.edit().putString(PREF_APPEARANCE, selected).apply();
+            return;
+        }
 
         // Nao recriar o editor caso alguma aba ainda tenha texto nao salvo.
         if (editor != null && editor.hasUnsavedTabs()) {
