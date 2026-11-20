@@ -142,8 +142,8 @@ public class GameActivity extends SDLActivity {
         // Tema da UI do executor (botao de voltar), sem alterar o jogo SDL.
         if (!exportedGame) {
             Workspace.configureTheme(this);
-            // O jogo exportado usa a orientacao do seu proprio conf.lua / SDL.
-            Workspace.applySavedOrientation(this);
+            // Only the legacy combined workspace inherits the editor orientation.
+            if (!standaloneRuntime) Workspace.applySavedOrientation(this);
         }
         if (standaloneRuntime) hideStandaloneStatusBar();
 
@@ -383,13 +383,12 @@ public class GameActivity extends SDLActivity {
     }
 
     /**
-     * O SDL pode solicitar uma orientacao sempre que o runtime cria ou redimensiona
-     * a janela. Depois que o usuario escolhe o formato do CodeLove, essa escolha
-     * persistida tem prioridade sobre qualquer solicitacao automatica do jogo.
+     * Standalone games and exported APKs use native SDL orientation requests.
+     * Only the legacy combined workspace retains the editor orientation.
      */
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
-        if (exportedGame) {
+        if (exportedGame || standaloneRuntime) {
             super.setOrientationBis(w, h, resizable, hint);
             return;
         }
@@ -423,7 +422,7 @@ public class GameActivity extends SDLActivity {
         // Reaplica a orientacao escolhida apos retornar do segundo plano.
         // O SDL/Android pode restaurar a orientacao do sistema durante a retomada.
         if (!exportedGame) {
-            Workspace.applySavedOrientation(this);
+            if (!standaloneRuntime) Workspace.applySavedOrientation(this);
             Workspace.onHostResume(this);
         }
         if (standaloneRuntime && standaloneConsoleOpen && standaloneConsole != null) {
