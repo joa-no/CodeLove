@@ -647,10 +647,11 @@ public final class Workspace {
 
     private View buildHeader() {
         LinearLayout header = new LinearLayout(activity);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout projectRow = new LinearLayout(activity);
+        projectRow.setGravity(Gravity.CENTER_VERTICAL);
 
-        header.addView(new IconView(activity, IconView.FOLDER, COLOR_FOLDER),
+        projectRow.addView(new IconView(activity, IconView.FOLDER, COLOR_FOLDER),
             new LinearLayout.LayoutParams(dp(22), dp(22)));
 
         TextView name = new TextView(activity);
@@ -664,10 +665,42 @@ public final class Workspace {
         LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         nameLp.setMargins(dp(10), 0, dp(8), 0);
-        header.addView(name, nameLp);
+        projectRow.addView(name, nameLp);
+        header.addView(projectRow, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
 
-        // A engrenagem e o unico acesso do cabecalho as opcoes do aplicativo.
-        // Orientacao e informacoes passam a ser acessadas dentro de Configuracoes.
+        // Keep the title visible in the narrow landscape panel.
+        // Place Export APK beside Settings on a dedicated action row.
+        LinearLayout actions = new LinearLayout(activity);
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        actionsLp.topMargin = dp(6);
+
+        LinearLayout exportButton = new LinearLayout(activity);
+        exportButton.setGravity(Gravity.CENTER);
+        exportButton.setPadding(dp(10), 0, dp(10), 0);
+        exportButton.setBackground(box(COLOR_FIELD, 10, false));
+        exportButton.addView(new IconView(activity, IconView.ANDROID, COLOR_TEXT),
+            new LinearLayout.LayoutParams(dp(20), dp(20)));
+        TextView exportText = new TextView(activity);
+        exportText.setText(R.string.cl_export_title);
+        exportText.setTextColor(COLOR_TEXT);
+        exportText.setTypeface(Typeface.DEFAULT_BOLD);
+        exportText.setTextSize(13);
+        exportText.setSingleLine(true);
+        LinearLayout.LayoutParams exportTextLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        exportTextLp.leftMargin = dp(6);
+        exportButton.addView(exportText, exportTextLp);
+        setButtonHint(exportButton, activity.getString(R.string.cl_export_title));
+        exportButton.setClickable(true);
+        exportButton.setFocusable(true);
+        exportButton.setOnClickListener(v -> showExportDialog());
+        actions.addView(exportButton, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)));
+
+        // Settings remains accessible beside the new export action.
         LinearLayout settingsButton = new LinearLayout(activity);
         settingsButton.setGravity(Gravity.CENTER);
         settingsButton.setBackground(box(COLOR_FIELD, 10, false));
@@ -677,7 +710,10 @@ public final class Workspace {
         settingsButton.setClickable(true);
         settingsButton.setFocusable(true);
         settingsButton.setOnClickListener(v -> showSettings());
-        header.addView(settingsButton, new LinearLayout.LayoutParams(dp(40), dp(40)));
+        LinearLayout.LayoutParams settingsLp = new LinearLayout.LayoutParams(dp(40), dp(40));
+        settingsLp.leftMargin = dp(8);
+        actions.addView(settingsButton, settingsLp);
+        header.addView(actions, actionsLp);
 
 
         return header;
@@ -2155,11 +2191,18 @@ public final class Workspace {
         actions.add(() -> newFolder(folder));
         labels.add(activity.getString(R.string.cl_change_main_folder));
         actions.add(this::addExistingProject);
-        labels.add(activity.getString(R.string.cl_export_title));
-        actions.add(() -> {
+        ui.showMenu(anchor, labels, actions);
+    }
+
+    /** Opens export from the Android button beside Settings. */
+    private void showExportDialog() {
             final File project = activeProject;
             final DirectSafStorage storage = activeSafStorage;
-            if (project == null || storage == null) return;
+            if (disposed) return;
+            if (project == null || storage == null) {
+                toast(activity.getString(R.string.cl_select_project_hint));
+                return;
+            }
             GameExportDialog.show(activity, project.getAbsolutePath(),
                 projectDisplayName(project), name -> {
                     if (disposed || activeSafStorage != storage || activeProject == null
@@ -2196,8 +2239,6 @@ public final class Workspace {
                         toast("Exportador de APK indisponível nesta versão.");
                     }
                 });
-        });
-        ui.showMenu(anchor, labels, actions);
     }
 
     private void addExistingProject() {
@@ -3229,6 +3270,7 @@ public final class Workspace {
         static final int SETTINGS = 18;
         static final int PALETTE = 19;
         static final int LANGUAGE = 20;
+        static final int ANDROID = 21;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -3294,6 +3336,34 @@ public final class Workspace {
                     path.addCircle(16f, 10f, 1.0f, Path.Direction.CW);
                     path.moveTo(15f, 15f);
                     path.cubicTo(18f, 13f, 19f, 19f, 15f, 20f);
+                    break;
+                case ANDROID:
+                    // Android robot line icon, using the same stroke as other controls.
+                    path.moveTo(6f, 10.5f);
+                    path.cubicTo(6f, 6.8f, 8.4f, 5f, 12f, 5f);
+                    path.cubicTo(15.6f, 5f, 18f, 6.8f, 18f, 10.5f);
+                    path.close();
+                    path.addCircle(9f, 8.5f, 0.45f, Path.Direction.CW);
+                    path.addCircle(15f, 8.5f, 0.45f, Path.Direction.CW);
+                    path.moveTo(8f, 4f);
+                    path.lineTo(6.5f, 2.2f);
+                    path.moveTo(16f, 4f);
+                    path.lineTo(17.5f, 2.2f);
+                    path.moveTo(6f, 12f);
+                    path.lineTo(18f, 12f);
+                    path.lineTo(18f, 17.5f);
+                    path.quadTo(18f, 19f, 16.5f, 19f);
+                    path.lineTo(7.5f, 19f);
+                    path.quadTo(6f, 19f, 6f, 17.5f);
+                    path.close();
+                    path.moveTo(3.5f, 12.5f);
+                    path.lineTo(3.5f, 17.5f);
+                    path.moveTo(20.5f, 12.5f);
+                    path.lineTo(20.5f, 17.5f);
+                    path.moveTo(9f, 19f);
+                    path.lineTo(9f, 21.5f);
+                    path.moveTo(15f, 19f);
+                    path.lineTo(15f, 21.5f);
                     break;
                 case SETTINGS:
                     // Engrenagem vetorial, alinhada aos demais icones do CodeLove.
