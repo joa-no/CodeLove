@@ -80,7 +80,10 @@ final class GameExportDialog {
 
         LinearLayout body = new LinearLayout(activity);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(padding, padding, padding, padding);
+        body.setPadding(padding, Math.round(18*density), padding, padding);
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(padding, padding, padding, 0);
         GradientDrawable background = new GradientDrawable();
         background.setColor(Workspace.COLOR_PANEL);
         background.setCornerRadius(18 * density);
@@ -96,7 +99,7 @@ final class GameExportDialog {
         LinearLayout.LayoutParams eyebrowParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         eyebrowParams.bottomMargin = Math.round(12*density);
-        body.addView(eyebrow, eyebrowParams);
+        header.addView(eyebrow, eyebrowParams);
 
         TextView heading = new TextView(activity);
         heading.setText(R.string.cl_export_title);
@@ -111,16 +114,23 @@ final class GameExportDialog {
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         headerLabelParams.leftMargin = Math.round(10*density);
         headerRow.addView(heading, headerLabelParams);
-        body.addView(headerRow);
+        header.addView(headerRow);
 
         TextView note = new TextView(activity);
         note.setText("Configure e prepare seu jogo para Android.");
         note.setTextSize(13);
         note.setTextColor(Workspace.COLOR_MUTED);
         note.setPadding(0, (int)(12*density), 0, (int)(6*density));
-        body.addView(note);
+        header.addView(note);
 
-        section(activity, body, "Informações do jogo", "settings");
+        View headerDivider = new View(activity);
+        headerDivider.setBackgroundColor(Workspace.COLOR_BORDER);
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, Math.round(density)));
+        dividerParams.topMargin = Math.round(20*density);
+        header.addView(headerDivider, dividerParams);
+
+        sectionHeading(activity, body, "Informações do jogo", "settings");
         EditText name = field(activity, body, R.string.cl_export_name,
             prefs.getString(key + "name", projectName), false);
         EditText pack = field(activity, body, R.string.cl_export_package,
@@ -232,6 +242,8 @@ final class GameExportDialog {
         panelBackground.setCornerRadius(18*density);
         panel.setBackground(panelBackground);
         panel.setClipToOutline(true);
+        panel.addView(header, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         panel.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         panel.addView(footer, new LinearLayout.LayoutParams(
@@ -343,6 +355,12 @@ final class GameExportDialog {
         sep.topMargin = Math.round(20*d);
         sep.bottomMargin = Math.round(18*d);
         body.addView(separator, sep);
+        sectionHeading(activity, body, title, iconType);
+    }
+
+    private static void sectionHeading(Activity activity, LinearLayout body,
+                                       String title, String iconType) {
+        float d = activity.getResources().getDisplayMetrics().density;
         LinearLayout heading = new LinearLayout(activity);
         heading.setOrientation(LinearLayout.HORIZONTAL);
         heading.setGravity(Gravity.CENTER_VERTICAL);
