@@ -88,6 +88,9 @@ final class CodeEditor {
     private final TextView title;
     private final LinearLayout emptyState;
     private final View footerDivider;
+    private final View headerDivider;
+    private final TextView closeButton;
+    private final TextView emptyTitle;
     private final TextView filesMenuButton;
     private final HorizontalScrollView tabsScroller;
     private final LinearLayout tabsRow;
@@ -205,7 +208,8 @@ final class CodeEditor {
         footer.addView(footerSpacer, new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
-        TextView close = new TextView(activity);
+        closeButton = new TextView(activity);
+        TextView close = closeButton;
         close.setText("\u00D7");
         close.setGravity(Gravity.CENTER);
         close.setTextColor(Workspace.COLOR_TEXT);
@@ -233,7 +237,8 @@ final class CodeEditor {
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
         tabsLp.setMargins(0, dp(8), 0, 0);
         view.addView(tabsScroller, tabsLp);
-        View divider = new View(activity);
+        headerDivider = new View(activity);
+        View divider = headerDivider;
         divider.setBackgroundColor(Workspace.COLOR_BORDER);
         LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
@@ -291,7 +296,7 @@ final class CodeEditor {
         emptyState.setOrientation(LinearLayout.VERTICAL);
         emptyState.setGravity(Gravity.CENTER);
         emptyState.setPadding(dp(24), dp(24), dp(24), dp(24));
-        TextView emptyTitle = new TextView(activity);
+        emptyTitle = new TextView(activity);
         emptyTitle.setText(activity.getString(R.string.cl_empty_open));
         emptyTitle.setTextColor(Workspace.COLOR_TEXT);
         emptyTitle.setTextSize(18);
@@ -322,6 +327,24 @@ final class CodeEditor {
         view.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+    }
+
+    /** Refreshes editor-owned chrome without replacing the editor or its document. */
+    void applyAppearance() {
+        view.setBackground(box(Workspace.COLOR_PANEL, 0, false));
+        filesMenuButton.setTextColor(Workspace.COLOR_TEXT);
+        filesMenuButton.setBackground(box(Workspace.COLOR_FIELD, 10, false));
+        title.setTextColor(Workspace.COLOR_TEXT);
+        closeButton.setTextColor(Workspace.COLOR_TEXT);
+        closeButton.setBackground(box(Workspace.COLOR_FIELD, 12, false));
+        tabsScroller.setBackgroundColor(Workspace.isLightTheme()
+            ? Workspace.COLOR_FIELD : 0xFF1B1E2A);
+        headerDivider.setBackgroundColor(Workspace.COLOR_BORDER);
+        footerDivider.setBackgroundColor(Workspace.COLOR_BORDER);
+        emptyTitle.setTextColor(Workspace.COLOR_TEXT);
+        emptyHint.setTextColor(Workspace.COLOR_MUTED);
+        applySoraAppearance();
+        if (tabsEnabled) renderTabStrip();
     }
 
     View getView() {
