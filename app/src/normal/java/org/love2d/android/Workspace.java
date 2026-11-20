@@ -647,60 +647,58 @@ public final class Workspace {
 
     private View buildHeader() {
         LinearLayout header = new LinearLayout(activity);
-        header.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout projectRow = new LinearLayout(activity);
-        projectRow.setGravity(Gravity.CENTER_VERTICAL);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
 
-        projectRow.addView(new IconView(activity, IconView.FOLDER, COLOR_FOLDER),
+        header.addView(new IconView(activity, IconView.FOLDER, COLOR_FOLDER),
             new LinearLayout.LayoutParams(dp(22), dp(22)));
 
         TextView name = new TextView(activity);
         projectTitle = name;
         name.setText(activeProject != null ? activeProject.getName() : "CodeLove");
         name.setTextColor(COLOR_TEXT);
-        name.setTextSize(16);
+        name.setTextSize(15);
+        // Do not push the project name to a second line when adding export.
+        // Auto-fit the name on Android 8+; older devices retain ellipsis.
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            name.setAutoSizeTextTypeUniformWithConfiguration(
+                11, 15, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+        }
         name.setTypeface(Typeface.DEFAULT_BOLD);
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(0,
             ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        nameLp.setMargins(dp(10), 0, dp(8), 0);
-        projectRow.addView(name, nameLp);
-        header.addView(projectRow, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+        nameLp.setMargins(dp(8), 0, dp(4), 0);
+        header.addView(name, nameLp);
 
-        // Keep the title visible in the narrow landscape panel.
-        // Place Export APK beside Settings on a dedicated action row.
-        LinearLayout actions = new LinearLayout(activity);
-        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams actionsLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
-        actionsLp.topMargin = dp(6);
-
+        // Single 40dp row: project title, Export APK and Settings.
+        // Keep the sidebar's original header height and search position.
         LinearLayout exportButton = new LinearLayout(activity);
         exportButton.setGravity(Gravity.CENTER);
-        exportButton.setPadding(dp(10), 0, dp(10), 0);
+        exportButton.setPadding(dp(6), 0, dp(6), 0);
         exportButton.setBackground(box(COLOR_FIELD, 10, false));
         exportButton.addView(new IconView(activity, IconView.ANDROID, COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(20), dp(20)));
+            new LinearLayout.LayoutParams(dp(18), dp(18)));
         TextView exportText = new TextView(activity);
         exportText.setText(R.string.cl_export_title);
         exportText.setTextColor(COLOR_TEXT);
+        exportText.setTextSize(12);
         exportText.setTypeface(Typeface.DEFAULT_BOLD);
-        exportText.setTextSize(13);
         exportText.setSingleLine(true);
         LinearLayout.LayoutParams exportTextLp = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        exportTextLp.leftMargin = dp(6);
+        exportTextLp.leftMargin = dp(4);
         exportButton.addView(exportText, exportTextLp);
         setButtonHint(exportButton, activity.getString(R.string.cl_export_title));
         exportButton.setClickable(true);
         exportButton.setFocusable(true);
         exportButton.setOnClickListener(v -> showExportDialog());
-        actions.addView(exportButton, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)));
+        LinearLayout.LayoutParams exportLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
+        header.addView(exportButton, exportLp);
 
-        // Settings remains accessible beside the new export action.
+        // Configuracoes permanece ao lado do botao Exportar APK.
         LinearLayout settingsButton = new LinearLayout(activity);
         settingsButton.setGravity(Gravity.CENTER);
         settingsButton.setBackground(box(COLOR_FIELD, 10, false));
@@ -711,9 +709,8 @@ public final class Workspace {
         settingsButton.setFocusable(true);
         settingsButton.setOnClickListener(v -> showSettings());
         LinearLayout.LayoutParams settingsLp = new LinearLayout.LayoutParams(dp(40), dp(40));
-        settingsLp.leftMargin = dp(8);
-        actions.addView(settingsButton, settingsLp);
-        header.addView(actions, actionsLp);
+        settingsLp.leftMargin = dp(5);
+        header.addView(settingsButton, settingsLp);
 
 
         return header;
@@ -3287,7 +3284,9 @@ public final class Workspace {
         /** Troca o desenho do icone. */
         void setKind(int kind) {
             path.reset();
-            paint.setStyle((kind == PLAY || kind == PAUSE) ? Paint.Style.FILL : Paint.Style.STROKE);
+            path.setFillType(Path.FillType.WINDING);
+            paint.setStyle((kind == PLAY || kind == PAUSE || kind == ANDROID)
+                ? Paint.Style.FILL : Paint.Style.STROKE);
 
             // Desenho em uma grade de 24 x 24.
             switch (kind) {
@@ -3338,32 +3337,50 @@ public final class Workspace {
                     path.cubicTo(18f, 13f, 19f, 19f, 15f, 20f);
                     break;
                 case ANDROID:
-                    // Android robot line icon, using the same stroke as other controls.
-                    path.moveTo(6f, 10.5f);
-                    path.cubicTo(6f, 6.8f, 8.4f, 5f, 12f, 5f);
-                    path.cubicTo(15.6f, 5f, 18f, 6.8f, 18f, 10.5f);
+                    // Android head silhouette traced from the supplied reference:
+                    // transparent eyes rather than an outlined full robot.
+                    path.setFillType(Path.FillType.EVEN_ODD);
+                    path.moveTo(1.0f, 17.88f);
+                    path.lineTo(1.0f, 18.2f);
+                    path.lineTo(22.98f, 18.2f);
+                    path.lineTo(22.83f, 16.93f);
+                    path.lineTo(22.51f, 15.72f);
+                    path.lineTo(22.03f, 14.51f);
+                    path.lineTo(21.41f, 13.35f);
+                    path.lineTo(20.51f, 12.1f);
+                    path.lineTo(19.43f, 10.98f);
+                    path.lineTo(18.49f, 10.22f);
+                    path.lineTo(17.39f, 9.53f);
+                    path.lineTo(19.24f, 6.3f);
+                    path.lineTo(19.2f, 5.97f);
+                    path.lineTo(18.96f, 5.8f);
+                    path.lineTo(18.75f, 5.8f);
+                    path.lineTo(18.57f, 5.91f);
+                    path.lineTo(16.68f, 9.19f);
+                    path.lineTo(15.67f, 8.78f);
+                    path.lineTo(14.79f, 8.52f);
+                    path.lineTo(13.85f, 8.32f);
+                    path.lineTo(12.67f, 8.19f);
+                    path.lineTo(11.31f, 8.19f);
+                    path.lineTo(10.11f, 8.32f);
+                    path.lineTo(8.5f, 8.71f);
+                    path.lineTo(7.29f, 9.19f);
+                    path.lineTo(5.47f, 5.99f);
+                    path.lineTo(5.21f, 5.8f);
+                    path.lineTo(4.91f, 5.84f);
+                    path.lineTo(4.76f, 6.02f);
+                    path.lineTo(4.74f, 6.3f);
+                    path.lineTo(6.59f, 9.53f);
+                    path.lineTo(5.51f, 10.2f);
+                    path.lineTo(4.57f, 10.95f);
+                    path.lineTo(3.71f, 11.82f);
+                    path.lineTo(2.96f, 12.77f);
+                    path.lineTo(2.22f, 13.95f);
+                    path.lineTo(1.67f, 15.18f);
+                    path.lineTo(1.26f, 16.47f);
                     path.close();
-                    path.addCircle(9f, 8.5f, 0.45f, Path.Direction.CW);
-                    path.addCircle(15f, 8.5f, 0.45f, Path.Direction.CW);
-                    path.moveTo(8f, 4f);
-                    path.lineTo(6.5f, 2.2f);
-                    path.moveTo(16f, 4f);
-                    path.lineTo(17.5f, 2.2f);
-                    path.moveTo(6f, 12f);
-                    path.lineTo(18f, 12f);
-                    path.lineTo(18f, 17.5f);
-                    path.quadTo(18f, 19f, 16.5f, 19f);
-                    path.lineTo(7.5f, 19f);
-                    path.quadTo(6f, 19f, 6f, 17.5f);
-                    path.close();
-                    path.moveTo(3.5f, 12.5f);
-                    path.lineTo(3.5f, 17.5f);
-                    path.moveTo(20.5f, 12.5f);
-                    path.lineTo(20.5f, 17.5f);
-                    path.moveTo(9f, 19f);
-                    path.lineTo(9f, 21.5f);
-                    path.moveTo(15f, 19f);
-                    path.lineTo(15f, 21.5f);
+                    path.addCircle(6.94f, 14.16f, 0.9f, Path.Direction.CW);
+                    path.addCircle(17.04f, 14.16f, 0.9f, Path.Direction.CW);
                     break;
                 case SETTINGS:
                     // Engrenagem vetorial, alinhada aos demais icones do CodeLove.
