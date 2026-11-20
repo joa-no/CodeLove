@@ -91,6 +91,16 @@ jobs:
         CODELOVE_RELEASE_KEY_ALIAS: ${{ secrets.CODELOVE_KEY_ALIAS }}
         CODELOVE_RELEASE_KEY_PASSWORD: ${{ secrets.CODELOVE_KEY_PASSWORD }}
       run: bash ./gradlew assembleNormalRecord${{ matrix.build_type }}
+    - name: Verify signed CodeLove release APK
+      if: ${{ matrix.build_type == 'Release' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        APK=app/build/outputs/apk/normalRecord/release/app-normal-record-release.apk
+        test -s "$APK"
+        APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+        test -x "$APKSIGNER"
+        "$APKSIGNER" verify --verbose "$APK"
     - name: Build Release-specific Binaries
       if: ${{ matrix.build_type == 'Release' }}
       env:

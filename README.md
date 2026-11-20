@@ -72,7 +72,7 @@ Cada APK exportado inclui uma identificação discreta em `META-INF/CODELOVE.txt
 
 **Guarde uma cópia do arquivo .p12 e a senha da chave.** Eles são necessários para continuar assinando atualizações após a perda dos dados do CodeLove.
 
-O gerador de APK está funcional e já foi testado no dispositivo, incluindo atualizações sem desinstalação e recuperação de uma identidade `.p12`. A cobertura em diferentes jogos e versões de Android ainda é parcial; a nova identificação interna do APK aguarda teste de regressão. Consulte o [estado do exportador e os testes pendentes](docs/exportacao-apk.md).
+O gerador de APK está funcional e já foi testado no dispositivo, incluindo atualizações sem desinstalação, recuperação de uma identidade `.p12` e verificação do carimbo em um APK StarGuard real. A cobertura em diferentes jogos e versões de Android ainda é parcial. Consulte o [estado do exportador e os testes pendentes](docs/exportacao-apk.md).
 
 ## Preparar o ambiente
 
@@ -132,4 +132,6 @@ Essa chave não deve ser usada para publicar o aplicativo. Uma distribuição re
 
 ## Licenças
 
-CodeLove contém código próprio e componentes derivados ou incorporados do projeto LÖVE e de suas dependências. Consulte os avisos em `license.txt`, `app/src/normal/assets/codelove-licenses.txt` e nos respectivos submódulos. Os créditos e licenças originais devem ser preservados.
+CodeLove contém código próprio e componentes derivados ou incorporados do projeto LÖVE e de suas dependências. Consulte os avisos em `license.txt`, `app/src/normal/assets/codelove-licenses.txt` (incluindo a LGPL-2.1 do Sora Editor) e nos respectivos submódulos. Os créditos e licenças originais devem ser preservados.
+
+A licença que regerá as partes originais do CodeLove ainda precisa ser definida antes da primeira release. O repositório público não elimina os direitos e obrigações das licenças de terceiros. Consulte também a [lista de verificação da versão 1.0.0](docs/release-1.0.0.md).

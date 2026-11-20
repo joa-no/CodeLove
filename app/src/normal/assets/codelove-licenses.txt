@@ -9,6 +9,16 @@ endossado pelo projeto LOVE.
 Abaixo, o texto de licenca que acompanha o LOVE para Android e as bibliotecas
 usadas por ele, sem alteracoes.
 
+Editor integrado — Sora Editor 0.24.7
+-------------------------------------
+Projeto: https://github.com/Rosemoe/sora-editor
+Fonte da versao utilizada: https://github.com/Rosemoe/sora-editor/tree/0.24.7
+Licenca: GNU Lesser General Public License v2.1 (LGPL-2.1).
+O texto integral da LGPL-2.1 ja esta incluido abaixo, na secao "LGPL 2.1".
+A biblioteca Sora Editor e utilizada apenas no aplicativo CodeLove e nao e
+empacotada nos APKs dos jogos exportados. Os direitos concedidos pela LGPL
+continuam aplicaveis a ela, independentemente da licenca do codigo proprio.
+
 ----------------------------------------------------------------------------
 
 Licensing information

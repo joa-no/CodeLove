@@ -1,6 +1,6 @@
 # CodeLove — exportação de jogos Android offline
 
-## Estado atual (19/11/2026)
+## Estado atual (20/11/2026)
 
 O CodeLove permite **gerar e assinar APKs independentes de jogos LÖVE2D no próprio Android**, sem hospedagem, servidor de compilação ou ferramentas de desenvolvimento adicionais instaladas no dispositivo.
 
@@ -39,7 +39,7 @@ Os componentes ficam em `app/src/normal/java/org/love2d/android/`, com entrada d
 | Instalar uma nova versão sobre a anterior, com a mesma chave | Confirmado: atualizações sucessivas com `versionCode` crescente, sem desinstalação |
 | Restaurar .p12 e exportar atualização com certificado preservado | Confirmado em teste real: certificado SHA-256 permaneceu igual após restauração e exportação |
 | Isolamento do runtime exportado (sem classes ou recursos do editor) | Aprovado no workflow #44633701383 e em APK StarGuard inspecionado; jogo também testado em Android |
-| Carimbo `META-INF/CODELOVE.txt` no APK exportado e assinado | Implementado no código e com testes adicionados; ainda requer execução de CI e nova exportação real |
+| Carimbo `META-INF/CODELOVE.txt` no APK exportado e assinado | Aprovado: workflow #44665273811 verificou APKs antes/depois da assinatura; StarGuard real inspecionado |
 | Jogos com vários dispositivos, versões Android, permissões e recursos | **Cobertura ainda parcial** |
 
 O aviso de compatibilidade do LÖVE, quando `t.version` em `conf.lua` difere da versão do runtime, pertence ao motor e **não significa falha de empacotamento**. O exportador não altera automaticamente `conf.lua`.
@@ -49,9 +49,9 @@ O aviso de compatibilidade do LÖVE, quando `t.version` em `conf.lua` difere da 
 1. **Concluído — instalação e atualização:** atualizações sucessivas testadas sem desinstalação, usando pacote e certificado estáveis. Não foi estabelecida uma garantia de preservação de todos os dados para todos os jogos.
 2. **Concluído — recuperação de assinatura:** backup e restauração `.p12` testados; certificado conferido após exportar atualização. Preservar sempre uma cópia externa e a senha.
 3. **Concluído — isolamento do runtime:** classes, recursos e dependências do editor removidos do template, com verificações automatizadas e execução real do StarGuard.
-4. **Pendente — validar o novo carimbo:** executar o teste JVM e o fluxo de assinatura com `META-INF/CODELOVE.txt`, seguido por exportação e inspeção de um APK real.
+4. **Concluído — carimbo:** workflow #44665273811 e APK StarGuard confirmaram o arquivo `META-INF/CODELOVE.txt` após a assinatura.
 5. **Regressão final:** validar os fluxos restantes de edição, SAF, imagens, sons, entradas, salvamento e falhas de exportação nos layouts vertical e horizontal aplicáveis. A cobertura em múltiplos dispositivos/Android permanece limitada.
-6. **Preparação da release:** revisar documentação, licenças de terceiros, identidade e assinatura da distribuição, validar artefatos finais e preparar a primeira publicação no GitHub.
+6. **Preparação da release:** conferir [checklist da 1.0.0](release-1.0.0.md), as licenças de terceiros (especialmente as obrigações da LGPL do Sora Editor), a assinatura de distribuição e os artefatos finais antes da primeira publicação no GitHub.
 
 A exportação **AAB para lojas** é uma evolução futura, não um pré-requisito para a primeira versão distribuída via GitHub. O workflow pode gerar AABs em ambiente CI, mas **o exportador no dispositivo atualmente gera APKs, não AABs**.
 
