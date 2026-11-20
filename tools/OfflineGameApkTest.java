@@ -59,6 +59,9 @@ public final class OfflineGameApkTest {
             add(zip, "META-INF/OLD.SF", new byte[]{1}, false);
             add(zip, "META-INF/OLD.RSA", new byte[]{2}, false);
             add(zip, "META-INF/androidx.core_core.version", new byte[]{3}, false);
+            // The exporter must replace any previous attribution, not duplicate it.
+            add(zip, "META-INF/CODELOVE.txt", "obsolete stamp".getBytes(
+                    java.nio.charset.StandardCharsets.UTF_8), false);
             if (gameSlot) add(zip, "assets/game.love", love("error('placeholder')"), false);
             if (loose) add(zip, "assets/main.lua", new byte[]{5}, false);
         }
@@ -80,6 +83,22 @@ public final class OfflineGameApkTest {
     }
 
 
+    private static void checkStamp(ZipFile apk) throws Exception {
+        String path = "META-INF/CODELOVE.txt";
+        check(apk.stream().filter(entry -> path.equals(entry.getName())).count() == 1,
+                "CodeLove attribution is absent or duplicated");
+        try (java.io.InputStream stream = apk.getInputStream(apk.getEntry(path))) {
+            String content = new String(stream.readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            check(content.contains("Built with CodeLove\n"), "Wrong CodeLove attribution");
+            check(content.contains("https://github.com/joa-no/CodeLove"),
+                    "Missing attribution link");
+            check(content.contains("Powered by LÖVE2D\n"),
+                    "Missing underlying LÖVE2D attribution");
+            check(!content.contains("obsolete stamp"), "Old stamp was not replaced");
+        }
+    }
+
     private static void testDirectAssets() throws Exception {
         File directory = Files.createTempDirectory("offline-assets-jvm-").toFile();
         try {
@@ -96,6 +115,7 @@ public final class OfflineGameApkTest {
             check(Arrays.equals(originalTemplate, Files.readAllBytes(template.toPath())),
                   "Direct export modified the original APK base");
             try (ZipFile apk = new ZipFile(output)) {
+                checkStamp(apk);
                 check(apk.getEntry("assets/game.love") == null,
                       "Legacy ZIP should not remain in direct-asset APK");
                 ZipEntry main = apk.getEntry("assets/main.lua");
@@ -122,6 +142,7 @@ public final class OfflineGameApkTest {
                 OfflineGameApk.writeUnsignedAssets(template, game, stream);
             }
             try (ZipFile apk = new ZipFile(recommended)) {
+                checkStamp(apk);
                 check(apk.getEntry("assets/game.love") == null,
                       "The recommended template should not add a legacy slot");
                 ZipEntry main = apk.getEntry("assets/main.lua");
@@ -166,6 +187,7 @@ public final class OfflineGameApkTest {
             check(Arrays.equals(Files.readAllBytes(template.toPath()), originalApk),
                   "Must not change template");
             try (ZipFile apk = new ZipFile(output)) {
+                checkStamp(apk);
                 ZipEntry entry = apk.getEntry("assets/game.love");
                 check(entry != null && entry.getMethod() == ZipEntry.STORED,
                       "Must have stored embedded LOVE");

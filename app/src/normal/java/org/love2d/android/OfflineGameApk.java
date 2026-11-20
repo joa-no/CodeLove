@@ -32,6 +32,13 @@ import java.util.zip.ZipOutputStream;
  */
 final class OfflineGameApk {
     static final String GAME_ENTRY = "assets/game.love";
+    static final String CODELOVE_STAMP_ENTRY = "META-INF/CODELOVE.txt";
+    private static final byte[] CODELOVE_STAMP_BYTES = (
+            "Built with CodeLove\n"
+            + "Android development environment for LÖVE2D\n"
+            + "https://github.com/joa-no/CodeLove\n"
+            + "\nPowered by LÖVE2D\n"
+            + "https://love2d.org\n").getBytes(StandardCharsets.UTF_8);
     private static final long MAX_GAME_ARCHIVE = 512L * 1024L * 1024L;
     private static final long MAX_GAME_CONTENT = 512L * 1024L * 1024L;
     private static final int MAX_GAME_ENTRIES = 10000;
@@ -68,7 +75,8 @@ final class OfflineGameApk {
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
                     String name = entry.getName();
-                    if (GAME_ENTRY.equals(name) || isOldJarSignature(name)) {
+                    if (GAME_ENTRY.equals(name) || CODELOVE_STAMP_ENTRY.equals(name)
+                            || isOldJarSignature(name)) {
                         continue;
                     }
                     ZipEntry copy = copyEntry(name, entry);
@@ -85,6 +93,8 @@ final class OfflineGameApk {
                     }
                     apk.closeEntry();
                 }
+
+                writeCodeLoveStamp(apk);
 
                 // Keep the embedded .love as STORED. LÖVE gets the exact
                 // original ZIP bytes and the APK entry is four-byte aligned.
@@ -259,6 +269,7 @@ final class OfflineGameApk {
                     // The Gradle-generated SCM provenance is diagnostic metadata only.
                     // It is not needed to launch LÖVE or verify the signed game.
                     if (slot.equals(name) || isOldJarSignature(name)
+                            || CODELOVE_STAMP_ENTRY.equals(name)
                             || "META-INF/version-control-info.textproto".equals(name)) continue;
                     if (rewrittenManifest != null && "AndroidManifest.xml".equals(name)) {
                         writeReplacementEntry(entry, name, rewrittenManifest, apk, counter);
@@ -268,6 +279,8 @@ final class OfflineGameApk {
                         writeCopiedEntry(template, entry, name, apk, counter);
                     }
                 }
+                writeCodeLoveStamp(apk);
+
                 gameEntries = game.entries();
                 while (gameEntries.hasMoreElements()) {
                     ZipEntry entry = gameEntries.nextElement();
@@ -455,6 +468,14 @@ final class OfflineGameApk {
                 throw new IOException("Unsafe archive entry path: " + name);
             }
         }
+    }
+
+    /** Attribution metadata is added once per export, never displayed in-game. */
+    private static void writeCodeLoveStamp(ZipOutputStream apk) throws IOException {
+        ZipEntry marker = new ZipEntry(CODELOVE_STAMP_ENTRY);
+        apk.putNextEntry(marker);
+        apk.write(CODELOVE_STAMP_BYTES);
+        apk.closeEntry();
     }
 
     private static boolean isOldJarSignature(String name) {

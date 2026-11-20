@@ -277,6 +277,29 @@ jobs:
           grep -F "application-label:'Prototype Test'" \
             "$RUNNER_TEMP/offline-personalized-badging.txt"
           echo "Manifest rewrite, ZIP alignment and test signature verified"
+      - name: Verify CodeLove stamp survives APK signing
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          expected = "Built with CodeLove\nAndroid development environment for LÖVE2D\nhttps://github.com/joa-no/CodeLove\n\nPowered by LÖVE2D\nhttps://love2d.org\n".encode("utf-8")
+          path = "META-INF/CODELOVE.txt"
+          outputs = (
+              "offline-java-unsigned.apk",
+              "offline-direct-unsigned.apk",
+              "offline-personalized-unsigned.apk",
+              "offline-prototype-test.apk",
+              "offline-prototype-again.apk",
+              "offline-direct-prototype.apk",
+              "offline-personalized-prototype.apk",
+          )
+          for filename in outputs:
+              with ZipFile(Path(os.environ["RUNNER_TEMP"]) / filename) as package:
+                  assert package.namelist().count(path) == 1, filename
+                  assert package.read(path) == expected, filename
+          print("CodeLove attribution verified in unsigned and signed APKs")
+          PY
       - name: Upload prototype test APK (not ready for distribution)
         uses: actions/upload-artifact@v4
         with:
