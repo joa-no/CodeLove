@@ -125,6 +125,7 @@
     <string name="cl_save_before_restart">Salve as alterações de todas as abas antes de reiniciar o jogo.</string>
     <string name="cl_collapse_console">Recolher console</string>
     <string name="cl_toggle_console">Abrir ou fechar console</string>
+    <string name="cl_export_button">Exportar</string>
     <string name="cl_export_title">Exportar APK</string>
     <string name="cl_export_not_ready">Configure o jogo aqui. A geração do APK ainda não está disponível.</string>
     <string name="cl_export_name">Nome do jogo</string>

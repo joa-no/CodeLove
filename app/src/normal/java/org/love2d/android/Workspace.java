@@ -672,18 +672,19 @@ public final class Workspace {
         nameLp.setMargins(dp(8), 0, dp(4), 0);
         header.addView(name, nameLp);
 
-        // Single 40dp row: project title, Export APK and Settings.
+        // Single 40dp row: project title, Export and Settings.
         // Keep the sidebar's original header height and search position.
         LinearLayout exportButton = new LinearLayout(activity);
         exportButton.setGravity(Gravity.CENTER);
         exportButton.setPadding(dp(6), 0, dp(6), 0);
-        exportButton.setBackground(box(COLOR_FIELD, 10, false));
-        exportButton.addView(new IconView(activity, IconView.ANDROID, COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(18), dp(18)));
+        // Android brand green; dark foreground keeps text/icon readable.
+        exportButton.setBackground(box(0xFF3DDC84, 10, false));
+        exportButton.addView(new IconView(activity, IconView.ANDROID, 0xFF143522),
+            new LinearLayout.LayoutParams(dp(22), dp(22)));
         TextView exportText = new TextView(activity);
-        exportText.setText(R.string.cl_export_title);
-        exportText.setTextColor(COLOR_TEXT);
-        exportText.setTextSize(12);
+        exportText.setText(R.string.cl_export_button);
+        exportText.setTextColor(0xFF143522);
+        exportText.setTextSize(13);
         exportText.setTypeface(Typeface.DEFAULT_BOLD);
         exportText.setSingleLine(true);
         LinearLayout.LayoutParams exportTextLp = new LinearLayout.LayoutParams(
@@ -698,7 +699,7 @@ public final class Workspace {
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
         header.addView(exportButton, exportLp);
 
-        // Configuracoes permanece ao lado do botao Exportar APK.
+        // Configuracoes permanece ao lado do botao Exportar.
         LinearLayout settingsButton = new LinearLayout(activity);
         settingsButton.setGravity(Gravity.CENTER);
         settingsButton.setBackground(box(COLOR_FIELD, 10, false));
