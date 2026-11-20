@@ -935,7 +935,7 @@ public final class Workspace {
         content.addView(brand);
 
         TextView title = new TextView(activity);
-        title.setText("Aparência");
+        title.setText(R.string.cl_appearance);
         title.setTextColor(COLOR_TEXT);
         title.setTextSize(20);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -2259,7 +2259,7 @@ public final class Workspace {
                             version, code, iconUri);
                     } catch (ReflectiveOperationException e) {
                         Log.e(TAG, "Offline APK export handler unavailable", e);
-                        toast("Exportador de APK indisponível nesta versão.");
+                        toast(activity.getString(R.string.cl_locale_export_13));
                     }
                 });
     }
@@ -2545,7 +2545,7 @@ public final class Workspace {
                 openInEditor(reopened);
             }
             saveState();
-            toast("Item movido.");
+            toast(activity.getString(R.string.cl_locale_export_14));
         } catch (IOException e) {
             toast(e.getMessage() == null ? activity.getString(R.string.cl_cannot_move) : e.getMessage());
             renderTree();
@@ -3063,7 +3063,7 @@ public final class Workspace {
             if (announceFailure) {
                 activity.runOnUiThread(() -> toast(
                     e.getMessage() == null
-                        ? "Nao foi possivel preparar o projeto para executar."
+                        ? activity.getString(R.string.cl_locale_export_15)
                         : e.getMessage()));
             }
             return false;

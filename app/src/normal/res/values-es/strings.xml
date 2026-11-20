@@ -147,4 +147,19 @@
     <string name="cl_export_love_busy">Ya se está preparando otro paquete.</string>
     <string name="cl_export_love_save_first">Guarda todas las pestañas abiertas antes de preparar el proyecto.</string>
     <string name="cl_export_love_project_changed">El proyecto seleccionado ha cambiado. Vuelve a abrir Exportar APK.</string>
+    <string name="cl_locale_export_1">Configura y prepara tu juego para Android.</string>
+    <string name="cl_locale_export_2">Información del juego</string>
+    <string name="cl_locale_export_3">Seleccionar icono</string>
+    <string name="cl_locale_export_4">Firma de la aplicación</string>
+    <string name="cl_locale_export_5">Gestionar clave de firma</string>
+    <string name="cl_locale_export_6">Crear, guardar una copia o restaurar la clave.</string>
+    <string name="cl_locale_export_7">Gestión de claves no disponible</string>
+    <string name="cl_locale_export_8">Preparar exportación</string>
+    <string name="cl_locale_export_9">Exportar paquete .love</string>
+    <string name="cl_locale_export_10">Generar APK</string>
+    <string name="cl_locale_export_11">Para generar el APK, selecciona un icono y crea o restaura la clave de firma del juego.</string>
+    <string name="cl_locale_export_12">Selecciona el icono del juego antes de generar el APK.</string>
+    <string name="cl_locale_export_13">Exportador de APK no disponible en esta versión.</string>
+    <string name="cl_locale_export_14">Elemento movido.</string>
+    <string name="cl_locale_export_15">No se pudo preparar el proyecto para ejecutarlo.</string>
 </resources>

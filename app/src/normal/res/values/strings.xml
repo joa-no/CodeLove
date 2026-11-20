@@ -147,4 +147,19 @@
     <string name="cl_export_love_busy">A package export is already in progress.</string>
     <string name="cl_export_love_save_first">Save all open tabs before preparing the project.</string>
     <string name="cl_export_love_project_changed">The selected project changed. Open Export APK again.</string>
+    <string name="cl_locale_export_1">Configure and prepare your game for Android.</string>
+    <string name="cl_locale_export_2">Game information</string>
+    <string name="cl_locale_export_3">Select icon</string>
+    <string name="cl_locale_export_4">App signing</string>
+    <string name="cl_locale_export_5">Manage signing key</string>
+    <string name="cl_locale_export_6">Create, back up or restore the key.</string>
+    <string name="cl_locale_export_7">Key management unavailable</string>
+    <string name="cl_locale_export_8">Prepare export</string>
+    <string name="cl_locale_export_9">Export .love package</string>
+    <string name="cl_locale_export_10">Generate APK</string>
+    <string name="cl_locale_export_11">To generate the APK, select an icon and create or restore the game signing key.</string>
+    <string name="cl_locale_export_12">Select the game icon before generating the APK.</string>
+    <string name="cl_locale_export_13">APK exporter unavailable in this version.</string>
+    <string name="cl_locale_export_14">Item moved.</string>
+    <string name="cl_locale_export_15">Could not prepare the project to run.</string>
 </resources>

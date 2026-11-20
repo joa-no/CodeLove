@@ -117,7 +117,7 @@ final class GameExportDialog {
         header.addView(headerRow);
 
         TextView note = new TextView(activity);
-        note.setText("Configure e prepare seu jogo para Android.");
+        note.setText(activity.getString(R.string.cl_locale_export_1));
         note.setTextSize(13);
         note.setTextColor(Workspace.COLOR_MUTED);
         note.setPadding(0, (int)(12*density), 0, (int)(6*density));
@@ -130,7 +130,7 @@ final class GameExportDialog {
         dividerParams.topMargin = Math.round(20*density);
         header.addView(headerDivider, dividerParams);
 
-        sectionHeading(activity, body, "Informações do jogo", "settings");
+        sectionHeading(activity, body, activity.getString(R.string.cl_locale_export_2), "settings");
         EditText name = field(activity, body, R.string.cl_export_name,
             prefs.getString(key + "name", projectName), false);
         EditText pack = field(activity, body, R.string.cl_export_package,
@@ -156,7 +156,7 @@ final class GameExportDialog {
 
         // Secondary action: outlined row with an icon and chevron.
         LinearLayout icon = secondaryAction(activity,
-            "Selecionar ícone", "image");
+            activity.getString(R.string.cl_locale_export_3), "image");
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44 * density));
         body.addView(icon, iconParams);
@@ -170,16 +170,16 @@ final class GameExportDialog {
         iconValue.setVisibility(selectedIcon.isEmpty() ? View.GONE : View.VISIBLE);
         body.addView(iconValue);
 
-        section(activity, body, "Assinatura do aplicativo", "shield");
+        section(activity, body, activity.getString(R.string.cl_locale_export_4), "shield");
         // Normal editor flavor provides the signing UI; exported games do not.
         if (!BuildConfig.FLAVOR.startsWith("embed")) {
-            LinearLayout signing = secondaryAction(activity, "Gerenciar chave de assinatura",
+            LinearLayout signing = secondaryAction(activity, activity.getString(R.string.cl_locale_export_5),
                 "key");
             LinearLayout.LayoutParams signingParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
             signingParams.topMargin = (int)(2*density);
             body.addView(signing, signingParams);
-            addActionDescription(activity, signing, "Criar, salvar backup ou restaurar a chave.");
+            addActionDescription(activity, signing, activity.getString(R.string.cl_locale_export_6));
             signing.setOnClickListener(v -> {
                 String packageName = pack.getText().toString().trim();
                 if (!PACKAGE.matcher(packageName).matches()) {
@@ -194,26 +194,26 @@ final class GameExportDialog {
                     method.setAccessible(true);
                     method.invoke(null, activity, packageName);
                 } catch (ReflectiveOperationException ex) {
-                    Toast.makeText(activity, "Gerenciamento de chaves indisponível",
+                    Toast.makeText(activity, activity.getString(R.string.cl_locale_export_7),
                         Toast.LENGTH_LONG).show();
                 }
             });
         }
 
-        section(activity, body, "Preparar exportação", "package");
+        section(activity, body, activity.getString(R.string.cl_locale_export_8), "package");
         LinearLayout prepareLove = secondaryAction(activity,
-            "Exportar pacote .love", "archive");
+            activity.getString(R.string.cl_locale_export_9), "archive");
         LinearLayout.LayoutParams loveParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         body.addView(prepareLove, loveParams);
-        LinearLayout prepareApk = secondaryAction(activity, "Gerar APK", "package");
+        LinearLayout prepareApk = secondaryAction(activity, activity.getString(R.string.cl_locale_export_10), "package");
         LinearLayout.LayoutParams apkParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, (int)(44*density));
         apkParams.topMargin = Math.round(10*density);
         body.addView(prepareApk, apkParams);
 
         TextView status = new TextView(activity);
-        status.setText("Para gerar o APK, selecione um ícone e crie ou restaure a chave de assinatura do jogo.");
+        status.setText(activity.getString(R.string.cl_locale_export_11));
         status.setTextColor(Workspace.COLOR_MUTED);
         status.setTextSize(12);
         status.setGravity(Gravity.CENTER);
@@ -309,7 +309,7 @@ final class GameExportDialog {
             if (value == null) return;
             String iconString = prefs.getString(key + "icon", "");
             if (iconString.isEmpty()) {
-                Toast.makeText(activity, "Selecione o ícone do jogo antes de gerar o APK.",
+                Toast.makeText(activity, activity.getString(R.string.cl_locale_export_12),
                     Toast.LENGTH_LONG).show();
                 return;
             }
