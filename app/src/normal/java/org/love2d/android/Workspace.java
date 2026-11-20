@@ -677,13 +677,13 @@ public final class Workspace {
         LinearLayout exportButton = new LinearLayout(activity);
         exportButton.setGravity(Gravity.CENTER);
         exportButton.setPadding(dp(6), 0, dp(6), 0);
-        // Android brand green; dark foreground keeps text/icon readable.
-        exportButton.setBackground(box(0xFF3DDC84, 10, false));
-        exportButton.addView(new IconView(activity, IconView.ANDROID, 0xFF143522),
+        // Subtle neutral style matching the Settings control.
+        exportButton.setBackground(box(COLOR_FIELD, 10, false));
+        exportButton.addView(new IconView(activity, IconView.ANDROID, COLOR_TEXT),
             new LinearLayout.LayoutParams(dp(22), dp(22)));
         TextView exportText = new TextView(activity);
         exportText.setText(R.string.cl_export_button);
-        exportText.setTextColor(0xFF143522);
+        exportText.setTextColor(COLOR_TEXT);
         exportText.setTextSize(13);
         exportText.setTypeface(Typeface.DEFAULT_BOLD);
         exportText.setSingleLine(true);
