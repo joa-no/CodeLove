@@ -1194,6 +1194,15 @@ public final class Workspace {
             return;
         }
 
+        // The standalone editor can update its existing views and document in place.
+        // Keep the legacy SDL path and active notice fallback until separately validated.
+        if (surface == null && projectNotice == null && editor != null) {
+            prefs.edit().putString(PREF_APPEARANCE, selected).apply();
+            configureTheme(activity);
+            refreshWorkspaceAppearance();
+            return;
+        }
+
         // Nao recriar o editor caso alguma aba ainda tenha texto nao salvo.
         if (editor != null && editor.hasUnsavedTabs()) {
             toast(activity.getString(R.string.cl_save_tabs_theme));
