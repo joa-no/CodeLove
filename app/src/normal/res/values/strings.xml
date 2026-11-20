@@ -187,14 +187,14 @@
     <string name="cl_locale_sign_23">Organizational unit (OU)</string>
     <string name="cl_locale_sign_24">City (L)</string>
     <string name="cl_locale_sign_25">State (ST)</string>
-    <string name="cl_locale_sign_26">Country (C, e.g. BR)</string>
+    <string name="cl_locale_sign_26">Country (C, e.g. US, ES, BR)</string>
     <string name="cl_locale_sign_27">I understand the risks of losing my key.</string>
     <string name="cl_locale_sign_28">Continue</string>
     <string name="cl_locale_sign_29">The password must contain at least 12 characters.</string>
     <string name="cl_locale_sign_30">Enter the password.</string>
     <string name="cl_locale_sign_31">Passwords do not match.</string>
     <string name="cl_locale_sign_32">Confirm that you have read the warnings before continuing.</string>
-    <string name="cl_locale_sign_33">Check the certificate details. The country code must have two letters (e.g. BR).</string>
+    <string name="cl_locale_sign_33">Check the certificate details. The country code must have two letters (e.g. US, ES, BR).</string>
     <string name="cl_locale_sign_34">A key already exists for this game</string>
     <string name="cl_locale_sign_35">Key created</string>
     <string name="cl_locale_sign_36">Got it</string>

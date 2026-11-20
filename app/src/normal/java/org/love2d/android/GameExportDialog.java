@@ -134,7 +134,7 @@ final class GameExportDialog {
         EditText name = field(activity, body, R.string.cl_export_name,
             prefs.getString(key + "name", projectName), false);
         EditText pack = field(activity, body, R.string.cl_export_package,
-            prefs.getString(key + "package", "com.exemplo.meujogo"), false);
+            prefs.getString(key + "package", "com.example.mygame"), false);
 
         LinearLayout versionRow = new LinearLayout(activity);
         versionRow.setOrientation(LinearLayout.HORIZONTAL);

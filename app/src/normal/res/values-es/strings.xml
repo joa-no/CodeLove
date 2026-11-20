@@ -187,14 +187,14 @@
     <string name="cl_locale_sign_23">Unidad organizativa (OU)</string>
     <string name="cl_locale_sign_24">Ciudad (L)</string>
     <string name="cl_locale_sign_25">Estado (ST)</string>
-    <string name="cl_locale_sign_26">País (C, p. ej. BR)</string>
+    <string name="cl_locale_sign_26">País (C, p. ej. US, ES, BR)</string>
     <string name="cl_locale_sign_27">Comprendo los riesgos de perder mi clave.</string>
     <string name="cl_locale_sign_28">Continuar</string>
     <string name="cl_locale_sign_29">La contraseña debe tener al menos 12 caracteres.</string>
     <string name="cl_locale_sign_30">Introduce la contraseña.</string>
     <string name="cl_locale_sign_31">Las contraseñas no coinciden.</string>
     <string name="cl_locale_sign_32">Confirma que has leído los avisos antes de continuar.</string>
-    <string name="cl_locale_sign_33">Revisa los datos del certificado. El país debe tener dos letras (p. ej. BR).</string>
+    <string name="cl_locale_sign_33">Revisa los datos del certificado. El país debe tener dos letras (p. ej. US, ES, BR).</string>
     <string name="cl_locale_sign_34">Ya existe una clave para este juego</string>
     <string name="cl_locale_sign_35">Clave creada</string>
     <string name="cl_locale_sign_36">Entendido</string>
