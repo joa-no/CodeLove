@@ -9,9 +9,23 @@ import android.widget.RelativeLayout;
 
 /** Editor CodeLove independente da superficie SDL. */
 public final class EditorActivity extends Activity {
+    private Context originalLanguageContext;
+    private android.content.res.Resources localizedResources;
+
+    void updateLanguageResources(String selected) {
+        localizedResources = CodeLoveLocale.forLanguage(originalLanguageContext, selected)
+            .getResources();
+    }
+
+    @Override
+    public android.content.res.Resources getResources() {
+        return localizedResources != null ? localizedResources : super.getResources();
+    }
+
     @Override
     protected void attachBaseContext(Context base) {
         // Aplica a escolha antes de qualquer view/Resources ser criada.
+        originalLanguageContext = base;
         super.attachBaseContext(CodeLoveLocale.wrap(base));
     }
 
