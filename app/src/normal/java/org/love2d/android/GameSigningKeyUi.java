@@ -297,6 +297,7 @@ final class GameSigningKeyUi {
         guidance.setPadding(0, (int)(10*density), 0, (int)(18*density));
         content.addView(guidance);
 
+        final EditText[] certificateFields = new EditText[6];
         EditText confirmation = null;
         CheckBox acknowledged = null;
         if (creating) {
@@ -308,6 +309,39 @@ final class GameSigningKeyUi {
                 ViewGroup.LayoutParams.MATCH_PARENT, (int)(52*density));
             confirmParams.topMargin = (int)(10*density);
             content.addView(confirmation, confirmParams);
+
+            TextView optional = text(activity, "Informações do certificado (opcional)  ▾",
+                15, Workspace.COLOR_TEXT);
+            optional.setPadding(0, (int)(18*density), 0, (int)(12*density));
+            optional.setTypeface(Typeface.DEFAULT_BOLD);
+            content.addView(optional);
+            LinearLayout details = new LinearLayout(activity);
+            details.setOrientation(LinearLayout.VERTICAL);
+            details.setVisibility(View.GONE);
+            content.addView(details);
+            TextView privacy = text(activity,
+                "Não é necessário preencher estes campos. Os dados informados serão públicos no certificado do APK. Evite informações pessoais sensíveis.",
+                13, Workspace.COLOR_MUTED);
+            details.addView(privacy);
+            String[] hints = {"Nome do desenvolvedor (CN)", "Organização (O)",
+                "Unidade organizacional (OU)", "Cidade (L)", "Estado (ST)", "País (C, ex.: BR)"};
+            for (int i = 0; i < hints.length; i++) {
+                EditText entry = passwordInput(activity, hints[i]);
+                entry.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+                entry.setFilters(new android.text.InputFilter[]{
+                    new android.text.InputFilter.LengthFilter(i == 5 ? 2 : 128)});
+                entry.setContentDescription(hints[i]);
+                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, (int)(52*density));
+                p.topMargin = (int)(8*density);
+                details.addView(entry, p);
+                certificateFields[i] = entry;
+            }
+            optional.setOnClickListener(v -> {
+                boolean open = details.getVisibility() != View.VISIBLE;
+                details.setVisibility(open ? View.VISIBLE : View.GONE);
+                optional.setText("Informações do certificado (opcional)  " + (open ? "▴" : "▾"));
+            });
 
             TextView backupNotice = text(activity,
                 "ⓘ  Após criar a chave, salve uma cópia de segurança .p12 fora do CodeLove "
@@ -423,6 +457,17 @@ final class GameSigningKeyUi {
                     Arrays.fill(password, '\0');
                     return;
                 }
+                final String[] details = new String[6];
+                for (int i = 0; i < details.length; i++) {
+                    details[i] = certificateFields[i].getText().toString().trim();
+                }
+                try {
+                    GameSigningKeyStore.certificateSubject(details);
+                } catch (java.security.GeneralSecurityException e) {
+                    error.setText("Verifique os dados do certificado. O país deve ter duas letras (ex.: BR).");
+                    Arrays.fill(password, '\0');
+                    return;
+                }
                 field.setText("");
                 confirmField.setText("");
                 dialog.dismiss();
@@ -431,7 +476,7 @@ final class GameSigningKeyUi {
                         if (GameSigningKeyManager.hasKey(activity, projectId)) {
                             throw new java.io.IOException("Já existe uma chave para este jogo");
                         }
-                        GameSigningKeyManager.generate(activity, projectId, password);
+                        GameSigningKeyManager.generate(activity, projectId, password, details);
                         activity.runOnUiThread(() ->
                             CodeLoveModal.message(activity, "Chave criada",
                                 "A chave foi criada. Faça agora o backup .p12 e guarde "

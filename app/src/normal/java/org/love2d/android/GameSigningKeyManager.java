@@ -81,6 +81,12 @@ final class GameSigningKeyManager {
         return GameSigningKeyStore.create(privateKeyFile(context, projectId), password);
     }
 
+    static GameSigningKeyStore.Identity generate(Context context, String projectId,
+                                                 char[] password, String[] details)
+            throws IOException, GeneralSecurityException {
+        return GameSigningKeyStore.create(privateKeyFile(context, projectId), password, details);
+    }
+
     static GameSigningKeyStore.Identity inspect(Context context, String projectId,
                                                 char[] password)
             throws IOException, GeneralSecurityException {

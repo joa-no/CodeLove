@@ -1,6 +1,8 @@
 package org.love2d.android;
 
 import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x500.X500NameBuilder;
+import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
@@ -65,12 +67,18 @@ final class GameSigningKeyStore {
     /** Generate a new signing identity. Never replace an existing identity. */
     static synchronized Identity create(File destination, char[] password)
             throws IOException, GeneralSecurityException {
+        return create(destination, password, new String[6]);
+    }
+
+    static synchronized Identity create(File destination, char[] password, String[] details)
+            throws IOException, GeneralSecurityException {
+        X500Name subject = certificateSubject(details);
         requirePassword(password, true);
         requireNewDestination(destination);
         KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
         generator.initialize(RSA_BITS, new SecureRandom());
         KeyPair pair = generator.generateKeyPair();
-        X509Certificate certificate = newCertificate(pair);
+        X509Certificate certificate = newCertificate(pair, subject);
         KeyStore store = KeyStore.getInstance("PKCS12");
         try {
             store.load(null, password);
@@ -189,7 +197,7 @@ final class GameSigningKeyStore {
         }
     }
 
-    private static X509Certificate newCertificate(KeyPair pair)
+    private static X509Certificate newCertificate(KeyPair pair, X500Name issuer)
             throws GeneralSecurityException {
         try {
             SecureRandom random = new SecureRandom();
@@ -202,7 +210,6 @@ final class GameSigningKeyStore {
             long now = System.currentTimeMillis();
             Date notBefore = new Date(now - 24L * 60 * 60 * 1000);
             Date notAfter = new Date(now + CERT_VALIDITY_MS);
-            X500Name issuer = new X500Name("CN=CodeLove Game Signing");
             X509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
                     issuer, serial, notBefore, notAfter, issuer, pair.getPublic());
             BouncyCastleProvider provider = new BouncyCastleProvider();
@@ -216,6 +223,35 @@ final class GameSigningKeyStore {
         } catch (Exception error) {
             throw new GeneralSecurityException("Could not create game certificate", error);
         }
+    }
+
+    static X500Name certificateSubject(String[] details) throws GeneralSecurityException {
+        if (details == null || details.length != 6) {
+            throw new GeneralSecurityException("Invalid certificate details");
+        }
+        X500NameBuilder builder = new X500NameBuilder(BCStyle.INSTANCE);
+        org.bouncycastle.asn1.ASN1ObjectIdentifier[] fields = {
+            BCStyle.CN, BCStyle.O, BCStyle.OU, BCStyle.L, BCStyle.ST, BCStyle.C
+        };
+        for (int i = 0; i < fields.length; i++) {
+            String value = details[i] == null ? "" : details[i].trim();
+            if (i == 0 && value.isEmpty()) value = "CodeLove Game Signing";
+            if (value.isEmpty()) continue;
+            if (value.length() > 128 || value.codePoints().anyMatch(Character::isISOControl)) {
+                throw new GeneralSecurityException("Invalid certificate field");
+            }
+            if (i == 5) {
+                if (!value.matches("[a-zA-Z]{2}")) {
+                    throw new GeneralSecurityException("Country code must contain two letters");
+                }
+                value = value.toUpperCase(java.util.Locale.ROOT);
+            }
+            // Encode as a literal ASN.1 value, never parse user-entered DN syntax.
+            builder.addRDN(fields[i], i == 5
+                ? new org.bouncycastle.asn1.DERPrintableString(value)
+                : new org.bouncycastle.asn1.DERUTF8String(value));
+        }
+        return builder.build();
     }
 
     private static void requirePassword(char[] password, boolean creating)
