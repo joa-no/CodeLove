@@ -67,7 +67,6 @@ public class GameActivity extends SDLActivity {
     private Uri delayedUri;
     private String[] args;
     private boolean isFused;
-    private boolean defaultWindowOrientationPending;
 
     private static native void nativeSetDefaultStreamValues(int sampleRate, int framesPerBurst);
 
@@ -103,7 +102,6 @@ public class GameActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         Log.d(TAG, "started");
         isFused = hasEmbeddedGame();
-        defaultWindowOrientationPending = isFused && !embeddedHasConf();
         args = new String[0];
 
         if (checkCallingOrSelfPermission(Manifest.permission.VIBRATE)
@@ -130,39 +128,6 @@ public class GameActivity extends SDLActivity {
             sendUriAsDroppedFile(delayedUri);
             delayedUri = null;
         }
-    }
-
-    private boolean embeddedHasConf() {
-        try (InputStream in = getAssets().open("main.lua")) {
-            try (InputStream conf = getAssets().open("conf.lua")) {
-                return true;
-            } catch (IOException absent) {
-                return false;
-            }
-        } catch (IOException absent) {
-            try (java.util.zip.ZipInputStream zip = new java.util.zip.ZipInputStream(
-                    getAssets().open("game.love"))) {
-                java.util.zip.ZipEntry entry;
-                while ((entry = zip.getNextEntry()) != null) {
-                    if ("conf.lua".equals(entry.getName())) return true;
-                }
-                return false;
-            } catch (IOException e) {
-                return true;
-            }
-        }
-    }
-
-    @Override
-    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
-        if (defaultWindowOrientationPending && w > 1 && h > 1) {
-            defaultWindowOrientationPending = false;
-            if (w == 800 && h == 600 && !resizable && (hint == null || hint.isEmpty())) {
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
-                return;
-            }
-        }
-        super.setOrientationBis(w, h, resizable, hint);
     }
 
     @Override

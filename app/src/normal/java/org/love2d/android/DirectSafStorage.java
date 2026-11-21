@@ -37,6 +37,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
         final boolean directory;
         final String name;
         final String mimeType;
+        long size = -1, modified = -1;
 
         Entry(File file, Uri uri, String documentId, boolean directory,
               String name, String mimeType) {
@@ -61,6 +62,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
     private final String rootDocumentId;
     private final String displayName;
     private final File syntheticRoot;
+    private final Map<String, String> snapshotVersions = new HashMap<>();
     private final Map<String, Uri> uriByPath = new HashMap<String, Uri>();
     private final Map<String, String> idByPath = new HashMap<String, String>();
     private final Map<String, Boolean> dirByPath = new HashMap<String, Boolean>();
@@ -157,6 +159,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
             return false;
         }
 
+        snapshotVersions.keySet().removeIf(key -> key.endsWith("\n" + file.getAbsolutePath()));
         final Uri uri;
         final byte[] original;
         try {
@@ -227,7 +230,9 @@ final class DirectSafStorage implements CodeEditor.Storage {
             new String[]{
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
             }, null, null, null);
         if (cursor == null) throw new IOException("O Android nao conseguiu listar essa pasta.");
 
@@ -249,7 +254,12 @@ final class DirectSafStorage implements CodeEditor.Storage {
                 boolean dir = DocumentsContract.Document.MIME_TYPE_DIR.equals(mime);
                 File child = new File(directory, name);
                 Uri childUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
-                result.add(new Entry(child, childUri, id, dir, name, mime));
+                Entry entry = new Entry(child, childUri, id, dir, name, mime);
+                int sizeColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE);
+                int modifiedColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+                if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) entry.size = cursor.getLong(sizeColumn);
+                if (modifiedColumn >= 0 && !cursor.isNull(modifiedColumn)) entry.modified = cursor.getLong(modifiedColumn);
+                result.add(entry);
             }
         } finally {
             cursor.close();
@@ -366,8 +376,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
      * A copia nao e usada pelo editor nem e fonte de dados do projeto.
      */
     synchronized File createRuntimeSnapshot(File destinationRoot) throws IOException {
-        if (destinationRoot.exists()) deleteLocal(destinationRoot);
-        if (!destinationRoot.mkdirs()) {
+        if (!destinationRoot.isDirectory() && !destinationRoot.mkdirs()) {
             throw new IOException("Nao consegui preparar a pasta temporaria de execucao.");
         }
         try {
@@ -379,6 +388,7 @@ final class DirectSafStorage implements CodeEditor.Storage {
             return destinationRoot;
         } catch (IOException e) {
             deleteLocal(destinationRoot);
+            snapshotVersions.clear();
             throw e;
         }
     }
@@ -386,13 +396,23 @@ final class DirectSafStorage implements CodeEditor.Storage {
     private void copyTree(File source, File destination, int depth, int[] count) throws IOException {
         if (depth > MAX_DEPTH) throw new IOException("Projeto profundo demais.");
         List<Entry> children = list(source);
+        java.util.Set<String> names = new java.util.HashSet<>();
         for (Entry entry : children) {
+            validateName(entry.name);
+            names.add(entry.name);
             if (++count[0] > MAX_ENTRIES) throw new IOException("Projeto grande demais.");
             File out = new File(destination, entry.name);
             if (entry.directory) {
-                if (!out.mkdirs()) throw new IOException("Nao consegui criar " + out);
+                if (out.exists() && !out.isDirectory()) deleteLocal(out);
+                if (!out.isDirectory() && !out.mkdirs()) throw new IOException("Nao consegui criar " + out);
                 copyTree(entry.file, out, depth + 1, count);
             } else {
+                String key = out.getAbsolutePath() + "\n" + entry.file.getAbsolutePath();
+                String version = entry.documentId + ":" + entry.size + ":" + entry.modified;
+                if (entry.modified > 0 && entry.size >= 0 && out.isFile()
+                    && out.length() == entry.size && version.equals(snapshotVersions.get(key))) continue;
+                snapshotVersions.remove(key);
+                if (out.isDirectory()) deleteLocal(out);
                 InputStream in = resolver.openInputStream(entry.uri);
                 if (in == null) throw new IOException("Nao consegui ler " + entry.name);
                 OutputStream outStream = new FileOutputStream(out);
@@ -406,11 +426,20 @@ final class DirectSafStorage implements CodeEditor.Storage {
                 } finally {
                     try { in.close(); } finally { outStream.close(); }
                 }
+                if (entry.modified > 0 && entry.size >= 0 && out.length() == entry.size) snapshotVersions.put(key, version);
             }
+        }
+        File[] existing = destination.listFiles();
+        if (existing == null) throw new IOException("Nao consegui listar copia temporaria.");
+        for (File child : existing) if (!names.contains(child.getName())) {
+            deleteLocal(child);
+            if (child.exists()) throw new IOException("Nao consegui remover copia antiga.");
+            snapshotVersions.keySet().removeIf(key -> key.startsWith(child.getAbsolutePath() + "\n") || key.startsWith(child.getAbsolutePath() + File.separator));
         }
     }
 
     synchronized void deleteLocalSnapshot(File directory) {
+        snapshotVersions.clear();
         deleteLocal(directory);
     }
 
