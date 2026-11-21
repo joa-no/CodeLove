@@ -62,7 +62,6 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
-    private long diagnosticCreate, diagnosticWindow, diagnosticSdl;
     private boolean defaultWindowOrientationPending;
     /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
     private final boolean exportedGame = BuildConfig.FLAVOR.startsWith("embed");
@@ -112,7 +111,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        diagnosticCreate = android.os.SystemClock.elapsedRealtime();
         Log.d(TAG, "started");
         isFused = hasEmbeddedGame();
         args = new String[0];
@@ -146,7 +144,6 @@ public class GameActivity extends SDLActivity {
         }
 
         super.onCreate(savedInstanceState);
-        diagnosticSdl = android.os.SystemClock.elapsedRealtime();
         // Tema da UI do executor (botao de voltar), sem alterar o jogo SDL.
         if (!exportedGame) {
             Workspace.configureTheme(this);
@@ -332,16 +329,6 @@ public class GameActivity extends SDLActivity {
         if (value == null) {
             value = CodeLoveLocale.wrap(this).getString(R.string.cl_console_waiting);
         }
-        long start = getIntent().getLongExtra("codelove.playStart", 0L);
-        if (start > 0) {
-            long launch = getIntent().getLongExtra("codelove.launchTime", start);
-            value = "[TEST] SAF: " + getIntent().getLongExtra("codelove.prepareMs", 0L)
-                + " ms | Play -> launch: " + (launch - start)
-                + " ms | launch -> Activity: " + (diagnosticCreate - launch)
-                + " ms | SDL onCreate: " + (diagnosticSdl - diagnosticCreate)
-                + " ms | Play -> window: " + (diagnosticWindow > 0 ? (diagnosticWindow - start) + " ms" : "pending")
-                + "\n" + value;
-        }
         if (!value.equals(lastStandaloneConsole)) {
             lastStandaloneConsole = value;
             standaloneConsole.setOutput(value);
@@ -403,7 +390,6 @@ public class GameActivity extends SDLActivity {
      */
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
-        if (standaloneRuntime && diagnosticWindow == 0 && w > 1 && h > 1) diagnosticWindow = android.os.SystemClock.elapsedRealtime();
         if (standaloneRuntime && defaultWindowOrientationPending && w > 1 && h > 1) {
             defaultWindowOrientationPending = false;
             if (w == 800 && h == 600 && !resizable && (hint == null || hint.isEmpty())) {

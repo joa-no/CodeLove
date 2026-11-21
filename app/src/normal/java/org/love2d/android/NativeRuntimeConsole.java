@@ -59,7 +59,7 @@ final class NativeRuntimeConsole implements AutoCloseable {
                         && (line.endsWith("/files/save'") || line.endsWith("/files/game'"))) continue;
                 if (line.equals("pixel format wanted SDL_PIXELFORMAT_RGBA8888 (1), got SDL_PIXELFORMAT_RGBA8888 (1)")) continue;
                 if (visible.length() > 0) visible.append('\n');
-                visible.append(line);
+                visible.append(line.startsWith("[LOVE] ") ? line.substring(7) : line);
             }
             return visible.toString();
         }

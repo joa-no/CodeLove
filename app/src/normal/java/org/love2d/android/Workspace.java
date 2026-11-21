@@ -2926,7 +2926,7 @@ public final class Workspace {
         return true;
     }
 
-    private void openStandalonePlayback(File project, long playStart, long prepareMs) {
+    private void openStandalonePlayback(File project) {
         if (project == null || !project.isDirectory()) return;
         if (editor != null && editor.hasUnsavedTabs()) {
             toast(activity.getString(R.string.cl_save_before_play));
@@ -2935,16 +2935,12 @@ public final class Workspace {
         Intent intent = new Intent(activity, GameActivity.class);
         intent.putExtra(EXTRA_RUNTIME_ONLY, true);
         intent.putExtra(EXTRA_RUNTIME_PROJECT, project.getAbsolutePath());
-        intent.putExtra("codelove.playStart", playStart);
-        intent.putExtra("codelove.prepareMs", prepareMs);
-        intent.putExtra("codelove.launchTime", android.os.SystemClock.elapsedRealtime());
         playing = true;
         updatePlayButton();
         activity.startActivity(intent);
     }
 
     private void launchStandalonePlayback() {
-        final long playStart = android.os.SystemClock.elapsedRealtime();
         if (activeProject == null) {
             toast(activity.getString(R.string.cl_select_project_hint));
             return;
@@ -2954,18 +2950,16 @@ public final class Workspace {
             final DirectSafStorage storage = activeSafStorage;
             final File selected = activeProject;
             new Thread(() -> {
-                long start = android.os.SystemClock.elapsedRealtime();
                 if (!prepareRuntimeProject(true)) return;
-                final long prepareMs = android.os.SystemClock.elapsedRealtime() - start;
                 activity.runOnUiThread(() -> {
                     if (disposed || currentInstance != this
                         || storage != activeSafStorage || activeProject == null
                         || !sameFile(activeProject, selected)) return;
-                    openStandalonePlayback(runtimeProject, playStart, prepareMs);
+                    openStandalonePlayback(runtimeProject);
                 });
             }, "CodeLove-SAF-StandalonePlay").start();
         } else {
-            openStandalonePlayback(activeProject, playStart, 0L);
+            openStandalonePlayback(activeProject);
         }
     }
 
