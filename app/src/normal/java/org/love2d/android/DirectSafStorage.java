@@ -109,6 +109,26 @@ final class DirectSafStorage implements CodeEditor.Storage {
         return value != null && value;
     }
 
+    // Rescan ancestors so a collapsed folder cannot hide a deletion.
+    synchronized File resolveOpenDocument(File file) throws IOException {
+        if (!contains(file) || file.equals(syntheticRoot)) return null;
+        String previousId = idByPath.get(file.getAbsolutePath());
+        File parent = file.getParentFile();
+        if (!parent.equals(syntheticRoot)) {
+            File resolvedParent = resolveOpenDocument(parent);
+            if (resolvedParent == null || !resolvedParent.equals(parent)) return null;
+        }
+        for (Entry entry : list(parent)) {
+            if (entry.file.equals(file)) return entry.file;
+        }
+        if (previousId != null) {
+            for (Map.Entry<String, String> entry : idByPath.entrySet()) {
+                if (previousId.equals(entry.getValue())) return new File(entry.getKey());
+            }
+        }
+        return null;
+    }
+
     synchronized boolean isFile(File file) {
         Boolean value = file == null ? null : dirByPath.get(file.getAbsolutePath());
         return value != null && !value;

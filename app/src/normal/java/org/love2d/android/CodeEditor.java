@@ -632,6 +632,63 @@ final class CodeEditor {
         listener.onClosed();
     }
 
+    void reconcileExternalTabs() {
+        snapshotActiveTab();
+        String active = file == null ? null : file.getAbsolutePath();
+        boolean changed = false;
+        boolean conflict = false;
+        for (String key : new ArrayList<>(openTabs.keySet())) {
+            TabState tab = openTabs.get(key);
+            if (!(tab.storage instanceof DirectSafStorage)) continue;
+            DirectSafStorage saf = (DirectSafStorage) tab.storage;
+            try {
+                File resolved = saf.resolveOpenDocument(tab.file);
+                if (resolved == null || !saf.isFile(resolved)) {
+                    if (tab.dirty) conflict = true;
+                    else { openTabs.remove(key); changed = true; }
+                    continue;
+                }
+                String current = saf.readText(resolved, MAX_BYTES);
+                if (current == null) continue;
+                if (tab.dirty) {
+                    if (!resolved.equals(tab.file) || !current.equals(tab.original)) conflict = true;
+                    continue;
+                }
+                if (!resolved.equals(tab.file)) {
+                    TabState renamed = new TabState(resolved, tab.storage, current);
+                    renamed.selection = tab.selection;
+                    renamed.scrollY = tab.scrollY;
+                    openTabs.remove(key);
+                    String newKey = resolved.getAbsolutePath();
+                    if (!openTabs.containsKey(newKey)) openTabs.put(newKey, renamed);
+                    if (key.equals(active)) active = newKey;
+                    changed = true;
+                } else if (!current.equals(tab.original)) {
+                    tab.text = current;
+                    tab.original = current;
+                    changed = true;
+                }
+            } catch (IOException | RuntimeException error) {
+                Log.w(TAG, "Unable to reconcile open document", error);
+            }
+        }
+        if (changed) {
+            TabState selected = active == null ? null : openTabs.get(active);
+            if (selected == null && !openTabs.isEmpty()) {
+                for (TabState tab : openTabs.values()) selected = tab;
+            }
+            if (selected == null) emptyEditor();
+            else showTab(selected);
+        }
+        if (conflict) {
+            new AlertDialog.Builder(activity)
+                .setTitle(R.string.cl_file_changed_title)
+                .setMessage(R.string.cl_file_changed_message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+        }
+    }
+
     private boolean closeTab(String key) {
         snapshotActiveTab();
         TabState target = openTabs.get(key);

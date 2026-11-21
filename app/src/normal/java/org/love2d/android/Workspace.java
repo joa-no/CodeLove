@@ -314,7 +314,9 @@ public final class Workspace {
                 workspace.updatePlayButton();
                 workspace.applyLayout();
             }
+            workspace.editor.reconcileExternalTabs();
             workspace.renderTree();
+            workspace.saveState();
         }
     }
 
