@@ -85,7 +85,14 @@ final class OfflineApkTemplateStore {
     static synchronized File get(Context context) throws IOException {
         if (context == null) throw new IOException("Missing context");
         File template = new File(new File(context.getFilesDir(), DIRECTORY), FILE_NAME);
-        if (!template.isFile()) {
+        long installedAt = 0;
+        try {
+            installedAt = context.getPackageManager().getPackageInfo(
+                    context.getPackageName(), 0).lastUpdateTime;
+        } catch (android.content.pm.PackageManager.NameNotFoundException error) {
+            throw new IOException("Cannot determine CodeLove update time", error);
+        }
+        if (!template.isFile() || template.lastModified() < installedAt) {
             provisionBundledTemplate(context, template);
         }
         OfflineApkTemplateValidator.Result result =
@@ -126,8 +133,11 @@ final class OfflineApkTemplateStore {
             if (!checked.alreadyContainsGame) {
                 throw new IOException("Bundled APK template lacks a game slot");
             }
-            if (!temporary.renameTo(destination)) {
-                throw new IOException("Cannot install bundled APK template");
+            // Atomic replacement on the same private filesystem.
+            try {
+                android.system.Os.rename(temporary.getAbsolutePath(), destination.getAbsolutePath());
+            } catch (android.system.ErrnoException error) {
+                throw new IOException("Cannot install bundled APK template", error);
             }
         } finally {
             if (temporary.exists()) temporary.delete();
