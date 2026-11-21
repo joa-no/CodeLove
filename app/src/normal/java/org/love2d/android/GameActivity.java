@@ -103,6 +103,8 @@ public class GameActivity extends SDLActivity {
         };
     }
 
+    private NativeRuntimeConsole nativeConsole;
+
     @Override
     protected String[] getArguments() {
         return args;
@@ -129,9 +131,11 @@ public class GameActivity extends SDLActivity {
         if (!exportedGame) {
             String channel = Workspace.prepareChannel(this);
             if (standaloneRuntime) {
-                Workspace.queueStandaloneRuntime(this,
-                    intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT),
-                    intent.getStringExtra(Workspace.EXTRA_RUNTIME_NAME));
+                try {
+                    nativeConsole = new NativeRuntimeConsole();
+                } catch (Exception e) {
+                    Log.e(TAG, "Unable to capture runtime output", e);
+                }
             }
             if (standaloneRuntime) {
                 String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
@@ -328,8 +332,7 @@ public class GameActivity extends SDLActivity {
     /** O editor e a tela visual leem exatamente o mesmo canal do executor. */
     private void updateStandaloneConsole() {
         if (standaloneConsole == null) return;
-        String value = Workspace.readTail(
-            new java.io.File(Workspace.channelDir(this), "console.txt"), 32768);
+        String value = nativeConsole != null ? nativeConsole.snapshot() : null;
         if (value == null) {
             value = CodeLoveLocale.wrap(this).getString(R.string.cl_console_waiting);
         }
@@ -371,7 +374,11 @@ public class GameActivity extends SDLActivity {
             vibrator.cancel();
         }
 
-        super.onDestroy();
+        try {
+            super.onDestroy();
+        } finally {
+            if (nativeConsole != null) nativeConsole.close();
+        }
     }
 
     @Override
