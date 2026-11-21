@@ -137,7 +137,7 @@ public class LoveDocumentsProvider extends DocumentsProvider {
         // that contain the desired type somewhere in their file hierarchy.
         row.add(Root.COLUMN_MIME_TYPES, "*/*");
         row.add(Root.COLUMN_AVAILABLE_BYTES, mBaseDir.getFreeSpace());
-        row.add(Root.COLUMN_ICON, R.drawable.love);
+        row.add(Root.COLUMN_ICON, R.mipmap.codelove_icon);
 
         return result;
     }
@@ -672,7 +672,7 @@ public class LoveDocumentsProvider extends DocumentsProvider {
 
         // Add a custom icon
         if (mimeType.equals("application/x-love-game")) {
-            row.add(Document.COLUMN_ICON, R.drawable.love);
+            row.add(Document.COLUMN_ICON, R.mipmap.codelove_icon);
         } else {
             row.add(Document.COLUMN_ICON, null);
         }

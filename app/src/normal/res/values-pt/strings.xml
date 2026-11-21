@@ -225,4 +225,6 @@
     <string name="cl_locale_sign_61">Operação falhou.</string>
     <string name="cl_locale_sign_62">Dados do APK inválidos.</string>
     <string name="cl_locale_sign_63">Falha na exportação.</string>
+    <string name="cl_external_media_no_app">Nenhum aplicativo compatível instalado.</string>
+    <string name="cl_external_media_failed">Não foi possível abrir este arquivo externamente.</string>
 </resources>

@@ -2905,6 +2905,14 @@ public final class Workspace {
     }
 
     private void openInEditor(File file) {
+        String extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(
+            android.net.Uri.encode(file.getName()));
+        String mime = android.webkit.MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(extension.toLowerCase(java.util.Locale.ROOT));
+        if (mime != null && (mime.startsWith("image/") || mime.startsWith("audio/"))) {
+            openExternalMedia(file, mime);
+            return;
+        }
         editor.setStorage(activeSafStorage != null && activeSafStorage.contains(file)
             ? activeSafStorage : null);
         if (editor.open(file)) {
@@ -2916,6 +2924,32 @@ public final class Workspace {
         } else if (!editor.hasUnsavedChanges()) {
             Toast.makeText(activity, activity.getString(R.string.cl_file_unopenable),
                 Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void openExternalMedia(File file, String mime) {
+        try {
+            Uri uri;
+            if (activeSafStorage != null && activeSafStorage.contains(file)) {
+                uri = activeSafStorage.uriForExternalView(file);
+            } else {
+                File root = activity.getExternalFilesDir(null);
+                if (root == null) throw new IOException("Storage unavailable");
+                String base = root.getCanonicalPath() + File.separator;
+                String path = file.getCanonicalPath();
+                if (!path.startsWith(base)) throw new IOException("Outside provider root");
+                uri = android.provider.DocumentsContract.buildDocumentUri(
+                    activity.getPackageName() + ".documents", "root:" + path.substring(base.length()));
+            }
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, mime);
+            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            view.setClipData(android.content.ClipData.newRawUri(file.getName(), uri));
+            activity.startActivity(view);
+        } catch (android.content.ActivityNotFoundException e) {
+            toast(activity.getString(R.string.cl_external_media_no_app));
+        } catch (Exception e) {
+            toast(activity.getString(R.string.cl_external_media_failed));
         }
     }
 

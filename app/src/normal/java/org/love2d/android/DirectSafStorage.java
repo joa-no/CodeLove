@@ -414,6 +414,10 @@ final class DirectSafStorage implements CodeEditor.Storage {
         deleteLocal(directory);
     }
 
+    synchronized Uri uriForExternalView(File file) throws IOException {
+        return requireUri(file);
+    }
+
     synchronized private Uri requireUri(File file) throws IOException {
         if (file == null) throw new IOException("Documento invalido.");
         Uri uri = uriByPath.get(file.getAbsolutePath());
