@@ -143,8 +143,6 @@ public class GameActivity extends SDLActivity {
             } catch (Exception e) {
                 Log.e(TAG, "Unable to capture runtime output", e);
             }
-        } else if (!exportedGame && isFused) {
-            args = new String[]{Workspace.prepareChannel(this)};
         }
 
         super.onCreate(savedInstanceState);
@@ -165,7 +163,6 @@ public class GameActivity extends SDLActivity {
 
         // Editor separado: o executor SDL fica livre de paineis.
         if (standaloneRuntime) showStandaloneExit();
-        else if (!exportedGame) Workspace.attach(this, mLayout, mSurface);
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
@@ -329,7 +326,7 @@ public class GameActivity extends SDLActivity {
         }
     }
 
-    /** O editor e a tela visual leem exatamente o mesmo canal do executor. */
+    /** Exibe a saida capturada do processo nativo. */
     private void updateStandaloneConsole() {
         if (standaloneConsole == null) return;
         String value = nativeConsole != null ? nativeConsole.snapshot() : null;

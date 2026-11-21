@@ -47,8 +47,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -157,8 +155,6 @@ public final class Workspace {
     private final RelativeLayout root;
     private final View surface;
     private final File gamesDir;   // pasta onde ficam os projetos (pode ser nula)
-    private final File channelDir; // pasta do canal de comandos com o executor (Lua)
-    private long commandSequence = 0L; // sequencia da fila Java -> Lua nesta execucao
     private final int panelWidth;
     private final int margin;
     private final Set<String> expanded = new HashSet<String>();
@@ -219,7 +215,6 @@ public final class Workspace {
         this.root = root;
         this.surface = surface;
         this.gamesDir = gamesDir;
-        this.channelDir = channelDir(activity);
         this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
         configureTheme(activity);
         this.onLeft = prefs.getBoolean("panel_left", true);
@@ -355,83 +350,10 @@ public final class Workspace {
         }
     }
 
-    /** Pasta do canal de comandos (Java -> executor em Lua). */
-    public static File channelDir(Context context) {
-        return new File(context.getFilesDir(), "codelove");
-    }
-
-    /**
-     * Prepara um canal de comandos limpo. Precisa ser chamado ANTES de o LOVE
-     * iniciar. Devolve o caminho da pasta, que o executor recebe como argumento.
-     */
-    public static String prepareChannel(Context context) {
-        File dir = channelDir(context);
-        if (!dir.isDirectory() && !dir.mkdirs()) {
-            throw new IllegalStateException("Nao foi possivel preparar o canal do CodeLove.");
-        }
-
-        // O executor comeca com a sequencia 1 em cada inicializacao. Limpa a fila
-        // anterior antes de iniciar o LOVE, sem tocar nos arquivos de status/console.
-        File queue = new File(dir, "commands");
-        if (queue.exists()) {
-            File[] pending = queue.listFiles();
-            if (pending == null) {
-                throw new IllegalStateException("Nao foi possivel ler a fila de comandos.");
-            }
-            for (File file : pending) {
-                if (!file.isFile() || !file.delete()) {
-                    throw new IllegalStateException("Nao foi possivel limpar a fila de comandos.");
-                }
-            }
-            if (!queue.delete()) {
-                throw new IllegalStateException("Nao foi possivel reiniciar a fila de comandos.");
-            }
-        }
-        if (!queue.mkdirs()) {
-            throw new IllegalStateException("Nao foi possivel criar a fila de comandos.");
-        }
-
-        new File(dir, "commands.txt").delete(); // remove o protocolo antigo, se existir
-        new File(dir, "status.txt").delete();
-        return dir.getAbsolutePath();
-    }
-
     /** Contrato entre editor Android e executor SDL. */
     public static final String EXTRA_RUNTIME_ONLY = "org.love2d.android.RUNTIME_ONLY";
     public static final String EXTRA_RUNTIME_PROJECT = "org.love2d.android.RUNTIME_PROJECT";
     public static final String EXTRA_RUNTIME_NAME = "org.love2d.android.RUNTIME_NAME";
-
-    /** Insere open/play na fila limpa, antes de o SDL iniciar. */
-    public static void queueStandaloneRuntime(Context context, String path, String name) {
-        if (path == null || path.isEmpty())
-            throw new IllegalArgumentException("Projeto ausente");
-        File queue = new File(channelDir(context), "commands");
-        if (!queue.isDirectory() && !queue.mkdirs())
-            throw new IllegalStateException("Fila de execucao indisponivel");
-        String safeName = name == null ? "" :
-            name.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
-        writeStandaloneCommand(queue, 1, "open", path + "\t" + safeName);
-        writeStandaloneCommand(queue, 2, "play", "");
-    }
-
-    private static void writeStandaloneCommand(File queue, int number,
-            String command, String argument) {
-        String filename = String.format(Locale.ROOT, "command-%010d.txt", number);
-        File target = new File(queue, filename);
-        File temporary = new File(queue, filename + ".tmp");
-        try (FileOutputStream output = new FileOutputStream(temporary)) {
-            output.write((command + "\t" + argument).getBytes(StandardCharsets.UTF_8));
-            output.flush();
-            output.getFD().sync();
-        } catch (IOException e) {
-            temporary.delete();
-            throw new IllegalStateException("Falha ao iniciar o jogo", e);
-        }
-        if (!temporary.renameTo(target)) {
-            temporary.delete();
-            throw new IllegalStateException("Falha ao publicar " + command);
-        }
-    }
 
     private int dp(int value) {
         float density = activity.getResources().getDisplayMetrics().density;
@@ -2582,7 +2504,6 @@ public final class Workspace {
         if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
 
         playing = false;
-        sendCommand("close", "");
 
         final String oldPath = target.getAbsolutePath();
         final String editedRelativePath = editedInsideTarget && editedFile != null
@@ -2619,8 +2540,6 @@ public final class Workspace {
 
             if (activeSafStorage != null) {
                 prepareRuntimeProject(false);
-            } else {
-                sendCommand("open", activeProject.getAbsolutePath());
             }
 
             renderTree();
@@ -2776,7 +2695,6 @@ public final class Workspace {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
         File editedFile = editor.isOpen() ? editor.getFile() : null;
         if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
-        if (isActiveProject) sendCommand("close", "");
 
         try {
             File dest = activeSafStorage.rename(target, newName).getAbsoluteFile();
@@ -2810,11 +2728,9 @@ public final class Workspace {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
         File editedFile = editor.isOpen() ? editor.getFile() : null;
         if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
-        if (isActiveProject) sendCommand("close", "");
 
         if (!target.renameTo(dest)) {
             toast(activity.getString(R.string.cl_cannot_rename));
-            if (isActiveProject) sendCommand("open", target.getAbsolutePath());
             renderTree();
             return;
         }
@@ -2836,11 +2752,9 @@ public final class Workspace {
             activeProject = dest;
             projectTitle.setText(dest.getName());
             playing = false;
-            sendCommand("open", dest.getAbsolutePath());
             updatePlayButton();
         } else if (activeProject != null && isInside(target, activeProject)) {
             playing = false;
-            sendCommand("open", activeProject.getAbsolutePath());
             updatePlayButton();
         }
 
@@ -2864,7 +2778,6 @@ public final class Workspace {
     private void doDelete(File target) {
         boolean isActiveProject = activeProject != null && sameFile(target, activeProject);
         if (editor.hasTabInside(target) && !editor.closeTabsInside(target)) return;
-        if (isActiveProject) sendCommand("close", "");
 
         boolean ok;
         if (activeSafStorage != null && activeSafStorage.contains(target)) {
@@ -2968,8 +2881,6 @@ public final class Workspace {
                     if (storage != activeSafStorage || disposed) return;
                     prepareRuntimeProject(false);
                 }, "CodeLove-SAF-RuntimeRefresh").start();
-            } else {
-                sendCommand("open", activeProject.getAbsolutePath());
             }
             updatePlayButton();
         }
@@ -3003,9 +2914,6 @@ public final class Workspace {
             return;
         }
 
-        if (activeSafStorage != null && activeSafStorage != storage) {
-            sendCommand("close", "");
-        }
 
         activeSafStorage = storage;
         activeProject = project;
@@ -3022,7 +2930,6 @@ public final class Workspace {
             }, "CodeLove-SAF-RuntimeOpen").start();
         } else {
             deleteRuntimeProject();
-            sendCommand("open", project.getAbsolutePath());
         }
 
         projectTitle.setText(projectDisplayName(project));
@@ -3080,55 +2987,12 @@ public final class Workspace {
     }
 
     private void togglePlayback() {
-        if (surface == null) {
-            launchStandalonePlayback();
-            return;
-        }
-        if (playing) {
-            playing = false;
-            sendCommand("pause", "");
-            updatePlayButton();
-            return;
-        }
-        if (activeProject == null) {
-            toast(activity.getString(R.string.cl_select_project_hint));
-            return;
-        }
-        if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
-
-        if (activeSafStorage != null) {
-            final DirectSafStorage storage = activeSafStorage;
-            final File project = activeProject;
-            new Thread(() -> {
-                if (storage != activeSafStorage || activeProject == null
-                    || !sameFile(activeProject, project) || disposed) return;
-                if (!prepareRuntimeProject(true)) return;
-                activity.runOnUiThread(() -> {
-                    if (currentInstance != this || disposed
-                        || storage != activeSafStorage
-                        || activeProject == null || !sameFile(activeProject, project)) return;
-                    playing = true;
-                    sendCommand("play", "");
-                    // No modo vertical, o Play leva da edicao para a visualizacao do jogo.
-                    if (editor != null && editor.isOpen()) editor.close();
-                    updatePlayButton();
-                });
-            }, "CodeLove-SAF-Play").start();
-            return;
-        }
-
-        sendCommand("open", activeProject.getAbsolutePath());
-        playing = true;
-        sendCommand("play", "");
-        // No modo vertical, o Play leva da edicao para a visualizacao do jogo.
-        if (editor != null && editor.isOpen()) editor.close();
-        updatePlayButton();
+        launchStandalonePlayback();
     }
 
     private void exitPlaybackToFiles() {
         if (!playing) return;
         playing = false;
-        sendCommand("pause", "");
         updatePlayButton();
         // Recalcula o layout para restaurar a arvore de arquivos no vertical.
         applyLayout();
@@ -3157,7 +3021,6 @@ public final class Workspace {
             return;
         }
 
-        sendCommand("open", activeProject.getAbsolutePath());
         playing = false;
         updatePlayButton();
     }
@@ -3179,9 +3042,6 @@ public final class Workspace {
                 storage.deleteLocalSnapshot(runtimeProject);
             }
             runtimeProject = destination;
-            String runtimeName = storage.getDisplayName()
-                .replace('\t', ' ').replace('\n', ' ').replace('\r', ' ');
-            sendCommand("open", runtimeProject.getAbsolutePath() + "\t" + runtimeName);
             return true;
         } catch (IOException e) {
             Log.w(TAG, "Falha ao preparar o projeto para execucao", e);
@@ -3245,82 +3105,6 @@ public final class Workspace {
         if (closePlaybackButton != null) {
             closePlaybackButton.setVisibility(
                 playing && verticalMode ? View.VISIBLE : View.GONE);
-        }
-    }
-
-    /**
-     * Publica um comando como arquivo independente. O rename do temporario
-     * torna a publicacao atomica para o leitor Lua: ele nunca ve um comando parcial.
-     */
-    private synchronized void sendCommand(String command, String argument) {
-        File queue = new File(channelDir, "commands");
-        if (!queue.isDirectory() && !queue.mkdirs()) {
-            Log.w(TAG, "Sem pasta da fila de comandos: " + queue);
-            return;
-        }
-
-        long next = commandSequence + 1L;
-        String name = String.format(Locale.ROOT, "command-%010d.txt", next);
-        File target = new File(queue, name);
-        File temp = new File(queue, name + ".tmp");
-        byte[] data = (command + "\t" + argument).getBytes(StandardCharsets.UTF_8);
-
-        try (FileOutputStream out = new FileOutputStream(temp)) {
-            out.write(data);
-            out.flush();
-            out.getFD().sync();
-        } catch (IOException e) {
-            temp.delete();
-            Log.w(TAG, "Falha ao preparar o comando " + command, e);
-            return;
-        }
-
-        if (!temp.renameTo(target)) {
-            temp.delete();
-            Log.w(TAG, "Falha ao publicar o comando " + command);
-            return;
-        }
-        commandSequence = next;
-    }
-
-    /** Le a saida do runtime; utilizado pelo console da GameActivity. */
-    /** Le so o final do arquivo (ate maxBytes), sem a primeira linha se foi cortada. */
-    static String readTail(File file, int maxBytes) {
-        if (!file.isFile()) {
-            return null;
-        }
-        try (FileInputStream in = new FileInputStream(file)) {
-            long length = file.length();
-            long start = Math.max(0L, length - maxBytes);
-            if (start > 0) {
-                long skipped = 0;
-                while (skipped < start) {
-                    long n = in.skip(start - skipped);
-                    if (n <= 0) {
-                        break;
-                    }
-                    skipped += n;
-                }
-            }
-            byte[] data = new byte[(int) (length - start)];
-            int total = 0;
-            while (total < data.length) {
-                int read = in.read(data, total, data.length - total);
-                if (read < 0) {
-                    break;
-                }
-                total += read;
-            }
-            String text = new String(data, 0, total, StandardCharsets.UTF_8);
-            if (start > 0) {
-                int cut = text.indexOf('\n');
-                if (cut >= 0) {
-                    text = text.substring(cut + 1);
-                }
-            }
-            return text;
-        } catch (IOException e) {
-            return null;
         }
     }
 
