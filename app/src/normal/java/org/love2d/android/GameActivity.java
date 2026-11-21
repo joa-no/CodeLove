@@ -64,6 +64,7 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
+    private boolean defaultWindowOrientationPending;
     /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
     private final boolean exportedGame = BuildConfig.FLAVOR.startsWith("embed");
     private CodeLoveConsolePanel standaloneConsole;
@@ -135,6 +136,7 @@ public class GameActivity extends SDLActivity {
                 finish();
                 return;
             }
+            defaultWindowOrientationPending = !new java.io.File(project, "conf.lua").exists();
             args = new String[]{"--renderers", "opengl", project};
             try {
                 nativeConsole = new NativeRuntimeConsole();
@@ -398,6 +400,13 @@ public class GameActivity extends SDLActivity {
      */
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        if (standaloneRuntime && defaultWindowOrientationPending && w > 1 && h > 1) {
+            defaultWindowOrientationPending = false;
+            if (w == 800 && h == 600 && !resizable && (hint == null || hint.isEmpty())) {
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+                return;
+            }
+        }
         if (exportedGame || standaloneRuntime) {
             super.setOrientationBis(w, h, resizable, hint);
             return;

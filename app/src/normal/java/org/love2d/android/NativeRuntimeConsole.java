@@ -50,7 +50,19 @@ final class NativeRuntimeConsole implements AutoCloseable {
     }
 
     String snapshot() {
-        synchronized (tail) { return tail.toString(); }
+        synchronized (tail) {
+            String raw = tail.toString();
+            StringBuilder visible = new StringBuilder();
+            for (String line : raw.split("\\n", -1)) {
+                if (line.startsWith("Trying to create directory '")
+                        && line.endsWith("'")
+                        && (line.endsWith("/files/save'") || line.endsWith("/files/game'"))) continue;
+                if (line.equals("pixel format wanted SDL_PIXELFORMAT_RGBA8888 (1), got SDL_PIXELFORMAT_RGBA8888 (1)")) continue;
+                if (visible.length() > 0) visible.append('\n');
+                visible.append(line);
+            }
+            return visible.toString();
+        }
     }
 
     private static void closeFd(FileDescriptor fd) {
