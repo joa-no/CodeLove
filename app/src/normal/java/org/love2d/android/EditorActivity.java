@@ -69,7 +69,6 @@ public final class EditorActivity extends Activity {
 
     @Override
     protected void onPause() {
-        Workspace.onHostPause(this);
         super.onPause();
     }
 

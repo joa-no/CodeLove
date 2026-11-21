@@ -23,8 +23,6 @@ package org.love2d.android;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.res.Configuration;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -149,8 +147,6 @@ public class GameActivity extends SDLActivity {
         // Tema da UI do executor (botao de voltar), sem alterar o jogo SDL.
         if (!exportedGame) {
             Workspace.configureTheme(this);
-            // Only the legacy combined workspace inherits the editor orientation.
-            if (!standaloneRuntime) Workspace.applySavedOrientation(this);
         }
         if (standaloneRuntime) hideStandaloneStatusBar();
 
@@ -351,7 +347,6 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (!exportedGame) Workspace.handleActivityResult(this, requestCode, resultCode, data);
     }
 
     @Override
@@ -365,7 +360,6 @@ public class GameActivity extends SDLActivity {
         if (standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
         }
-        if (!exportedGame) Workspace.onHostDestroy(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
             vibrator.cancel();
@@ -383,7 +377,6 @@ public class GameActivity extends SDLActivity {
         if (standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
         }
-        if (!exportedGame) Workspace.onHostPause(this);
         if (vibrator != null) {
             Log.d(TAG, "Cancelling vibration");
             vibrator.cancel();
@@ -393,7 +386,7 @@ public class GameActivity extends SDLActivity {
 
     /**
      * Standalone games and exported APKs use native SDL orientation requests.
-     * Only the legacy combined workspace retains the editor orientation.
+     * The default preview window may follow the device orientation.
      */
     @Override
     public void setOrientationBis(int w, int h, boolean resizable, String hint) {
@@ -404,32 +397,7 @@ public class GameActivity extends SDLActivity {
                 return;
             }
         }
-        if (exportedGame || standaloneRuntime) {
-            super.setOrientationBis(w, h, resizable, hint);
-            return;
-        }
-        SharedPreferences preferences = getSharedPreferences("codelove", MODE_PRIVATE);
-        String saved = preferences.getString("workspace_orientation", "");
-
-        int requested;
-        if ("portrait".equals(saved)) {
-            requested = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
-        } else if ("landscape".equals(saved)) {
-            requested = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
-        } else {
-            // Na primeira abertura, trava a orientacao que o aparelho ja esta usando.
-            // O SDL nao deve impor a orientacao padrao horizontal antes da escolha.
-            int currentOrientation = getResources().getConfiguration().orientation;
-            int initialOrientation = currentOrientation == Configuration.ORIENTATION_PORTRAIT
-                ? ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                : ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
-            setRequestedOrientation(initialOrientation);
-            return;
-        }
-
-        if (getRequestedOrientation() != requested) {
-            setRequestedOrientation(requested);
-        }
+        super.setOrientationBis(w, h, resizable, hint);
     }
 
     @Override
@@ -437,10 +405,6 @@ public class GameActivity extends SDLActivity {
         super.onResume();
         // Reaplica a orientacao escolhida apos retornar do segundo plano.
         // O SDL/Android pode restaurar a orientacao do sistema durante a retomada.
-        if (!exportedGame) {
-            if (!standaloneRuntime) Workspace.applySavedOrientation(this);
-            Workspace.onHostResume(this);
-        }
         if (standaloneRuntime && standaloneConsoleOpen && standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
             updateStandaloneConsole();

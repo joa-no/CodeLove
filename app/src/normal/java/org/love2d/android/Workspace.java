@@ -254,24 +254,6 @@ public final class Workspace {
         workspace.showInitialOrientationChooser();
     }
 
-    public static void attach(Activity activity, ViewGroup layout, View surface) {
-        if (activity == null || surface == null || !(layout instanceof RelativeLayout)) {
-            return;
-        }
-        File games = activity.getExternalFilesDir("games");
-        if (games != null) {
-            if (!games.isDirectory()) {
-                games.mkdirs();
-            }
-        }
-        Workspace workspace = new Workspace(activity, (RelativeLayout) layout, surface, games);
-        currentInstance = workspace;
-        workspace.build();
-        workspace.importPreviouslyRegisteredProjects();
-        workspace.restoreThemeSession();
-        workspace.showInitialOrientationChooser();
-    }
-
     private void importPreviouslyRegisteredProjects() {
         List<SafProjectManager.RegisteredProject> projects =
             SafProjectManager.getRegisteredProjects(activity);
@@ -336,11 +318,6 @@ public final class Workspace {
         }
     }
 
-    /** Mantido para preservar o contrato de ciclo de vida com as Activities. */
-    public static void onHostPause(Activity activity) {
-        // O console agora pertence exclusivamente a GameActivity.
-    }
-
     public static void onHostDestroy(Activity activity) {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity) {
@@ -353,7 +330,6 @@ public final class Workspace {
     /** Contrato entre editor Android e executor SDL. */
     public static final String EXTRA_RUNTIME_ONLY = "org.love2d.android.RUNTIME_ONLY";
     public static final String EXTRA_RUNTIME_PROJECT = "org.love2d.android.RUNTIME_PROJECT";
-    public static final String EXTRA_RUNTIME_NAME = "org.love2d.android.RUNTIME_NAME";
 
     private int dp(int value) {
         float density = activity.getResources().getDisplayMetrics().density;
@@ -2948,7 +2924,7 @@ public final class Workspace {
         return true;
     }
 
-    private void openStandalonePlayback(File project, String displayName) {
+    private void openStandalonePlayback(File project) {
         if (project == null || !project.isDirectory()) return;
         if (editor != null && editor.hasUnsavedTabs()) {
             toast(activity.getString(R.string.cl_save_before_play));
@@ -2957,7 +2933,6 @@ public final class Workspace {
         Intent intent = new Intent(activity, GameActivity.class);
         intent.putExtra(EXTRA_RUNTIME_ONLY, true);
         intent.putExtra(EXTRA_RUNTIME_PROJECT, project.getAbsolutePath());
-        intent.putExtra(EXTRA_RUNTIME_NAME, displayName);
         playing = true;
         updatePlayButton();
         activity.startActivity(intent);
@@ -2978,11 +2953,11 @@ public final class Workspace {
                     if (disposed || currentInstance != this
                         || storage != activeSafStorage || activeProject == null
                         || !sameFile(activeProject, selected)) return;
-                    openStandalonePlayback(runtimeProject, storage.getDisplayName());
+                    openStandalonePlayback(runtimeProject);
                 });
             }, "CodeLove-SAF-StandalonePlay").start();
         } else {
-            openStandalonePlayback(activeProject, projectDisplayName(activeProject));
+            openStandalonePlayback(activeProject);
         }
     }
 
