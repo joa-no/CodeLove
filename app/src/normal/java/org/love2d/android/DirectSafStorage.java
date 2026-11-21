@@ -179,7 +179,9 @@ final class DirectSafStorage implements CodeEditor.Storage {
             return false;
         }
 
-        snapshotVersions.keySet().removeIf(key -> key.endsWith("\n" + file.getAbsolutePath()));
+        for (java.util.Iterator<String> it = snapshotVersions.keySet().iterator(); it.hasNext();) {
+            if (it.next().endsWith("\n" + file.getAbsolutePath())) it.remove();
+        }
         final Uri uri;
         final byte[] original;
         try {
@@ -454,7 +456,10 @@ final class DirectSafStorage implements CodeEditor.Storage {
         for (File child : existing) if (!names.contains(child.getName())) {
             deleteLocal(child);
             if (child.exists()) throw new IOException("Nao consegui remover copia antiga.");
-            snapshotVersions.keySet().removeIf(key -> key.startsWith(child.getAbsolutePath() + "\n") || key.startsWith(child.getAbsolutePath() + File.separator));
+            for (java.util.Iterator<String> it = snapshotVersions.keySet().iterator(); it.hasNext();) {
+                String key = it.next();
+                if (key.startsWith(child.getAbsolutePath() + "\n") || key.startsWith(child.getAbsolutePath() + File.separator)) it.remove();
+            }
         }
     }
 
