@@ -126,25 +126,23 @@ public class GameActivity extends SDLActivity {
         // Prevent SDL sending filedropped event. Let us do that instead.
         intent.setData(null);
 
-        // CodeLove: prepara o canal de comandos e diz ao executor (Lua) onde ele fica.
-        // Precisa vir ANTES do super.onCreate, que inicia o LOVE.
-        if (!exportedGame) {
-            String channel = Workspace.prepareChannel(this);
-            if (standaloneRuntime) {
-                try {
-                    nativeConsole = new NativeRuntimeConsole();
-                } catch (Exception e) {
-                    Log.e(TAG, "Unable to capture runtime output", e);
-                }
+        // Native preview: use the prepared project directly, without Lua commands.
+        if (standaloneRuntime) {
+            String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
+            if (project == null || !new java.io.File(project, "main.lua").isFile()) {
+                Log.e(TAG, "Missing runtime project");
+                super.onCreate(savedInstanceState);
+                finish();
+                return;
             }
-            if (standaloneRuntime) {
-                String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
-                if (project != null) {
-                    args = new String[]{"--renderers", "opengl", project};
-                }
-            } else if (isFused) {
-                args = new String[]{channel};
+            args = new String[]{"--renderers", "opengl", project};
+            try {
+                nativeConsole = new NativeRuntimeConsole();
+            } catch (Exception e) {
+                Log.e(TAG, "Unable to capture runtime output", e);
             }
+        } else if (!exportedGame && isFused) {
+            args = new String[]{Workspace.prepareChannel(this)};
         }
 
         super.onCreate(savedInstanceState);
