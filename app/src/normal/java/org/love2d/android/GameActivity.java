@@ -133,7 +133,12 @@ public class GameActivity extends SDLActivity {
                     intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT),
                     intent.getStringExtra(Workspace.EXTRA_RUNTIME_NAME));
             }
-            if (isFused) {
+            if (standaloneRuntime) {
+                String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
+                if (project != null) {
+                    args = new String[]{"--renderers", "opengl", project};
+                }
+            } else if (isFused) {
                 args = new String[]{channel};
             }
         }
