@@ -432,23 +432,25 @@ final class DirectSafStorage implements CodeEditor.Storage {
                 String key = out.getAbsolutePath() + "\n" + entry.file.getAbsolutePath();
                 String version = entry.documentId + ":" + entry.size + ":" + entry.modified;
                 if (entry.modified > 0 && entry.size >= 0 && out.isFile()
-                    && out.length() == entry.size && version.equals(snapshotVersions.get(key))) continue;
+                    && out.length() == entry.size && out.lastModified() > 0
+                    && (version + ":" + out.lastModified()).equals(snapshotVersions.get(key))) continue;
                 snapshotVersions.remove(key);
                 if (out.isDirectory()) deleteLocal(out);
-                InputStream in = resolver.openInputStream(entry.uri);
-                if (in == null) throw new IOException("Nao consegui ler " + entry.name);
-                OutputStream outStream = new FileOutputStream(out);
-                try {
-                    byte[] buffer = new byte[8192];
-                    int n;
-                    while ((n = in.read(buffer)) >= 0) {
-                        if (n > 0) outStream.write(buffer, 0, n);
+                try (InputStream in = resolver.openInputStream(entry.uri)) {
+                    if (in == null) throw new IOException("Nao consegui ler " + entry.name);
+                    try (OutputStream outStream = new FileOutputStream(out)) {
+                        byte[] buffer = new byte[8192];
+                        int n;
+                        while ((n = in.read(buffer)) >= 0) {
+                            if (n > 0) outStream.write(buffer, 0, n);
+                        }
+                        outStream.flush();
                     }
-                    outStream.flush();
-                } finally {
-                    try { in.close(); } finally { outStream.close(); }
                 }
-                if (entry.modified > 0 && entry.size >= 0 && out.length() == entry.size) snapshotVersions.put(key, version);
+                if (entry.modified > 0 && entry.size >= 0 && out.length() == entry.size
+                    && out.lastModified() > 0) {
+                    snapshotVersions.put(key, version + ":" + out.lastModified());
+                }
             }
         }
         File[] existing = destination.listFiles();

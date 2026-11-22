@@ -145,15 +145,12 @@ public final class Workspace {
     private static final int PANEL_WIDTH_DP = 272;
     private static final int MARGIN_DP = 8;
     private static final int CONTROL_BUTTON_DP = 44;
-    private static final int BAR_PAD_DP = 6;
-    private static final int BAR_GAP_DP = 8;
     private static final int ROW_HEIGHT_DP = 36;
     private static final int LEVEL_WIDTH_DP = 16;
     private static final int MAX_DEPTH = 12;
 
     private final Activity activity;
     private final RelativeLayout root;
-    private final View surface;
     private final File gamesDir;   // pasta onde ficam os projetos (pode ser nula)
     private final int panelWidth;
     private final int margin;
@@ -163,6 +160,7 @@ public final class Workspace {
     private DirectSafStorage activeSafStorage = null; // fonte direta SAF, quando aplicavel
     private File runtimeProject = null; // snapshot temporario usado somente pelo LOVE
     private boolean playing = false;
+    private boolean preparingPlayback = false;
 
     private OverlayUi ui;
     private SharedPreferences prefs;
@@ -185,16 +183,10 @@ public final class Workspace {
     private View movePanelButton;
     private Dialog settingsDialog;
     private LinearLayout placeholder;
-    private LinearLayout playButton;
-    private TextView resetButton;
-    private IconView playIcon;
     private IconView headerPlayIcon;
     private IconView panelPlayIcon;
     private LinearLayout headerPlayButton;
     private LinearLayout panelPlayButton;
-    private LinearLayout controlsBar;
-    private LinearLayout closePlaybackButton;
-    private IconView fullscreenIcon;
     private TextView projectTitle;
     private IconView saveIcon;
     private LinearLayout projectNotice;
@@ -202,7 +194,6 @@ public final class Workspace {
     private final ArrayList<Row> visibleTreeRows = new ArrayList<Row>();
     private EditText search;
 
-    private boolean fullscreen = false;
     private boolean onLeft = true; // restaurado das preferencias no construtor
     private int insetLeft;
     private int insetTop;
@@ -210,10 +201,9 @@ public final class Workspace {
     private int insetBottom;     // barras do sistema (sem o teclado)
     private int insetBottomIme;  // barras do sistema + teclado
 
-    private Workspace(Activity activity, RelativeLayout root, View surface, File gamesDir) {
+    private Workspace(Activity activity, RelativeLayout root, File gamesDir) {
         this.activity = activity;
         this.root = root;
-        this.surface = surface;
         this.gamesDir = gamesDir;
         this.prefs = activity.getSharedPreferences("codelove", Context.MODE_PRIVATE);
         configureTheme(activity);
@@ -222,10 +212,6 @@ public final class Workspace {
         this.margin = dp(MARGIN_DP);
     }
 
-    /**
-     * Liga a area de trabalho ao layout do SDL.
-     * "layout" e o layout criado pelo SDL; "surface" e onde o LOVE desenha.
-     */
     /** Aplica a orientacao salva antes de montar a interface do ambiente de trabalho. */
     public static void applySavedOrientation(Activity activity) {
         if (activity == null) return;
@@ -246,7 +232,7 @@ public final class Workspace {
         if (activity == null || layout == null) return;
         File games = activity.getExternalFilesDir("games");
         if (games != null && !games.isDirectory()) games.mkdirs();
-        Workspace workspace = new Workspace(activity, layout, null, games);
+        Workspace workspace = new Workspace(activity, layout, games);
         currentInstance = workspace;
         workspace.build();
         workspace.importPreviouslyRegisteredProjects();
@@ -285,7 +271,7 @@ public final class Workspace {
 
     /** Restaura visual e abas na mesma posicao, sem animar a gaveta nem reler codigo. */
     private void restoreThemeSession() {
-        if (surface != null || pendingThemeSession == null) return;
+        if (pendingThemeSession == null) return;
         ThemeSession session = pendingThemeSession;
         pendingThemeSession = null;
         String projectPath = activeProject == null ? null : activeProject.getAbsolutePath();
@@ -309,7 +295,7 @@ public final class Workspace {
     public static void onHostResume(Activity activity) {
         Workspace workspace = currentInstance;
         if (workspace != null && workspace.activity == activity && !workspace.disposed) {
-            if (workspace.surface == null && workspace.playing) {
+            if (workspace.playing) {
                 workspace.playing = false;
                 workspace.updatePlayButton();
                 workspace.applyLayout();
@@ -441,54 +427,6 @@ public final class Workspace {
         panel.addView(footer, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
 
-        // Barra flutuante herdada: so para a Activity com superficie SDL.
-        // A EditorActivity usa exclusivamente os botoes integrados ao editor.
-        playIcon = appearanceIcon(IconView.PLAY, () -> COLOR_TEXT);
-        playButton = new LinearLayout(activity);
-        playButton.setGravity(Gravity.CENTER);
-        bindAppearance(() -> playButton.setBackground(box(COLOR_FIELD, 22, false)));
-        playButton.addView(playIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        playButton.setOnClickListener(v -> togglePlayback());
-
-        // Reset: mantem a acao tanto na barra flutuante quanto no rodape do editor.
-        resetButton = new TextView(activity);
-        resetButton.setText("\u21BA");
-        resetButton.setGravity(Gravity.CENTER);
-        bindAppearance(() -> resetButton.setTextColor(COLOR_TEXT));
-        resetButton.setTextSize(20);
-        bindAppearance(() -> resetButton.setBackground(box(COLOR_FIELD, 22, false)));
-        resetButton.setOnClickListener(v -> resetScene());
-
-        // Tela cheia continua sendo um controle separado da barra do editor.
-        fullscreenIcon = appearanceIcon(IconView.FULLSCREEN, () -> COLOR_TEXT);
-        LinearLayout fullscreenButton = new LinearLayout(activity);
-        fullscreenButton.setGravity(Gravity.CENTER);
-        bindAppearance(() -> fullscreenButton.setBackground(box(COLOR_FIELD, 22, false)));
-        fullscreenButton.addView(fullscreenIcon, new LinearLayout.LayoutParams(dp(20), dp(20)));
-        fullscreenButton.setOnClickListener(v -> setFullscreen(!fullscreen));
-
-        // Barra flutuante usada quando o editor esta fechado ou em tela cheia.
-        controlsBar = new LinearLayout(activity);
-        controlsBar.setOrientation(LinearLayout.HORIZONTAL);
-        controlsBar.setGravity(Gravity.CENTER_VERTICAL);
-        bindAppearance(() -> controlsBar.setBackground(box(COLOR_PANEL, 30, true)));
-        controlsBar.setPadding(dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP), dp(BAR_PAD_DP));
-        controlsBar.setVisibility(View.GONE);
-        controlsBar.addView(playButton, barButtonParams(true));
-        if (surface != null) {
-            controlsBar.addView(resetButton, barButtonParams(false));
-            controlsBar.addView(fullscreenButton, barButtonParams(false));
-        }
-
-        // No modo vertical, oferece uma saida visivel da visualizacao do jogo.
-        closePlaybackButton = new LinearLayout(activity);
-        closePlaybackButton.setGravity(Gravity.CENTER);
-        bindAppearance(() -> closePlaybackButton.setBackground(box(COLOR_PANEL, 22, true)));
-        closePlaybackButton.addView(appearanceIcon(IconView.CLOSE, () -> COLOR_TEXT),
-            new LinearLayout.LayoutParams(dp(20), dp(20)));
-        bindLanguage(() -> setButtonHint(closePlaybackButton, activity.getString(R.string.cl_exit_visual)));
-        closePlaybackButton.setOnClickListener(v -> exitPlaybackToFiles());
-        closePlaybackButton.setVisibility(View.GONE);
 
         // Play no topo do editor, inclusive com a area vazia e nenhum arquivo aberto.
         // A acao e a mesma do Play original, sem salvar arquivos automaticamente.
@@ -534,7 +472,7 @@ public final class Workspace {
 
             @Override
             public void onFilesRequested() {
-                if (root.getHeight() <= root.getWidth() || fullscreen) return;
+                if (root.getHeight() <= root.getWidth()) return;
                 setDrawerOpen(!fileDrawerOpen);
             }
 
@@ -558,8 +496,6 @@ public final class Workspace {
         drawerScrim.setOnClickListener(v -> setDrawerOpen(false));
         root.addView(drawerScrim);
         root.addView(panel);
-        root.addView(controlsBar);
-        root.addView(closePlaybackButton);
 
         // Acompanha as barras do sistema (relogio no topo, gestos embaixo).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -1087,7 +1023,7 @@ public final class Workspace {
 
     private void changeLanguage(String selected) {
         if (prefs.getString(PREF_LANGUAGE, "auto").equals(selected)) return;
-        if (surface == null && projectNotice == null && editor != null
+        if (projectNotice == null && editor != null
                 && activity instanceof EditorActivity) {
             prefs.edit().putString(PREF_LANGUAGE, selected).apply();
             ((EditorActivity) activity).updateLanguageResources(selected);
@@ -1098,11 +1034,9 @@ public final class Workspace {
             toast(activity.getString(R.string.cl_save_tabs_language));
             return;
         }
-        if (surface == null) {
-            pendingThemeSession = new ThemeSession(
-                activeProject == null ? null : activeProject.getAbsolutePath(),
-                editor == null ? null : editor.captureThemeTabs(), fileDrawerOpen);
-        }
+        pendingThemeSession = new ThemeSession(
+            activeProject == null ? null : activeProject.getAbsolutePath(),
+            editor == null ? null : editor.captureThemeTabs(), fileDrawerOpen);
         prefs.edit().putString(PREF_LANGUAGE, selected).apply();
         if (activity.getWindow() != null) activity.getWindow().setWindowAnimations(0);
         activity.recreate();
@@ -1119,8 +1053,8 @@ public final class Workspace {
         }
 
         // The standalone editor can update its existing views and document in place.
-        // Keep the legacy SDL path and active notice fallback until separately validated.
-        if (surface == null && projectNotice == null && editor != null) {
+        // Preserve the active notice fallback.
+        if (projectNotice == null && editor != null) {
             prefs.edit().putString(PREF_APPEARANCE, selected).apply();
             configureTheme(activity);
             refreshWorkspaceAppearance();
@@ -1132,12 +1066,10 @@ public final class Workspace {
             toast(activity.getString(R.string.cl_save_tabs_theme));
             return;
         }
-        if (surface == null) {
-            pendingThemeSession = new ThemeSession(
-                activeProject == null ? null : activeProject.getAbsolutePath(),
-                editor == null ? null : editor.captureThemeTabs(),
-                fileDrawerOpen);
-        }
+        pendingThemeSession = new ThemeSession(
+            activeProject == null ? null : activeProject.getAbsolutePath(),
+            editor == null ? null : editor.captureThemeTabs(),
+            fileDrawerOpen);
         prefs.edit().putString(PREF_APPEARANCE, selected).apply();
         // Recria somente a Activity (a engine de jogo permanece isolada).
         // Sem animacao de janela adicional durante a mudanca de aparencia.
@@ -1337,15 +1269,6 @@ public final class Workspace {
         return lp;
     }
 
-    private LinearLayout.LayoutParams barButtonParams(boolean first) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-            dp(CONTROL_BUTTON_DP), dp(CONTROL_BUTTON_DP));
-        if (!first) {
-            lp.setMargins(dp(BAR_GAP_DP), 0, 0, 0);
-        }
-        return lp;
-    }
-
     private void showAbout() {
         ui.showAbout("joa-no", activity.getString(R.string.cl_credits_full),
             readAssetText("codelove-licenses.txt"));
@@ -1364,16 +1287,6 @@ public final class Workspace {
         } catch (IOException e) {
             return activity.getString(R.string.cl_license_fallback, name);
         }
-    }
-
-    /** Tela cheia: some tudo (pastas, editor, console) e o jogo ocupa a area toda. */
-    private void setFullscreen(boolean on) {
-        fullscreen = on;
-        if (ui != null) {
-            ui.dismiss();
-        }
-        fullscreenIcon.setKind(on ? IconView.FULLSCREEN_EXIT : IconView.FULLSCREEN);
-        applyLayout();
     }
 
     private View buildSearch() {
@@ -1407,8 +1320,7 @@ public final class Workspace {
             if (imm != null) {
                 imm.hideSoftInputFromWindow(search.getWindowToken(), 0);
             }
-            if (surface != null) surface.requestFocus();
-            else root.requestFocus();
+            root.requestFocus();
             return true;
         });
         return search;
@@ -1451,7 +1363,7 @@ public final class Workspace {
     /** Desloca o painel sem recalcular o layout nem interromper a rolagem. */
     private void updateDrawerProgress(float progress) {
         drawerProgress = clampDrawer(progress);
-        if (root.getHeight() <= root.getWidth() || surface != null || fullscreen) return;
+        if (root.getHeight() <= root.getWidth()) return;
         int width = currentDrawerWidth();
         boolean visible = drawerProgress > 0.0001f;
         panel.setVisibility(visible ? View.VISIBLE : View.GONE);
@@ -1493,7 +1405,7 @@ public final class Workspace {
     static int handleEditorSwipe(Activity activity, MotionEvent event) {
         Workspace w = currentInstance;
         if (w == null || w.activity != activity || w.disposed
-            || w.surface != null || w.fullscreen || w.root.getWidth() <= 0
+            || w.root.getWidth() <= 0
             || w.root.getHeight() <= w.root.getWidth()) return 0;
         return w.handleDrawerTouch(event);
     }
@@ -1581,15 +1493,10 @@ public final class Workspace {
                     && activity.getResources().getConfiguration().orientation
                         == Configuration.ORIENTATION_PORTRAIT);
         }
-        boolean editorOpen = editor != null && editor.isOpen() && !fullscreen;
-        // EditorActivity nao possui superficie de jogo: o editor ocupa sempre
-        // a area de trabalho, inclusive quando nenhum arquivo esta selecionado.
-        boolean editorScreenVisible = !fullscreen && (surface == null || editorOpen);
         if (editor != null) {
             // As abas funcionam em ambas as orientacoes do editor Java;
             // o menu hamburguer e exclusivo do vertical.
-            editor.setTabsMode(surface == null, verticalMode && surface == null);
-            editor.setEmptyWorkspaceEnabled(surface == null);
+            editor.setTabsOrientation(verticalMode);
         }
         if (!verticalMode) {
             fileDrawerOpen = false;
@@ -1598,13 +1505,10 @@ public final class Workspace {
             swipeCandidate = false;
             swipeCaptured = false;
         }
-        boolean panelShown = !fullscreen && (!verticalMode
-            || (surface == null ? fileDrawerOpen : (!editorOpen && !playing)));
+        boolean panelShown = !verticalMode || fileDrawerOpen;
         if (movePanelButton != null) {
             movePanelButton.setVisibility(verticalMode ? View.GONE : View.VISIBLE);
         }
-        // Evita dois botoes Play simultaneos no modo horizontal: o Play do
-        // editor ja fica no canto superior direito da area de trabalho.
 
         int sideInset = onLeft ? insetLeft : insetRight;
         if (ui != null) {
@@ -1612,7 +1516,6 @@ public final class Workspace {
         }
 
         float baseW = root.getWidth() - insetLeft - insetRight;
-        float baseH = root.getHeight() - insetTop - insetBottom;
 
         // No modo horizontal, mantemos a largura original do painel.
         // No vertical, o painel de arquivos vira uma gaveta sobreposta.
@@ -1629,48 +1532,17 @@ public final class Workspace {
         }
 
         int editorWidth = ViewGroup.LayoutParams.MATCH_PARENT;
-        if (editorScreenVisible) {
-            if (verticalMode) {
-                editorOffset = 0;
-                editorWidth = baseW > 0f
-                    ? Math.max(0, (int) baseW)
-                    : ViewGroup.LayoutParams.MATCH_PARENT;
-            } else {
-                editorOffset = panelShown ? cursor : sideInset;
-                if (baseW > 0f) {
-                    editorWidth = Math.max(0,
-                        (int) baseW - (editorOffset - sideInset));
-                }
+        if (verticalMode) {
+            editorOffset = 0;
+            editorWidth = baseW > 0f
+                ? Math.max(0, (int) baseW)
+                : ViewGroup.LayoutParams.MATCH_PARENT;
+        } else {
+            editorOffset = panelShown ? cursor : sideInset;
+            if (baseW > 0f) {
+                editorWidth = Math.max(0,
+                    (int) baseW - (editorOffset - sideInset));
             }
-        }
-
-        // O runtime continua com a mesma resolucao logica. No modo vertical,
-        // os paineis sao sobrepostos e nao reduzem a area do jogo.
-        if (surface != null) {
-        RelativeLayout.LayoutParams surfaceLp = new RelativeLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        surfaceLp.leftMargin = insetLeft;
-        surfaceLp.topMargin = insetTop;
-        surfaceLp.rightMargin = insetRight;
-        surfaceLp.bottomMargin = insetBottom;
-        surface.setLayoutParams(surfaceLp);
-
-        float scale = 1f;
-        float shiftX = 0f;
-        float shiftY = 0f;
-        if (baseW > 0f && baseH > 0f && reserved > 0) {
-            float availW = Math.max(1f, baseW - reserved);
-            float availH = baseH;
-            scale = Math.min(1f, Math.min(availW / baseW, availH / baseH));
-            shiftX = (onLeft ? reserved : 0f) + (availW - baseW * scale) / 2f;
-            shiftY = (availH - baseH * scale) / 2f;
-        }
-        surface.setPivotX(0f);
-        surface.setPivotY(0f);
-        surface.setScaleX(scale);
-        surface.setScaleY(scale);
-        surface.setTranslationX(shiftX);
-        surface.setTranslationY(shiftY);
         }
 
         RelativeLayout.LayoutParams placeholderLp = new RelativeLayout.LayoutParams(
@@ -1682,9 +1554,7 @@ public final class Workspace {
         placeholder.setLayoutParams(placeholderLp);
 
         if (verticalMode) {
-            int drawerWidth = surface == null && !fullscreen
-                ? Math.max(0, Math.min((int) (baseW * 0.86f), dp(340)))
-                : Math.max(0, (int) baseW);
+            int drawerWidth = Math.max(0, Math.min((int) (baseW * 0.86f), dp(340)));
             RelativeLayout.LayoutParams panelLp = new RelativeLayout.LayoutParams(
                 drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT);
             panelLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
@@ -1709,7 +1579,7 @@ public final class Workspace {
         }
         // O painel da Activity de edicao vertical e posicionado por translacao.
         // Nao alternar a visibilidade aqui durante o arraste.
-        if (!verticalMode || surface != null || fullscreen) {
+        if (!verticalMode) {
             panel.setTranslationX(0f);
             panel.setVisibility(panelShown ? View.VISIBLE : View.GONE);
         }
@@ -1720,7 +1590,7 @@ public final class Workspace {
         scrimLp.topMargin = insetTop;
         scrimLp.bottomMargin = insetBottomIme;
         drawerScrim.setLayoutParams(scrimLp);
-        if (verticalMode && surface == null && !fullscreen) {
+        if (verticalMode) {
             updateDrawerProgress(drawerProgress);
         } else {
             drawerScrim.setAlpha(1f);
@@ -1739,42 +1609,8 @@ public final class Workspace {
             editorLp.rightMargin = editorOffset;
         }
         editorView.setLayoutParams(editorLp);
-        editorView.setVisibility(editorScreenVisible ? View.VISIBLE : View.GONE);
+        editorView.setVisibility(View.VISIBLE);
 
-        int barHeight = dp(CONTROL_BUTTON_DP) + 2 * dp(BAR_PAD_DP);
-        int buttonCount = surface == null ? 1 : 3;
-        int barWidth = buttonCount * dp(CONTROL_BUTTON_DP)
-            + (buttonCount - 1) * dp(BAR_GAP_DP) + 2 * dp(BAR_PAD_DP);
-        int regionStart = insetLeft + (!verticalMode && onLeft ? reserved : 0);
-        int regionWidth = root.getWidth() - insetLeft - insetRight
-            - (!verticalMode ? reserved : 0);
-        int barX;
-        if (root.getWidth() <= 0) {
-            barX = 0;
-        } else if (fullscreen) {
-            barX = onLeft
-                ? insetLeft + margin
-                : root.getWidth() - insetRight - margin - barWidth;
-        } else {
-            barX = regionStart + Math.max(0, (regionWidth - barWidth) / 2);
-        }
-        RelativeLayout.LayoutParams barLp = new RelativeLayout.LayoutParams(barWidth, barHeight);
-        barLp.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
-        barLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        barLp.leftMargin = barX;
-        barLp.bottomMargin = insetBottom + margin;
-        controlsBar.setLayoutParams(barLp);
-        controlsBar.setAlpha(fullscreen ? 0.55f : 1f);
-
-        RelativeLayout.LayoutParams closeLp = new RelativeLayout.LayoutParams(
-            dp(CONTROL_BUTTON_DP), dp(CONTROL_BUTTON_DP));
-        closeLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        closeLp.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
-        closeLp.bottomMargin = insetBottom + margin;
-        closeLp.rightMargin = insetRight + margin;
-        closePlaybackButton.setLayoutParams(closeLp);
-
-        updateControlsVisibility();
     }
 
     // ------------------------------------------------------------------
@@ -2941,6 +2777,7 @@ public final class Workspace {
     }
 
     private void launchStandalonePlayback() {
+        if (preparingPlayback || playing || disposed) return;
         if (activeProject == null) {
             toast(activity.getString(R.string.cl_select_project_hint));
             return;
@@ -2949,14 +2786,21 @@ public final class Workspace {
         if (activeSafStorage != null) {
             final DirectSafStorage storage = activeSafStorage;
             final File selected = activeProject;
+            preparingPlayback = true;
             new Thread(() -> {
-                if (!prepareRuntimeProject(true)) return;
-                activity.runOnUiThread(() -> {
-                    if (disposed || currentInstance != this
-                        || storage != activeSafStorage || activeProject == null
-                        || !sameFile(activeProject, selected)) return;
-                    openStandalonePlayback(runtimeProject);
-                });
+                boolean prepared = false;
+                try {
+                    prepared = prepareRuntimeProject(true);
+                } finally {
+                    final boolean ready = prepared;
+                    activity.runOnUiThread(() -> {
+                        preparingPlayback = false;
+                        if (!ready || disposed || currentInstance != this
+                            || storage != activeSafStorage || activeProject == null
+                            || !sameFile(activeProject, selected)) return;
+                        openStandalonePlayback(runtimeProject);
+                    });
+                }
             }, "CodeLove-SAF-StandalonePlay").start();
         } else {
             openStandalonePlayback(activeProject);
@@ -2967,40 +2811,6 @@ public final class Workspace {
         launchStandalonePlayback();
     }
 
-    private void exitPlaybackToFiles() {
-        if (!playing) return;
-        playing = false;
-        updatePlayButton();
-        // Recalcula o layout para restaurar a arvore de arquivos no vertical.
-        applyLayout();
-        renderTree();
-    }
-
-    private void resetScene() {
-        if (activeProject == null) return;
-        if (!editorChangesAreSaved(R.string.cl_save_before_restart)) return;
-
-        if (activeSafStorage != null) {
-            final DirectSafStorage storage = activeSafStorage;
-            final File project = activeProject;
-            new Thread(() -> {
-                if (storage != activeSafStorage || activeProject == null
-                    || !sameFile(activeProject, project) || disposed) return;
-                if (!prepareRuntimeProject(true)) return;
-                activity.runOnUiThread(() -> {
-                    if (currentInstance != this || disposed
-                        || storage != activeSafStorage
-                        || activeProject == null || !sameFile(activeProject, project)) return;
-                    playing = false;
-                    updatePlayButton();
-                });
-            }, "CodeLove-SAF-Reset").start();
-            return;
-        }
-
-        playing = false;
-        updatePlayButton();
-    }
 
     private boolean prepareRuntimeProject(boolean announceFailure) {
         if (activeSafStorage == null || activeProject == null) {
@@ -3051,7 +2861,6 @@ public final class Workspace {
 
     private void updatePlayButton() {
         int kind = playing ? IconView.PAUSE : IconView.PLAY;
-        if (playIcon != null) playIcon.setKind(kind);
         if (headerPlayIcon != null) headerPlayIcon.setKind(kind);
         if (panelPlayIcon != null) panelPlayIcon.setKind(kind);
         // Play sempre legivel e clicavel; sem projeto, o clique orienta
@@ -3064,26 +2873,8 @@ public final class Workspace {
             panelPlayButton.setEnabled(true);
             panelPlayButton.setAlpha(1f);
         }
-        updateControlsVisibility();
     }
 
-    private void updateControlsVisibility() {
-        boolean editorVisible = editor != null && editor.isOpen() && !fullscreen;
-        boolean verticalMode = root.getHeight() > root.getWidth();
-        // No vertical, os controles do editor ficam no rodape do proprio editor.
-        // Esconde a barra flutuante para nao cobrir o botao + da arvore de arquivos.
-        // A barra flutuante com Play nao faz parte da EditorActivity. No modo
-        // horizontal, a execucao permanece no Play integrado ao rodape do editor.
-        boolean showBar = surface != null && activeProject != null
-            && !editorVisible && !verticalMode;
-        if (controlsBar != null) {
-            controlsBar.setVisibility(showBar ? View.VISIBLE : View.GONE);
-        }
-        if (closePlaybackButton != null) {
-            closePlaybackButton.setVisibility(
-                playing && verticalMode ? View.VISIBLE : View.GONE);
-        }
-    }
 
     /** Guarda onde voce parou: projeto aberto, arquivo no editor e lado do painel. */
     private void saveState() {

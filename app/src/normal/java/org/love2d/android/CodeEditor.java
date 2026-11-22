@@ -95,9 +95,8 @@ final class CodeEditor {
     private final HorizontalScrollView tabsScroller;
     private final LinearLayout tabsRow;
     private final LinkedHashMap<String, TabState> openTabs = new LinkedHashMap<>();
-    private boolean tabsEnabled;
     private boolean verticalTabsLayout;
-    private boolean emptyWorkspaceEnabled;
+    private boolean tabsLayoutInitialized;
     private final TextView emptyHint;
     private final io.github.rosemoe.sora.widget.CodeEditor soraInput;
     private final CodeLoveParameterHints soraParameterHints;
@@ -285,7 +284,7 @@ final class CodeEditor {
                 boolean firstDirty = !dirty;
                 dirty = true;
                 saveFailureNotified = false;
-                if (firstDirty && tabsEnabled) renderTabStrip();
+                if (firstDirty) renderTabStrip();
                 listener.onEdited();
             });
         view.addView(soraInput, new LinearLayout.LayoutParams(
@@ -329,14 +328,13 @@ final class CodeEditor {
 
     }
 
-    /** Refreshes editor-owned chrome without replacing the editor or its document. */
     /** Refresh localized editor chrome without replacing the document. */
     void applyLanguage() {
         filesMenuButton.setContentDescription(activity.getString(R.string.cl_open_files));
         emptyTitle.setText(activity.getString(R.string.cl_empty_open));
         emptyHint.setText(activity.getString(verticalTabsLayout
             ? R.string.cl_empty_hint : R.string.cl_empty_hint_horizontal));
-        if (tabsEnabled) renderTabStrip();
+        renderTabStrip();
     }
 
     void applyAppearance() {
@@ -353,7 +351,7 @@ final class CodeEditor {
         emptyTitle.setTextColor(Workspace.COLOR_TEXT);
         emptyHint.setTextColor(Workspace.COLOR_MUTED);
         applySoraAppearance();
-        if (tabsEnabled) renderTabStrip();
+        renderTabStrip();
     }
 
     View getView() {
@@ -422,9 +420,9 @@ final class CodeEditor {
     }
 
     /** Abas nos dois formatos da EditorActivity; menu de arquivos so no vertical. */
-    void setTabsMode(boolean enabled, boolean vertical) {
-        if (tabsEnabled == enabled && verticalTabsLayout == vertical) return;
-        tabsEnabled = enabled;
+    void setTabsOrientation(boolean vertical) {
+        if (tabsLayoutInitialized && verticalTabsLayout == vertical) return;
+        tabsLayoutInitialized = true;
         verticalTabsLayout = vertical;
         filesMenuButton.setVisibility(vertical ? View.VISIBLE : View.GONE);
         headerSpacer.setVisibility(vertical ? View.VISIBLE : View.GONE);
@@ -444,16 +442,9 @@ final class CodeEditor {
         renderTabStrip();
     }
 
-    /** A EditorActivity mostra a area vazia mesmo em horizontal, sem criar arquivo. */
-    void setEmptyWorkspaceEnabled(boolean enabled) {
-        if (emptyWorkspaceEnabled == enabled) return;
-        emptyWorkspaceEnabled = enabled;
-        updateEmptyState();
-    }
-
     /** Somente a apresentacao muda; o editor real continua fechado sem arquivo. */
     private void updateEmptyState() {
-        boolean noFile = emptyWorkspaceEnabled && file == null;
+        boolean noFile = file == null;
         emptyHint.setText(activity.getString(verticalTabsLayout
             ? R.string.cl_empty_hint : R.string.cl_empty_hint_horizontal));
         emptyState.setVisibility(noFile ? View.VISIBLE : View.GONE);
@@ -527,9 +518,8 @@ final class CodeEditor {
     private void renderTabStrip() {
         // A faixa de abas existe no vertical e no horizontal, mas desaparece
         // inteiramente quando nenhum arquivo estiver aberto.
-        tabsScroller.setVisibility(tabsEnabled && !openTabs.isEmpty()
+        tabsScroller.setVisibility(!openTabs.isEmpty()
             ? View.VISIBLE : View.GONE);
-        if (!tabsEnabled) return;
         tabsRow.removeAllViews();
         for (TabState tab : openTabs.values()) {
             String key = tab.file.getAbsolutePath();
@@ -592,11 +582,6 @@ final class CodeEditor {
         if (target == null) return false;
         String key = target.getAbsolutePath();
         if (file != null && file.getAbsolutePath().equals(key)) return true;
-        // Em superficies legadas sem abas, impede perder alteracoes ao alternar.
-        if (!tabsEnabled && dirty) {
-            notifyUnsavedChanges();
-            return false;
-        }
         TabState next = openTabs.get(key);
         if (next == null) {
             String text;
@@ -710,10 +695,10 @@ final class CodeEditor {
         return true;
     }
 
-    /** O X do rodape fecha a aba atual quando as abas estao habilitadas. */
+    /** O X do rodape fecha a aba atual. */
     boolean close() {
         if (file == null) return true;
-        return tabsEnabled ? closeTab(file.getAbsolutePath()) : closeAllTabs();
+        return closeTab(file.getAbsolutePath());
     }
 
     boolean hasUnsavedTabs() {
@@ -856,7 +841,7 @@ final class CodeEditor {
             tab.original = text;
             tab.dirty = false;
         }
-        if (tabsEnabled) renderTabStrip();
+        renderTabStrip();
         listener.onSaved(file);
         return true;
     }
