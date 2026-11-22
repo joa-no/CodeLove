@@ -1,119 +1,157 @@
+<div align="center">
+
+<img src="app/src/main/res/drawable-xxxhdpi/codelove_icon_fg.png" alt="CodeLove app icon foreground" width="160" />
+
 # CodeLove
 
-**CodeLove** é um ambiente Android para editar código Lua e executar projetos com o mecanismo [LÖVE](https://love2d.org/).
+**Create with Lua. Play with LÖVE.**
 
-O projeto combina uma interface de edição própria em Java com o runtime nativo do LÖVE. O objetivo é permitir que o usuário abra uma pasta existente, trabalhe diretamente nos arquivos dela e execute o projeto no próprio dispositivo.
+An integrated Android workspace for writing Lua, managing project files, and running LÖVE games directly on your device.
 
-## Estado do projeto
+<p>
+  <img src="https://img.shields.io/badge/Android-242436?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Android" />
+  <img src="https://img.shields.io/badge/Lua-A78BFA?style=for-the-badge&logo=lua&logoColor=white" alt="Lua" />
+  <img src="https://img.shields.io/badge/L%C3%96VE-242436?style=for-the-badge" alt="LÖVE" />
+  <img src="https://img.shields.io/badge/Status-In_development-A78BFA?style=for-the-badge&labelColor=242436" alt="In development" />
+</p>
 
-O fluxo principal de trabalho já está implementado:
+<a href="https://github.com/joa-no/CodeLove/actions"><img src="https://img.shields.io/badge/Development-Builds-242436?style=for-the-badge&logo=githubactions&logoColor=A78BFA" alt="Development builds" /></a>
 
-- Seleção de uma pasta pelo Storage Access Framework (SAF).
-- Acesso direto aos arquivos da pasta selecionada, com a autorização concedida pelo Android.
-- Criação, leitura, edição, renomeação e exclusão de arquivos e pastas.
-- Salvamento explícito pelo editor.
-- Atualização da árvore ao detectar alterações feitas fora do CodeLove.
-- Execução de projetos Lua por meio do runtime LÖVE.
+[About](#about-codelove) · [Features](#features) · [Built with](#built-with) · [Build from source](#build-from-source)
 
-**A pasta selecionada pelo usuário é a fonte de verdade.** O projeto não mantém uma cópia de trabalho persistente nem um mecanismo de sincronização entre duas pastas.
+</div>
 
-## Tecnologias
+---
 
-- Android: Java.
-- Interface: Views nativas do Android.
-- Runtime de jogos: LÖVE.
-- Código nativo: C/C++ com CMake e Android NDK.
-- Build: Gradle.
-- Integração contínua: GitHub Actions.
+## About CodeLove
 
-O runtime nativo é mantido por submódulos Git. Não remova nem substitua os submódulos sem verificar a compatibilidade com o projeto.
+CodeLove brings a native Android code editor and the [LÖVE](https://love2d.org/) runtime together in one application. Open an existing project folder, work directly with its files, and run your Lua projects without switching to a separate runner.
 
-## Estrutura do repositório
+CodeLove is a code-first development environment, not a visual game engine.
 
-```text
-.
-├── .github/workflows/       # Compilação automatizada
-├── app/
-│   ├── src/main/java/       # Editor, workspace e acesso SAF
-│   ├── src/main/cpp/        # Integração nativa e CMake
-│   ├── src/main/res/        # Recursos compartilhados
-│   ├── src/normal/          # Aplicativo CodeLove
-│   └── src/embed/           # Variante que incorpora um jogo
-├── gradle/wrapper/          # Versão fixada do Gradle
-├── app/build.gradle         # Configuração Android e dependências
-├── build.gradle             # Configuração Gradle raiz
-└── settings.gradle          # Módulos do projeto
-```
+> [!NOTE]
+> CodeLove is under active development. Development builds are intended for testing; a stable release has not yet been announced here.
 
-### Componentes principais
+## Features
 
-| Arquivo | Responsabilidade |
-|---|---|
-| `GameActivity.java` | Integração entre Android e runtime LÖVE |
-| `Workspace.java` | Interface e coordenação do ambiente de trabalho |
-| `CodeEditor.java` | Edição de arquivos e estado de salvamento |
-| `LuaSyntax.java` | Reconhecimento léxico usado no destaque de sintaxe Lua |
-| `OverlayUi.java` | Componentes visuais do workspace |
-| `SafProjectManager.java` | Seleção e gerenciamento da pasta concedida pelo SAF |
-| `DirectSafStorage.java` | Operações diretas sobre documentos e diretórios SAF |
-| `FileOps.java` | Operações auxiliares com arquivos locais |
+- **Integrated workspace:** Edit Lua code and run LÖVE projects on Android.
+- **Direct folder access:** Select an existing project using Android's Storage Access Framework (SAF).
+- **File management:** Create, read, edit, rename, and delete files and folders.
+- **Explicit saving:** Control when editor changes are written to disk.
+- **External changes:** Refresh the file tree when changes made outside CodeLove are detected.
+- **Native runtime:** Execute Lua projects using the integrated LÖVE runtime.
 
-## Preparar o ambiente
+**The selected project folder is the source of truth.** CodeLove does not maintain a persistent working copy or a synchronization mechanism between two folders.
 
-Requisitos usados pela configuração atual:
+## Built with
+
+| Component | Technology |
+| :-- | :-- |
+| Android | Java |
+| Interface | Native Android Views |
+| Scripting | Lua |
+| Game runtime | LÖVE |
+| Native integration | C/C++, CMake, Android NDK |
+| Build system | Gradle |
+| Continuous integration | GitHub Actions |
+
+The native runtime is maintained through Git submodules. Do not remove or replace them without verifying compatibility.
+
+## Build from source
+
+### Requirements
 
 - JDK 17.
-- Android SDK com plataforma de compilação configurada no Gradle.
+- Android SDK with the compile platform configured in Gradle.
 - Android NDK `27.3.13750724`.
-- CMake 3.21 ou superior.
-- Python 3.9 ou superior para a conversão de módulos nativos que ainda usam `Android.mk`.
+- CMake 3.21 or newer.
+- Python 3.9 or newer for converting native modules that still use `Android.mk`.
 
-Clone o repositório incluindo os submódulos:
+Clone the repository with its submodules:
 
 ```bash
 git clone --recurse-submodules https://github.com/joa-no/CodeLove.git
 cd CodeLove
 ```
 
-Se o repositório já foi clonado sem os submódulos:
+If the repository was already cloned without submodules:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-## Compilar
-
-APK de depuração:
+Build the debug APK:
 
 ```bash
 ./gradlew assembleNormalRecordDebug
 ```
 
-APK de release (não assinado para distribuição):
+Build the release APK (unsigned for distribution):
 
 ```bash
 ./gradlew assembleNormalRecordRelease
 ```
 
-Os arquivos gerados ficam em `app/build/outputs/`. A automação do GitHub Actions também compila as variantes Debug e Release e publica os artefatos de cada execução.
+Build outputs are located in `app/build/outputs/`. GitHub Actions also builds Debug and Release variants and publishes workflow artifacts. On Windows, use `gradlew.bat` instead of `./gradlew`.
 
-No Windows, use `gradlew.bat` no lugar de `./gradlew`.
+## Project structure
 
-## Assinatura de depuração
+```text
+.
+├── .github/workflows/       # Automated builds
+├── app/
+│   ├── src/main/java/       # Editor, workspace and SAF access
+│   ├── src/main/cpp/        # Native integration and CMake
+│   ├── src/main/res/        # Shared resources
+│   ├── src/normal/          # CodeLove application
+│   └── src/embed/           # Embedded game variant
+├── gradle/wrapper/          # Pinned Gradle version
+├── app/build.gradle         # Android configuration and dependencies
+├── build.gradle             # Root Gradle configuration
+└── settings.gradle          # Project modules
+```
 
-O repositório contém `app/codelove-debug.p12`, uma chave de assinatura **pública e exclusiva para builds de teste**. Ela permite que instalações de teste sucessivas mantenham a mesma identidade de assinatura.
+<details>
+<summary><strong>Core components</strong></summary>
 
-Essa chave não deve ser usada para publicar o aplicativo. Uma distribuição real precisa de uma chave de release privada, armazenada fora do repositório e protegida por segredos do ambiente de build.
+| File | Responsibility |
+| :-- | :-- |
+| `GameActivity.java` | Android and LÖVE runtime integration |
+| `Workspace.java` | Workspace UI and coordination |
+| `CodeEditor.java` | File editing and save state |
+| `LuaSyntax.java` | Lua lexical recognition for syntax highlighting |
+| `OverlayUi.java` | Workspace visual components |
+| `SafProjectManager.java` | Selection and management of SAF project folders |
+| `DirectSafStorage.java` | Direct SAF document and directory operations |
+| `FileOps.java` | Local file utilities |
 
-## Diretrizes de manutenção
+</details>
 
-- Preserve o acesso direto via SAF. Não reintroduza cópia de trabalho persistente ou sincronização sem uma necessidade técnica demonstrada.
-- Não altere o fluxo de salvamento explícito sem testar a proteção contra perda de alterações.
-- Preserve os submódulos nativos e seus avisos de licença.
-- Não adicione dependências sem uso comprovado.
-- Faça mudanças pequenas e compile Debug e Release antes de considerar uma alteração concluída.
-- Testes automatizados não substituem a validação no Android real, especialmente para SAF, permissões e ciclo de vida.
+## Debug signing
 
-## Licenças
+The repository contains `app/codelove-debug.p12`, a **public signing key intended exclusively for test builds**. It allows successive test installations to retain the same signing identity.
 
-CodeLove contém código próprio e componentes derivados ou incorporados do projeto LÖVE e de suas dependências. Consulte os avisos em `license.txt`, `app/src/normal/assets/codelove-licenses.txt` e nos respectivos submódulos. Os créditos e licenças originais devem ser preservados.
+Never use this key to publish the application. Production distribution requires a private release key stored outside the repository and protected by build environment secrets.
+
+## Maintenance guidelines
+
+- Preserve direct SAF access. Do not reintroduce persistent working copies or synchronization without a demonstrated technical need.
+- Do not change explicit saving without testing protection against data loss.
+- Preserve native submodules and their license notices.
+- Do not add dependencies without a proven use.
+- Keep changes small and validate Debug and Release builds before considering a change complete.
+- Automated tests do not replace real Android device testing, especially for SAF, permissions, and lifecycle behavior.
+
+## Licenses & credits
+
+CodeLove contains original code and components derived from or incorporating LÖVE and its dependencies. See [license.txt](license.txt), [CodeLove license notices](app/src/normal/assets/codelove-licenses.txt), and the respective submodules. Original credits and license notices must be preserved.
+
+---
+
+<div align="center">
+
+**CodeLove — your Lua workspace, anywhere.**
+
+<sub>Created by <a href="https://github.com/joa-no">joa-no</a> · Powered by <a href="https://love2d.org/">LÖVE</a></sub>
+
+</div>
