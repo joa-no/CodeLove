@@ -68,12 +68,27 @@ final class GameExportArchive {
         if (!writer.hasMainLua) {
             throw new IOException("O projeto precisa conter main.lua na raiz.");
         }
-        ZipOutputStream zip = new ZipOutputStream(target);
-        // Do not close the caller's output stream; closeEntry / finish writes
-        // the central directory while retaining ownership with the caller.
-        writer.copyEntries(zip, root, "", 0);
-        zip.finish();
-        zip.flush();
+        // Close the ZIP wrapper to release its native compressor, but keep
+        // the caller's stream open for its final file descriptor sync.
+        OutputStream nonClosing = new OutputStream() {
+            @Override public void write(int value) throws IOException {
+                target.write(value);
+            }
+            @Override public void write(byte[] data, int offset, int length) throws IOException {
+                target.write(data, offset, length);
+            }
+            @Override public void flush() throws IOException {
+                target.flush();
+            }
+            @Override public void close() throws IOException {
+                target.flush();
+            }
+        };
+        try (ZipOutputStream zip = new ZipOutputStream(nonClosing)) {
+            writer.copyEntries(zip, root, "", 0);
+            zip.finish();
+            zip.flush();
+        }
         return new Summary(writer.fileCount, writer.totalBytes);
     }
 

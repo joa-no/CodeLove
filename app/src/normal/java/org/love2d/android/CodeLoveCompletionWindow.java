@@ -104,15 +104,21 @@ final class CodeLoveCompletionWindow extends EditorAutoCompletion {
         float dp = getEditor().getDpUnit();
         if (dp <= 0) return;
 
-        int longest = 8;
-        for (int i = 0; i < Math.min(rows.getCount(), 24); i++) {
+        android.graphics.Paint measure = new android.graphics.Paint();
+        measure.setTypeface(Typeface.MONOSPACE);
+        measure.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP,
+            12f, getEditor().getResources().getDisplayMetrics()));
+        float longest = measure.measureText("function");
+        for (int i = 0; i < rows.getCount(); i++) {
             CompletionItem item = rows.getItem(i);
             if (item.label != null) {
-                longest = Math.max(longest, item.label.length());
+                longest = Math.max(longest, measure.measureText(item.label.toString()));
             }
         }
-        // Mesmo para uma unica sugestao, nao usa os 300dp padroes do Sora.
-        int width = Math.round(Math.max(84f, Math.min(260f, 20f + longest * 7.3f)) * dp);
+        // Include the row padding and extra space for popup/list insets.
+        int desired = (int) Math.ceil(longest + 32f * dp);
+        int available = Math.max(1, getEditor().getWidth() - Math.round(8f * dp));
+        int width = Math.min(available, Math.max(Math.round(84f * dp), desired));
         setSize(width, getHeight());
     }
 
@@ -135,6 +141,7 @@ final class CodeLoveCompletionWindow extends EditorAutoCompletion {
                 text.setTypeface(Typeface.MONOSPACE);
                 text.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
                 text.setSingleLine(true);
+                text.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 text.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                 text.setPadding(Math.round(10 * density), Math.round(6 * density),
                     Math.round(10 * density), Math.round(6 * density));

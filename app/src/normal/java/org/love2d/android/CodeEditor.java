@@ -10,7 +10,6 @@
 package org.love2d.android;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
@@ -80,6 +79,7 @@ final class CodeEditor {
     }
 
     private final Activity activity;
+    private final OverlayUi ui;
     private final Listener listener;
     private Storage storage;
     private final LinearLayout view;
@@ -154,8 +154,9 @@ final class CodeEditor {
     private boolean saveFailureNotified; // evita repetir o mesmo aviso a cada tentativa
     private boolean loading;     // true enquanto trocamos o texto por codigo
     private boolean highlightLua; // arquivo .lua usa linguagem e ajudas especificas
-    CodeEditor(Activity activity, Listener listener) {
+    CodeEditor(Activity activity, OverlayUi ui, Listener listener) {
         this.activity = activity;
+        this.ui = ui;
         this.listener = listener;
 
         view = new LinearLayout(activity);
@@ -666,11 +667,9 @@ final class CodeEditor {
             else showTab(selected);
         }
         if (conflict) {
-            new AlertDialog.Builder(activity)
-                .setTitle(R.string.cl_file_changed_title)
-                .setMessage(R.string.cl_file_changed_message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+            ui.message(activity.getString(R.string.cl_file_changed_title),
+                activity.getString(R.string.cl_file_changed_message), null,
+                activity.getString(android.R.string.ok), () -> {});
         }
     }
 
@@ -785,12 +784,29 @@ final class CodeEditor {
         }
 
         if (originalText == null || !originalText.equals(current)) {
-            new AlertDialog.Builder(activity)
-                .setTitle(activity.getString(R.string.cl_file_changed_title))
-                .setMessage(activity.getString(R.string.cl_file_changed_message))
-                .setNegativeButton(activity.getString(R.string.cl_cancel), (dialog, which) -> { })
-                .setPositiveButton(activity.getString(R.string.cl_overwrite), (dialog, which) -> writeTextNow(text))
-                .show();
+            final File confirmedFile = file;
+            final Storage confirmedStorage = storage;
+            ui.message(activity.getString(R.string.cl_file_changed_title),
+                activity.getString(R.string.cl_file_changed_message),
+                activity.getString(R.string.cl_cancel),
+                activity.getString(R.string.cl_overwrite), () -> {
+                    if (!confirmedFile.equals(file) || storage != confirmedStorage
+                        || !text.equals(soraInput.getText().toString())) return;
+                    try {
+                        String latest = storage != null
+                            ? storage.readText(file, MAX_BYTES) : readText(file);
+                        if (latest == null) {
+                            notifySaveFailure();
+                        } else if (!current.equals(latest)) {
+                            saveNow();
+                        } else {
+                            writeTextNow(text);
+                        }
+                    } catch (IOException e) {
+                        Log.w(TAG, "Falha ao verificar confirmacao de sobrescrita", e);
+                        notifySaveFailure();
+                    }
+                });
             return false;
         }
 

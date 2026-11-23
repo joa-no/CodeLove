@@ -75,9 +75,9 @@ final class GameExportPackage {
                     }
                     Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                     intent.addCategory(Intent.CATEGORY_OPENABLE);
-                    intent.setType("application/zip");
+                    intent.setType("application/octet-stream");
                     intent.putExtra(Intent.EXTRA_TITLE, safeFileName(title) + ".love");
-                    intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                     try {
                         activity.startActivityForResult(intent, REQUEST_SAVE_LOVE);
                     } catch (RuntimeException e) {
@@ -146,6 +146,7 @@ final class GameExportPackage {
                     }
                     out.flush();
                 }
+                ExportDocumentVerification.verify(activity.getContentResolver(), destination, packageFile);
                 ok = true;
             } catch (IOException | SecurityException e) {
                 Log.w(TAG, "Failed to copy LOVE archive to selected document", e);

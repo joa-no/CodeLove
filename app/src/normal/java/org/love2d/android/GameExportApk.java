@@ -110,7 +110,7 @@ final class GameExportApk {
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 intent.setType("application/vnd.android.package-archive");
                 intent.putExtra(Intent.EXTRA_TITLE, safeFileName(identity.displayName) + ".apk");
-                intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 try {
                     activity.startActivityForResult(intent, REQUEST_SAVE_APK);
                 } catch (RuntimeException e) {
@@ -167,6 +167,7 @@ final class GameExportApk {
                     }
                     output.flush();
                 }
+                ExportDocumentVerification.verify(activity.getContentResolver(), destination, ready);
                 successful = true;
             } catch (IOException | SecurityException e) {
                 Log.e(TAG, "Could not save signed game APK", e);

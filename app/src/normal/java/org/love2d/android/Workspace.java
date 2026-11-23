@@ -63,7 +63,7 @@ public final class Workspace {
     private static final String PREF_WORKSPACE_ORIENTATION = "workspace_orientation";
     private static final String PREF_APPEARANCE = "appearance_theme";
     private static final String PREF_LANGUAGE = "workspace_language";
-    private static Workspace currentInstance;
+    private static volatile Workspace currentInstance;
 
     /** Apenas caminhos: nenhuma Activity ou view e guardada na recriacao de tema. */
     private static final class ThemeSession {
@@ -157,7 +157,7 @@ public final class Workspace {
     private final Set<String> expanded = new HashSet<String>();
 
     private File activeProject = null; // identificador virtual do projeto aberto
-    private DirectSafStorage activeSafStorage = null; // fonte direta SAF, quando aplicavel
+    private volatile DirectSafStorage activeSafStorage = null; // fonte direta SAF, quando aplicavel
     private File runtimeProject = null; // snapshot temporario usado somente pelo LOVE
     private boolean playing = false;
     private boolean preparingPlayback = false;
@@ -261,12 +261,7 @@ public final class Workspace {
         // Reativa e atualiza o Play assim que o projeto SAF e restaurado.
         updatePlayButton();
         renderTree();
-        final DirectSafStorage selectedStorage = storage;
-        new Thread(() -> {
-            if (selectedStorage == activeSafStorage && !disposed) {
-                prepareRuntimeProject(false);
-            }
-        }, "CodeLove-SAF-RuntimeRestore").start();
+        queueRuntimePreparation();
     }
 
     /** Restaura visual e abas na mesma posicao, sem animar a gaveta nem reler codigo. */
@@ -449,7 +444,7 @@ public final class Workspace {
         bindLanguage(() -> setButtonHint(saveButton, activity.getString(R.string.cl_save_codelove)));
         saveButton.setOnClickListener(v -> saveCurrentFile());
 
-        editor = new CodeEditor(activity, new CodeEditor.Listener() {
+        editor = new CodeEditor(activity, ui, new CodeEditor.Listener() {
             @Override
             public void onEdited() {
                 if (saveIcon != null) saveIcon.setKind(IconView.SAVE);
@@ -1928,7 +1923,7 @@ public final class Workspace {
         messageScroll.addView(body, new ScrollView.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout.LayoutParams messageLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, dp(150));
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         messageLp.setMargins(0, dp(2), 0, dp(10));
         sheet.addView(messageScroll, messageLp);
 
@@ -1961,9 +1956,8 @@ public final class Workspace {
         // o layout raiz tiver sido medido (root.getWidth() pode ser zero no inicio).
         RelativeLayout.LayoutParams sheetLp = new RelativeLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sheetLp.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM);
-        sheetLp.addRule(RelativeLayout.CENTER_HORIZONTAL);
-        sheetLp.setMargins(dp(16), 0, dp(16), Math.max(dp(12), insetBottom));
+        sheetLp.addRule(RelativeLayout.CENTER_IN_PARENT);
+        sheetLp.setMargins(dp(16), dp(12), dp(16), dp(12));
         projectNotice = sheet;
         root.addView(sheet, sheetLp);
         sheet.bringToFront();
@@ -1977,7 +1971,7 @@ public final class Workspace {
                 rootWidth = activity.getResources().getDisplayMetrics().widthPixels;
             }
             int availableWidth = Math.max(dp(1), rootWidth - dp(32));
-            int sheetWidth = Math.min(Math.round(availableWidth * 0.82f), dp(540));
+            int sheetWidth = Math.min(availableWidth, dp(360));
             RelativeLayout.LayoutParams measuredLp =
                 (RelativeLayout.LayoutParams) sheet.getLayoutParams();
             measuredLp.width = sheetWidth;
@@ -2353,7 +2347,7 @@ public final class Workspace {
             lastFolder = destination;
 
             if (activeSafStorage != null) {
-                prepareRuntimeProject(false);
+                queueRuntimePreparation();
             }
 
             renderTree();
@@ -2527,7 +2521,7 @@ public final class Workspace {
             if (isActiveProject) {
                 activeProject = dest;
                 projectTitle.setText(activeSafStorage.getDisplayName());
-                prepareRuntimeProject(false);
+                queueRuntimePreparation();
             }
             renderTree();
             if (editedFile != null && sameFile(editedFile, target)) openInEditor(dest);
@@ -2618,7 +2612,7 @@ public final class Workspace {
             editor.setStorage(null);
         } else if (activeProject != null && isInside(target, activeProject)) {
             playing = false;
-            prepareRuntimeProject(false);
+            queueRuntimePreparation();
             updatePlayButton();
         }
         renderTree();
@@ -2690,11 +2684,7 @@ public final class Workspace {
         if (activeProject != null && isInside(file, activeProject)) {
             playing = false;
             if (activeSafStorage != null) {
-                final DirectSafStorage storage = activeSafStorage;
-                new Thread(() -> {
-                    if (storage != activeSafStorage || disposed) return;
-                    prepareRuntimeProject(false);
-                }, "CodeLove-SAF-RuntimeRefresh").start();
+                queueRuntimePreparation();
             }
             updatePlayButton();
         }
@@ -2737,11 +2727,7 @@ public final class Workspace {
 
         editor.setStorage(storage);
         if (storage != null) {
-            final DirectSafStorage selectedStorage = storage;
-            new Thread(() -> {
-                if (selectedStorage != activeSafStorage || disposed) return;
-                prepareRuntimeProject(false);
-            }, "CodeLove-SAF-RuntimeOpen").start();
+            queueRuntimePreparation();
         } else {
             deleteRuntimeProject();
         }
@@ -2787,21 +2773,21 @@ public final class Workspace {
             final DirectSafStorage storage = activeSafStorage;
             final File selected = activeProject;
             preparingPlayback = true;
-            new Thread(() -> {
-                boolean prepared = false;
+            RUNTIME_QUEUE.execute(() -> {
+                File prepared = null;
                 try {
-                    prepared = prepareRuntimeProject(true);
+                    prepared = prepareRuntimeSnapshot(storage, true);
                 } finally {
-                    final boolean ready = prepared;
+                    final File ready = prepared;
                     activity.runOnUiThread(() -> {
                         preparingPlayback = false;
-                        if (!ready || disposed || currentInstance != this
+                        if (ready == null || disposed || currentInstance != this
                             || storage != activeSafStorage || activeProject == null
                             || !sameFile(activeProject, selected)) return;
-                        openStandalonePlayback(runtimeProject);
+                        openStandalonePlayback(ready);
                     });
                 }
-            }, "CodeLove-SAF-StandalonePlay").start();
+            });
         } else {
             openStandalonePlayback(activeProject);
         }
@@ -2812,12 +2798,17 @@ public final class Workspace {
     }
 
 
-    private boolean prepareRuntimeProject(boolean announceFailure) {
-        if (activeSafStorage == null || activeProject == null) {
-            return activeProject != null;
-        }
-        DirectSafStorage storage = activeSafStorage;
-        File project = activeProject;
+    private static final java.util.concurrent.ExecutorService RUNTIME_QUEUE =
+        java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    private void queueRuntimePreparation() {
+        final DirectSafStorage storage = activeSafStorage;
+        if (storage == null || disposed) return;
+        RUNTIME_QUEUE.execute(() -> prepareRuntimeSnapshot(storage, false));
+    }
+
+    private File prepareRuntimeSnapshot(DirectSafStorage storage, boolean announceFailure) {
+        if (disposed || currentInstance != this || storage != activeSafStorage) return null;
         File storageRoot = storage.getRoot();
         File storageKey = storageRoot == null ? null : storageRoot.getParentFile();
         String runtimeKey = storageKey == null ? "project" : storageKey.getName();
@@ -2829,34 +2820,35 @@ public final class Workspace {
                 storage.deleteLocalSnapshot(runtimeProject);
             }
             runtimeProject = destination;
-            return true;
+            return destination;
         } catch (IOException e) {
             Log.w(TAG, "Falha ao preparar o projeto para execucao", e);
             if (announceFailure) {
-                activity.runOnUiThread(() -> toast(
-                    activity.getString(R.string.cl_locale_export_15)));
+                activity.runOnUiThread(() -> {
+                    if (!disposed && currentInstance == this && storage == activeSafStorage)
+                        toast(activity.getString(R.string.cl_locale_export_15));
+                });
             }
-            return false;
+            return null;
         }
     }
 
     private void deleteRuntimeProject() {
-        if (runtimeProject != null) {
-            DirectSafStorage storage = activeSafStorage;
-            if (storage != null) {
-                storage.deleteLocalSnapshot(runtimeProject);
-            } else {
-                FileOps.deleteRecursive(runtimeProject);
+        final DirectSafStorage storage = activeSafStorage;
+        RUNTIME_QUEUE.execute(() -> {
+            if (runtimeProject != null) {
+                if (storage != null) storage.deleteLocalSnapshot(runtimeProject);
+                else FileOps.deleteRecursive(runtimeProject);
+                runtimeProject = null;
             }
-            runtimeProject = null;
-        }
-        File fallback = new File(activity.getCacheDir(), "codelove-runtime");
-        if (fallback.isDirectory()) {
-            File[] children = fallback.listFiles();
-            if (children != null) {
-                for (File child : children) FileOps.deleteRecursive(child);
+            File fallback = new File(activity.getCacheDir(), "codelove-runtime");
+            if (fallback.isDirectory()) {
+                File[] children = fallback.listFiles();
+                if (children != null) {
+                    for (File child : children) FileOps.deleteRecursive(child);
+                }
             }
-        }
+        });
     }
 
     private void updatePlayButton() {
@@ -2899,7 +2891,7 @@ public final class Workspace {
         selectProject(project);
     }
 
-    private boolean disposed = false;
+    private volatile boolean disposed = false;
 
     /** Aviso que cobre a area do jogo enquanto nenhum projeto estiver aberto. */
     private LinearLayout buildPlaceholder() {

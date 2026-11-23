@@ -262,8 +262,7 @@ final class OverlayUi {
 
         int width = Math.min(dp(360), root.getWidth() - dp(32));
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-            width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        lp.topMargin = topInset + dp(72);
+            width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         scrim.addView(card, lp);
 
         currentField = field;
@@ -378,6 +377,46 @@ final class OverlayUi {
     // Janela de confirmacao
     // ------------------------------------------------------------------
 
+    void message(String title, String message, String cancelLabel,
+                 String confirmLabel, Runnable onYes) {
+        FrameLayout scrim = openScrim(0x99000000);
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        card.setPadding(dp(18), dp(18), dp(18), dp(14));
+        card.setClickable(true);
+        TextView heading = new TextView(activity);
+        heading.setText(title);
+        heading.setTextColor(Workspace.COLOR_TEXT);
+        heading.setTextSize(17);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(heading);
+        TextView body = new TextView(activity);
+        body.setText(message);
+        body.setTextColor(Workspace.COLOR_MUTED);
+        body.setTextSize(15);
+        body.setPadding(0, dp(12), 0, 0);
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(body);
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        Runnable confirm = () -> { dismiss(); onYes.run(); };
+        if (cancelLabel != null) {
+            card.addView(buttons(cancelLabel, confirmLabel, Workspace.COLOR_FOLDER,
+                Workspace.COLOR_ACCENT_TEXT, confirm), buttonsParams());
+        } else {
+            TextView ok = button(confirmLabel, Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT);
+            ok.setOnClickListener(v -> confirm.run());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+            lp.topMargin = dp(16);
+            card.addView(ok, lp);
+        }
+        int width = Math.min(dp(360), Math.max(dp(1), root.getWidth() - dp(32)));
+        int height = Math.min(dp(260), Math.max(dp(1), root.getHeight() - dp(24)));
+        scrim.addView(card, new FrameLayout.LayoutParams(width, height, Gravity.CENTER));
+    }
+
     void confirm(String message, String confirmLabel, final Runnable onYes) {
         FrameLayout scrim = openScrim(0x99000000);
 
@@ -403,8 +442,7 @@ final class OverlayUi {
 
         int width = Math.min(dp(360), root.getWidth() - dp(32));
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-            width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        lp.topMargin = topInset + dp(72);
+            width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
         scrim.addView(card, lp);
     }
 

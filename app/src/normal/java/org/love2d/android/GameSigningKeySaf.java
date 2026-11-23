@@ -59,11 +59,30 @@ final class GameSigningKeySaf {
         // Validate the password and existing identity before opening/truncating
         // the destination document.
         GameSigningKeyManager.inspect(context, projectId, password);
+        GameSigningKeyStore.Identity identity;
         try (OutputStream out = context.getContentResolver()
                 .openOutputStream(destination, "wt")) {
             if (out == null) throw new FileNotFoundException("Cannot write backup document");
-            return GameSigningKeyManager.backup(context, projectId, password, out);
+            identity = GameSigningKeyManager.backup(context, projectId, password, out);
         }
+        // Verify the actual document after closing the writer. A provider
+        // that cannot return identical bytes must not yield backup success.
+        try (InputStream expected = new java.io.BufferedInputStream(
+                    new java.io.FileInputStream(
+                        GameSigningKeyManager.privateKeyFile(context, projectId)));
+             InputStream actual = context.getContentResolver().openInputStream(destination)) {
+            if (actual == null) throw new FileNotFoundException("Cannot verify backup document");
+            try (InputStream buffered = new java.io.BufferedInputStream(actual)) {
+                int value;
+                while ((value = expected.read()) != -1) {
+                    if (buffered.read() != value)
+                        throw new IOException("Signing key backup verification failed");
+                }
+                if (buffered.read() != -1)
+                    throw new IOException("Signing key backup verification failed");
+            }
+        }
+        return identity;
     }
 
     static GameSigningKeyStore.Identity restoreFromDocument(
