@@ -39,3 +39,11 @@ Pinned upstream sources:
 - Megasource: [5118c13ca1dea1890e298c0ce5e410846913a5a8](https://github.com/love2d/megasource/tree/5118c13ca1dea1890e298c0ce5e410846913a5a8)
 
 The shared asset `assets/native-license-notices.txt` supplements the existing notices with 16 original files from this exact Megasource revision, including SDL3, LuaJIT, zlib, Xiph libraries, FreeType, HarfBuzz, libmodplug and OpenAL Soft. Both APKs must contain the identical asset. OpenAL Soft's COPYING is the GNU Library GPL version 2; retain the original text and review applicable version elections and relinking obligations. This is not a complete native notice inventory: NDK libc++ and embedded LÖVE libraries still require reconciliation, as do Maven artifacts and corresponding-source/relink instructions. No library version was changed.
+
+## Evidence from build 549
+
+[Build 549](https://github.com/joa-no/CodeLove/actions/runs/45459608322) passed the native notice asset tests in both APK flavors. The collected dependency inventory contains 29 unique coordinates (26 editor, 20 runtime, 17 common). Seven coordinates have original embedded notice files: three AndroidX artifacts share one Apache license text, the three Bouncy Castle artifacts share one MIT text, and apksig has its own Apache notice.
+
+Both flavors now have separate `assets/jvm-dependency-notices.txt` files. These list the exact resolved coordinates and include the verified upstream license texts for Kotlin (different versions per flavor), coroutines, Oboe, Sora, JSpecify and Bouncy Castle, plus the AndroidX license and candidate apksig text. Guava ListenableFuture and JetBrains annotations declare Apache-2.0 in their artifact metadata; the exact version source notices still need review. The next build must prove that every original notice from the resolved artifacts is present verbatim in the relevant flavor, and that the inventory and packaged asset match. This check is not an assertion that the full upstream notice obligations have been met.
+
+Remaining gates include exact-version upstream copyright/NOTICE and Kotlin third-party code review, native libc++ and LÖVE notices, readable access to license information, and LGPL/GPL corresponding-source and practical relinking distribution. No dependency versions or app behavior were changed.

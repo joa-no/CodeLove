@@ -107,12 +107,17 @@ jobs:
         native = Path("app/src/main/assets/native-license-notices.txt").read_bytes()
         assert native.strip(), "Native notices are empty"
         runtime = Path("app/src/embed/assets/runtime-licenses.txt").read_bytes()
+        editor_jvm = Path("app/src/normal/assets/jvm-dependency-notices.txt").read_bytes()
+        runtime_jvm = Path("app/src/embed/assets/jvm-dependency-notices.txt").read_bytes()
+        assert editor_jvm.strip() and runtime_jvm.strip() and editor_jvm != runtime_jvm
         with ZipFile(apk) as normal:
             assert normal.read("assets/codelove-licenses.txt") == editor, "Editor license asset differs from source"
             assert normal.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in editor"
+            assert normal.read("assets/jvm-dependency-notices.txt") == editor_jvm, "JVM editor notices missing or changed"
             with ZipFile(BytesIO(normal.read("assets/offline/embed-unsigned.apk"))) as embed:
                 assert embed.read("assets/runtime-licenses.txt") == runtime, "Runtime license asset differs from source"
                 assert embed.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in runtime"
+                assert embed.read("assets/jvm-dependency-notices.txt") == runtime_jvm, "JVM runtime notices missing or changed"
                 assert "assets/codelove-licenses.txt" not in embed.namelist(), "Editor notices leaked into runtime"
         print("Packaged editor and embedded runtime license assets verified")
         PY
@@ -137,6 +142,7 @@ jobs:
         export CODELOVE_AUDIT_DIR="$RUNNER_TEMP/dependency-audit"
         bash ./gradlew -I tools/dependency-audit.init.gradle :app:collectAuditArtifacts --console=plain
         python3 tools/collect_dependency_notices.py "$CODELOVE_AUDIT_DIR"
+        python3 tools/check_jvm_notices.py "$CODELOVE_AUDIT_DIR"
         git submodule status --recursive > "$CODELOVE_AUDIT_DIR/native-source-revisions.txt"
         python3 - <<'PY'
         import os
