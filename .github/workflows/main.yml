@@ -146,7 +146,7 @@ jobs:
                 for label, archive in (("editor", editor), ("runtime", runtime)):
                     libs = sorted(n for n in archive.namelist() if n.startswith("lib/") and n.endswith(".so"))
                     assert libs, label
-                    (root / (label + "-native-libraries.txt")).write_text("\\n".join(libs) + "\\n")
+                    (root / (label + "-native-libraries.txt")).write_text("\n".join(libs) + "\n")
         PY
     - name: Artifact (Dependency audit reports)
       if: ${{ matrix.build_type == 'Release' }}
