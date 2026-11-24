@@ -91,6 +91,47 @@ jobs:
         CODELOVE_RELEASE_KEY_ALIAS: ${{ secrets.CODELOVE_KEY_ALIAS }}
         CODELOVE_RELEASE_KEY_PASSWORD: ${{ secrets.CODELOVE_KEY_PASSWORD }}
       run: bash ./gradlew assembleNormalRecord${{ matrix.build_type }}
+    - name: Verify license assets in packaged CodeLove APK
+      shell: bash
+      run: |
+        set -euo pipefail
+        python3 - "${{ matrix.build_type }}" <<'PY'
+        from io import BytesIO
+        from pathlib import Path
+        from zipfile import ZipFile
+        import sys
+
+        variant = sys.argv[1].lower()
+        apk = Path(f"app/build/outputs/apk/normalRecord/{variant}/app-normal-record-{variant}.apk")
+        editor = Path("app/src/normal/assets/codelove-licenses.txt").read_bytes()
+        runtime = Path("app/src/embed/assets/runtime-licenses.txt").read_bytes()
+        with ZipFile(apk) as normal:
+            assert normal.read("assets/codelove-licenses.txt") == editor, "Editor license asset differs from source"
+            with ZipFile(BytesIO(normal.read("assets/offline/embed-unsigned.apk"))) as embed:
+                assert embed.read("assets/runtime-licenses.txt") == runtime, "Runtime license asset differs from source"
+                assert "assets/codelove-licenses.txt" not in embed.namelist(), "Editor notices leaked into runtime"
+        print("Packaged editor and embedded runtime license assets verified")
+        PY
+    - name: Collect runtime dependency reports
+      if: ${{ matrix.build_type == 'Release' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/dependency-audit"
+        for configuration in normalRecordReleaseRuntimeClasspath normalNoRecordReleaseRuntimeClasspath embedRecordReleaseRuntimeClasspath embedNoRecordReleaseRuntimeClasspath; do
+          bash ./gradlew :app:dependencies --configuration "$configuration" --console=plain > "$RUNNER_TEMP/dependency-audit/$configuration.txt"
+          if grep -Eq ' FAILED($|[[:space:]])' "$RUNNER_TEMP/dependency-audit/$configuration.txt"; then
+            cat "$RUNNER_TEMP/dependency-audit/$configuration.txt"
+            exit 1
+          fi
+        done
+    - name: Artifact (Dependency audit reports)
+      if: ${{ matrix.build_type == 'Release' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-audit-reports
+        path: ${{ runner.temp }}/dependency-audit
+        if-no-files-found: error
     - name: Verify signed CodeLove release APK
       if: ${{ matrix.build_type == 'Release' }}
       shell: bash
