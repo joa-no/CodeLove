@@ -125,6 +125,29 @@ jobs:
             exit 1
           fi
         done
+    - name: Collect original dependency notices and native source revisions
+      if: ${{ matrix.build_type == 'Release' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        export CODELOVE_AUDIT_DIR="$RUNNER_TEMP/dependency-audit"
+        bash ./gradlew -I tools/dependency-audit.init.gradle :app:collectAuditArtifacts --console=plain
+        python3 tools/collect_dependency_notices.py "$CODELOVE_AUDIT_DIR"
+        git submodule status --recursive > "$CODELOVE_AUDIT_DIR/native-source-revisions.txt"
+        python3 - <<'PY'
+        import os
+        from pathlib import Path
+        from zipfile import ZipFile
+        from io import BytesIO
+        root = Path(os.environ["CODELOVE_AUDIT_DIR"])
+        path = Path("app/build/outputs/apk/normalRecord/release/app-normal-record-release.apk")
+        with ZipFile(path) as editor:
+            with ZipFile(BytesIO(editor.read("assets/offline/embed-unsigned.apk"))) as runtime:
+                for label, archive in (("editor", editor), ("runtime", runtime)):
+                    libs = sorted(n for n in archive.namelist() if n.startswith("lib/") and n.endswith(".so"))
+                    assert libs, label
+                    (root / (label + "-native-libraries.txt")).write_text("\\n".join(libs) + "\\n")
+        PY
     - name: Artifact (Dependency audit reports)
       if: ${{ matrix.build_type == 'Release' }}
       uses: actions/upload-artifact@v4
