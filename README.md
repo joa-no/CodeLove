@@ -134,4 +134,4 @@ Essa chave não deve ser usada para publicar o aplicativo. Uma distribuição re
 
 CodeLove contém código próprio e componentes derivados ou incorporados do projeto LÖVE e de suas dependências. Consulte os avisos em `license.txt`, `app/src/normal/assets/codelove-licenses.txt` (incluindo a LGPL-2.1 do Sora Editor) e nos respectivos submódulos. Os créditos e licenças originais devem ser preservados.
 
-A licença que regerá as partes originais do CodeLove ainda precisa ser definida antes da primeira release. O repositório público não elimina os direitos e obrigações das licenças de terceiros. Consulte também a [lista de verificação da versão 1.0.0](docs/release-1.0.0.md).
+As contribuições próprias do editor CodeLove são licenciadas sob [GPL-3.0-only](LICENSE). As contribuições próprias incorporadas ao runtime independente dos jogos são licenciadas sob [zlib](LICENSE-runtime.txt). As licenças de terceiros permanecem intactas. Consulte o [escopo de licenciamento](LICENSING.md). Consulte também a [lista de verificação da versão 1.0.0](docs/release-1.0.0.md).

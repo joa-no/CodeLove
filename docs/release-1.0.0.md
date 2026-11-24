@@ -15,7 +15,8 @@ Estado: em preparação, ainda **não lançado**. A branch de trabalho é `featu
 
 - [ ] Executar a compilação com a nova verificação independente da assinatura do APK **CodeLove Release**, introduzida após o workflow #44665273830 (não executá-la sem autorização).
 - [ ] Verificar `apksigner verify` e o certificado do APK destinado ao público; manter backup seguro da chave de release e de sua senha. **Nunca publicar com a chave de debug**.
-- [ ] Definir expressamente os termos de distribuição das partes autorais do CodeLove. O repositório público já existe, mas não possui licença própria concluída.
+- [x] Definir os termos das contribuições próprias: GPL-3.0-only para editor e ferramentas, zlib para o runtime independente. Ver `LICENSING.md`.
+- [ ] Confirmar a delimitação de todos os arquivos e componentes distribuídos e a disponibilidade do código-fonte correspondente.
 - [ ] Revisar obrigações de todas as dependências, em particular a LGPL-2.1 do Sora Editor 0.24.7 (avisos, código-fonte disponível e condições aplicáveis à substituição/religação da biblioteca), com atenção a futuras opções proprietárias. A inclusão do aviso não substitui a avaliação de conformidade.
 - [ ] Confirmar os avisos de licença de outras dependências distribuídas (AndroidX, Bouncy Castle, apksig, Oboe e componentes nativos).
 - [ ] Fazer regressão manual da interface nos layouts vertical e horizontal, em celular e tablet: SAF, troca de pasta principal, abas, edição, salvamento, console, execução, exportação e falhas/cancelamentos.
