@@ -44,6 +44,8 @@ def check(path: Path) -> None:
                     f"Editor dependency leaked into embed APK: {symbol.decode()}"
                 )
 
+        if "assets/runtime-licenses.txt" not in entries or not apk.read("assets/runtime-licenses.txt").strip():
+            raise SystemExit("Runtime license notices missing")
         if "assets/codelove-licenses.txt" in entries:
             raise SystemExit("CodeLove editor license screen asset leaked")
         if "resources.arsc" not in entries:
