@@ -29,6 +29,8 @@ for row in rows:
                 continue
             name = entry.filename
             leaf = name.rsplit("/", 1)[-1].upper()
+            if leaf.endswith((".CLASS", ".DEX", ".SO")):
+                continue
             if re.match(r"^(LICENSE|LICENCE|NOTICE|COPYING|COPYRIGHT|DEPENDENCIES|THIRD[-_ ]PARTY)([._-]|$)", leaf):
                 payload = z.read(entry)
                 label = prefix + name

@@ -104,11 +104,15 @@ jobs:
         variant = sys.argv[1].lower()
         apk = Path(f"app/build/outputs/apk/normalRecord/{variant}/app-normal-record-{variant}.apk")
         editor = Path("app/src/normal/assets/codelove-licenses.txt").read_bytes()
+        native = Path("app/src/main/assets/native-license-notices.txt").read_bytes()
+        assert native.strip(), "Native notices are empty"
         runtime = Path("app/src/embed/assets/runtime-licenses.txt").read_bytes()
         with ZipFile(apk) as normal:
             assert normal.read("assets/codelove-licenses.txt") == editor, "Editor license asset differs from source"
+            assert normal.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in editor"
             with ZipFile(BytesIO(normal.read("assets/offline/embed-unsigned.apk"))) as embed:
                 assert embed.read("assets/runtime-licenses.txt") == runtime, "Runtime license asset differs from source"
+                assert embed.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in runtime"
                 assert "assets/codelove-licenses.txt" not in embed.namelist(), "Editor notices leaked into runtime"
         print("Packaged editor and embedded runtime license assets verified")
         PY

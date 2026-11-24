@@ -27,3 +27,15 @@ Other AndroidX groups in both graphs: annotation-experimental 1.4.1, arch.core 2
 - Establish corresponding-source distribution and a practical rebuild/relink procedure for LGPL-covered components (notably Sora Editor and OpenAL Soft). A license notice or dynamic linkage alone does not prove compliance. Consult the [LGPL 2.1, section 6](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html).
 - Package verified notices in the correct flavor. Ensure exported-game users can access the runtime source and license information without relying on editor licensing.
 - Do not publish until these gates are addressed. No dependency upgrades or application behavior changes are part of this audit.
+
+## Evidence from build 548
+
+[Build 548](https://github.com/joa-no/CodeLove/actions/runs/45315647557) resolved 29 distinct Maven artifact coordinates; seven contained at least one candidate original notice. A class file named LICENSE.class was incorrectly counted as a notice and is now excluded. Missing notices require source review, not automatic classification.
+
+Both APKs contained the same seven native shared libraries for arm64-v8a, armeabi-v7a and x86_64: SDL3, libc++_shared, liblove, libliblove, LuaJIT, Oboe and OpenAL Soft. Additional statically linked code is not identifiable from that list alone.
+
+Pinned upstream sources:
+- LÖVE: [792690b73dc0c9f84c67c118e295cae1d04195b7](https://github.com/love2d/love/tree/792690b73dc0c9f84c67c118e295cae1d04195b7)
+- Megasource: [5118c13ca1dea1890e298c0ce5e410846913a5a8](https://github.com/love2d/megasource/tree/5118c13ca1dea1890e298c0ce5e410846913a5a8)
+
+The shared asset `assets/native-license-notices.txt` supplements the existing notices with 16 original files from this exact Megasource revision, including SDL3, LuaJIT, zlib, Xiph libraries, FreeType, HarfBuzz, libmodplug and OpenAL Soft. Both APKs must contain the identical asset. OpenAL Soft's COPYING is the GNU Library GPL version 2; retain the original text and review applicable version elections and relinking obligations. This is not a complete native notice inventory: NDK libc++ and embedded LÖVE libraries still require reconciliation, as do Maven artifacts and corresponding-source/relink instructions. No library version was changed.
