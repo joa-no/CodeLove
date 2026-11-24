@@ -55,3 +55,7 @@ Remaining gates include exact-version upstream copyright/NOTICE and Kotlin third
 ## Evidence from build 551
 
 [Build 551](https://github.com/joa-no/CodeLove/actions/runs/45479161483) passed source revision packaging and actual Java direct-asset export notice-preservation tests in Debug and Release. A candidate source archive is now prepared in release CI from exact committed CodeLove and native submodule revisions plus Sora Editor 0.24.7 (commit ab9f2cb23aeb30ae42f0ad9e32b281c6bdbcbfc9). The source candidate is not published automatically. It is restricted to committed files, excludes unexpected signing-key file types, includes the intentionally public debug test key, and records a SHA-256 digest and revision inventory. Rebuild from the archive and modified-library tests remain open. The same run collects actual NDK notice candidates for manual reconciliation rather than treating every NDK tool notice as applicable to the shipped libc++ runtime.
+
+## Evidence from build 552
+
+[Build 552](https://github.com/joa-no/CodeLove/actions/runs/45487651193): Release APK build and license checks passed, but source archive creation rejected the uninitialized Sora Oniguruma submodule (`oniguruma-native/src/main/cpp/oniguruma`). Debug was cancelled by matrix fail-fast. The corrected workflow initializes Sora submodules recursively, rewriting the public SSH URL to HTTPS for this command only, without requiring an SSH key. Existing gitlink verification remains in place. No dependency versions or application code changed.

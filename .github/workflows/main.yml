@@ -206,6 +206,8 @@ jobs:
         set -euo pipefail
         mkdir -p "$RUNNER_TEMP/source-candidate"
         git clone --depth 1 --branch 0.24.7 https://github.com/Rosemoe/sora-editor.git "$RUNNER_TEMP/sora-source"
+        # Sora uses an SSH submodule URL; fetch public sources over HTTPS without credentials.
+        git -C "$RUNNER_TEMP/sora-source" -c url.https://github.com/.insteadOf=git@github.com: submodule update --init --recursive
         python3 tools/package_source_candidate.py "$RUNNER_TEMP/source-candidate" "$RUNNER_TEMP/sora-source"
     - name: Artifact (Corresponding source candidate)
       if: ${{ matrix.build_type == 'Release' }}
