@@ -50,6 +50,9 @@ jobs:
         CODELOVE_KEYSTORE_BASE64: ${{ secrets.CODELOVE_KEYSTORE_BASE64 }}
       run: |
         echo "$CODELOVE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/codelove-release.jks"
+    - name: Record corresponding source revisions
+      shell: bash
+      run: python3 tools/write_source_revision.py
     - name: Prepare bundled offline embed template
       shell: bash
       run: |
@@ -84,6 +87,41 @@ jobs:
         java -cp "$RUNNER_TEMP/offline-manifest-classes" \
           org.love2d.android.OfflineBinaryManifestCheck \
           app/src/normal/assets/offline/embed-unsigned.apk
+    - name: Verify notices survive actual Java game export
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/notice-export-test"
+        javac --release 17 -d "$RUNNER_TEMP/notice-export-test" \
+          app/src/normal/java/org/love2d/android/OfflineGameApk.java \
+          app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java \
+          app/src/normal/java/org/love2d/android/OfflineApkIdentity.java \
+          app/src/normal/java/org/love2d/android/OfflineApkIconResources.java \
+          tools/OfflineGameApkTest.java
+        python3 - <<'PY'
+        import os
+        from pathlib import Path
+        from zipfile import ZipFile
+        with ZipFile(Path(os.environ["RUNNER_TEMP"]) / "notice-export-test" / "sample.love", "w") as game:
+            game.writestr("main.lua", "function love.load() end")
+        PY
+        java -cp "$RUNNER_TEMP/notice-export-test" org.love2d.android.OfflineGameApkTest --repack-assets \
+          app/src/normal/assets/offline/embed-unsigned.apk \
+          "$RUNNER_TEMP/notice-export-test/sample.love" \
+          "$RUNNER_TEMP/notice-export-test/sample.apk"
+        python3 - <<'PY'
+        import os
+        from pathlib import Path
+        from zipfile import ZipFile
+        with ZipFile("app/src/normal/assets/offline/embed-unsigned.apk") as template:
+            with ZipFile(Path(os.environ["RUNNER_TEMP"]) / "notice-export-test" / "sample.apk") as game:
+                for name in ("assets/runtime-licenses.txt", "assets/native-license-notices.txt",
+                             "assets/jvm-dependency-notices.txt", "META-INF/CODELOVE-SOURCE.txt"):
+                    assert template.read(name) == game.read(name), name
+                assert "assets/codelove-licenses.txt" not in game.namelist()
+                assert game.read("assets/main.lua") == b"function love.load() end"
+        print("Runtime notices and source revision preserved by the production Java exporter")
+        PY
     - name: Build Normal Flavor
       env:
         CODELOVE_RELEASE_STORE_FILE: ${{ runner.temp }}/codelove-release.jks
@@ -107,14 +145,17 @@ jobs:
         native = Path("app/src/main/assets/native-license-notices.txt").read_bytes()
         assert native.strip(), "Native notices are empty"
         runtime = Path("app/src/embed/assets/runtime-licenses.txt").read_bytes()
+        revision = Path("app/src/main/resources/META-INF/CODELOVE-SOURCE.txt").read_bytes()
         editor_jvm = Path("app/src/normal/assets/jvm-dependency-notices.txt").read_bytes()
         runtime_jvm = Path("app/src/embed/assets/jvm-dependency-notices.txt").read_bytes()
         assert editor_jvm.strip() and runtime_jvm.strip() and editor_jvm != runtime_jvm
         with ZipFile(apk) as normal:
+            assert normal.read("META-INF/CODELOVE-SOURCE.txt") == revision, "Editor source revision missing"
             assert normal.read("assets/codelove-licenses.txt") == editor, "Editor license asset differs from source"
             assert normal.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in editor"
             assert normal.read("assets/jvm-dependency-notices.txt") == editor_jvm, "JVM editor notices missing or changed"
             with ZipFile(BytesIO(normal.read("assets/offline/embed-unsigned.apk"))) as embed:
+                assert embed.read("META-INF/CODELOVE-SOURCE.txt") == revision, "Runtime source revision missing"
                 assert embed.read("assets/runtime-licenses.txt") == runtime, "Runtime license asset differs from source"
                 assert embed.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in runtime"
                 assert embed.read("assets/jvm-dependency-notices.txt") == runtime_jvm, "JVM runtime notices missing or changed"
