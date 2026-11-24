@@ -38,3 +38,7 @@ app/src/embed/assets/*
 .env.*
 !.env.example
 !app/codelove-debug.p12
+
+# Generated release provenance and NDK notice (included in the source candidate).
+app/src/main/resources/META-INF/CODELOVE-SOURCE.txt
+app/src/main/assets/ndk-runtime-notice.txt

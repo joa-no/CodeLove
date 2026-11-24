@@ -63,12 +63,25 @@ with tempfile.TemporaryDirectory() as temp:
                     seen.add(name)
                     output.addfile(member, part.extractfile(member) if member.isfile() else None)
 
+        # Include only the two explicitly reviewed generated inputs, not the
+        # working tree, signing material, build output, or cached credentials.
+        for relative in ("app/src/main/resources/META-INF/CODELOVE-SOURCE.txt",
+                         "app/src/main/assets/ndk-runtime-notice.txt"):
+            name = "codelove/" + relative
+            source = root / relative
+            if name in seen or not source.is_file() or source.is_symlink():
+                raise SystemExit("Missing or duplicate generated source input: " + relative)
+            seen.add(name)
+            output.add(source, arcname=name, recursive=False)
+
 required = {
     "codelove/LICENSE", "codelove/LICENSE-runtime.txt", "codelove/gradlew",
     "codelove/app/build.gradle", "codelove/docs/rebuild-and-relink.md",
     "codelove/app/src/main/cpp/love/license.txt",
     "codelove/app/src/main/cpp/megasource/libs/openal-soft/COPYING",
     "third-party/sora-editor/LICENSE",
+    "codelove/app/src/main/resources/META-INF/CODELOVE-SOURCE.txt",
+    "codelove/app/src/main/assets/ndk-runtime-notice.txt",
 }
 missing = required - seen
 if missing:

@@ -53,6 +53,15 @@ jobs:
     - name: Record corresponding source revisions
       shell: bash
       run: python3 tools/write_source_revision.py
+    - name: Prepare original NDK runtime notice
+      shell: bash
+      run: |
+        set -euo pipefail
+        NDK="$ANDROID_HOME/ndk/27.3.13750724"
+        if [ ! -f "$NDK/source.properties" ]; then
+          sdkmanager "ndk;27.3.13750724"
+        fi
+        python3 tools/prepare_ndk_runtime_notice.py "$NDK"
     - name: Prepare bundled offline embed template
       shell: bash
       run: |
@@ -116,7 +125,7 @@ jobs:
         with ZipFile("app/src/normal/assets/offline/embed-unsigned.apk") as template:
             with ZipFile(Path(os.environ["RUNNER_TEMP"]) / "notice-export-test" / "sample.apk") as game:
                 for name in ("assets/runtime-licenses.txt", "assets/native-license-notices.txt",
-                             "assets/jvm-dependency-notices.txt", "META-INF/CODELOVE-SOURCE.txt"):
+                             "assets/jvm-dependency-notices.txt", "assets/ndk-runtime-notice.txt", "META-INF/CODELOVE-SOURCE.txt"):
                     assert template.read(name) == game.read(name), name
                 assert "assets/codelove-licenses.txt" not in game.namelist()
                 assert game.read("assets/main.lua") == b"function love.load() end"
@@ -144,6 +153,7 @@ jobs:
         editor = Path("app/src/normal/assets/codelove-licenses.txt").read_bytes()
         native = Path("app/src/main/assets/native-license-notices.txt").read_bytes()
         assert native.strip(), "Native notices are empty"
+        ndk_notice = Path("app/src/main/assets/ndk-runtime-notice.txt").read_bytes()
         runtime = Path("app/src/embed/assets/runtime-licenses.txt").read_bytes()
         revision = Path("app/src/main/resources/META-INF/CODELOVE-SOURCE.txt").read_bytes()
         editor_jvm = Path("app/src/normal/assets/jvm-dependency-notices.txt").read_bytes()
@@ -153,11 +163,13 @@ jobs:
             assert normal.read("META-INF/CODELOVE-SOURCE.txt") == revision, "Editor source revision missing"
             assert normal.read("assets/codelove-licenses.txt") == editor, "Editor license asset differs from source"
             assert normal.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in editor"
+            assert normal.read("assets/ndk-runtime-notice.txt") == ndk_notice, "NDK notice missing or changed in editor"
             assert normal.read("assets/jvm-dependency-notices.txt") == editor_jvm, "JVM editor notices missing or changed"
             with ZipFile(BytesIO(normal.read("assets/offline/embed-unsigned.apk"))) as embed:
                 assert embed.read("META-INF/CODELOVE-SOURCE.txt") == revision, "Runtime source revision missing"
                 assert embed.read("assets/runtime-licenses.txt") == runtime, "Runtime license asset differs from source"
                 assert embed.read("assets/native-license-notices.txt") == native, "Native notices missing or changed in runtime"
+                assert embed.read("assets/ndk-runtime-notice.txt") == ndk_notice, "NDK notice missing or changed in runtime"
                 assert embed.read("assets/jvm-dependency-notices.txt") == runtime_jvm, "JVM runtime notices missing or changed"
                 assert "assets/codelove-licenses.txt" not in embed.namelist(), "Editor notices leaked into runtime"
         print("Packaged editor and embedded runtime license assets verified")
@@ -209,6 +221,10 @@ jobs:
         # Sora uses an SSH submodule URL; fetch public sources over HTTPS without credentials.
         git -C "$RUNNER_TEMP/sora-source" -c url.https://github.com/.insteadOf=git@github.com: submodule update --init --recursive
         python3 tools/package_source_candidate.py "$RUNNER_TEMP/source-candidate" "$RUNNER_TEMP/sora-source"
+    - name: Verify candidate source archive can rebuild without checkout
+      if: ${{ matrix.build_type == 'Release' }}
+      shell: bash
+      run: bash tools/rebuild_source_candidate.sh "$RUNNER_TEMP/source-candidate" "$RUNNER_TEMP/source-rebuild"
     - name: Artifact (Corresponding source candidate)
       if: ${{ matrix.build_type == 'Release' }}
       uses: actions/upload-artifact@v4
