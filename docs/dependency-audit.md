@@ -51,3 +51,7 @@ Remaining gates include exact-version upstream copyright/NOTICE and Kotlin third
 ## Evidence from build 550
 
 [Build 550](https://github.com/joa-no/CodeLove/actions/runs/45464358064) passed the JVM notice packaging and original-notice checks. Next: record exact source revisions in both APKs and verify notice preservation using the production Java export assembler. The [rebuild and relink draft](rebuild-and-relink.md) documents pending corresponding-source and modified-library tests; these remain release blockers. Source identification does not by itself establish LGPL compliance. Native NDK and remaining upstream notices are still open.
+
+## Evidence from build 551
+
+[Build 551](https://github.com/joa-no/CodeLove/actions/runs/45479161483) passed source revision packaging and actual Java direct-asset export notice-preservation tests in Debug and Release. A candidate source archive is now prepared in release CI from exact committed CodeLove and native submodule revisions plus Sora Editor 0.24.7 (commit ab9f2cb23aeb30ae42f0ad9e32b281c6bdbcbfc9). The source candidate is not published automatically. It is restricted to committed files, excludes unexpected signing-key file types, includes the intentionally public debug test key, and records a SHA-256 digest and revision inventory. Rebuild from the archive and modified-library tests remain open. The same run collects actual NDK notice candidates for manual reconciliation rather than treating every NDK tool notice as applicable to the shipped libc++ runtime.
