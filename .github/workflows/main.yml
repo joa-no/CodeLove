@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      build_aab:
+        description: 'Also build Android App Bundles (optional; not needed for GitHub APK releases)'
+        type: boolean
+        default: false
 
 jobs:
   build-android:
@@ -289,9 +294,9 @@ jobs:
         test -s "$APK"
         APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
         test -x "$APKSIGNER"
-        "$APKSIGNER" verify --verbose "$APK"
+        "$APKSIGNER" verify --verbose --print-certs "$APK"
     - name: Build Release-specific Binaries
-      if: ${{ matrix.build_type == 'Release' }}
+      if: ${{ matrix.build_type == 'Release' && github.event_name == 'workflow_dispatch' && inputs.build_aab }}
       env:
         CODELOVE_RELEASE_STORE_FILE: ${{ runner.temp }}/codelove-release.jks
         CODELOVE_RELEASE_STORE_PASSWORD: ${{ secrets.CODELOVE_KEYSTORE_PASSWORD }}
@@ -311,19 +316,19 @@ jobs:
         name: love-android.apk
         path: app/build/outputs/apk/normalRecord/release/app-normal-record-release.apk
     - name: Artifact (Normal AAB w/o recording)
-      if: ${{ matrix.build_type == 'Release' }}
+      if: ${{ matrix.build_type == 'Release' && github.event_name == 'workflow_dispatch' && inputs.build_aab }}
       uses: actions/upload-artifact@v4
       with:
         name: love-android-ps.aab
         path: app/build/outputs/bundle/normalNoRecordRelease/app-normal-noRecord-release.aab
     - name: Artifact (Embed AAB)
-      if: ${{ matrix.build_type == 'Release' }}
+      if: ${{ matrix.build_type == 'Release' && github.event_name == 'workflow_dispatch' && inputs.build_aab }}
       uses: actions/upload-artifact@v4
       with:
         name: love-android-embed-record.aab
         path: app/build/outputs/bundle/embedRecordRelease/app-embed-record-release.aab
     - name: Artifact (Embed AAB w/o recording)
-      if: ${{ matrix.build_type == 'Release' }}
+      if: ${{ matrix.build_type == 'Release' && github.event_name == 'workflow_dispatch' && inputs.build_aab }}
       uses: actions/upload-artifact@v4
       with:
         name: love-android-embed.aab

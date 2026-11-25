@@ -33,7 +33,7 @@ See https://www.gnu.org/licenses/old-licenses/lgpl-2.1.en.html (especially secti
 
 The release CI generates a `codelove-source-candidate` artifact from the exact checkout and its native submodules, with the Sora source under `third-party/sora-editor/`. Verify `SHA256SUMS` and `source-inventory.json` before using it. Extract and enter the `codelove/` directory; the native submodule contents are already present, so no Git checkout is needed for that part. Do not run the provenance-generation script in a Git-less archive; the original revision inventory supplies provenance for this candidate. Build 554 independently rebuilt the archive; full corresponding-source compliance still requires final review. The intentionally public debug key is included only to permit test builds; the release signing secrets are never part of this package.
 
-The candidate now includes the two generated source-identification and NDK notice files. For an unmodified archive rebuild, use `bash tools/rebuild_source_candidate.sh <candidate-directory> <empty-extraction-directory>` from the checkout, or follow the script's commands in the extracted codelove directory. The rebuild uses a configured Android SDK/NDK and resolves Gradle dependencies as needed; it does not require a private signing key or the original Git checkout. The unmodified compilation test is not a claim of bit-identical output; the modified-library smoke test is documented separately.
+The candidate includes the three generated inputs: source revision metadata, NDK runtime notice and exact Maven source notice supplement. For an unmodified archive rebuild, use `bash tools/rebuild_source_candidate.sh <candidate-directory> <empty-extraction-directory>` from the checkout, or follow the script's commands in the extracted codelove directory. The rebuild uses a configured Android SDK/NDK and resolves Gradle dependencies as needed; it does not require a private signing key or the original Git checkout. The unmodified compilation test is not a claim of bit-identical output; the modified-library smoke test is documented separately.
 
 ## Modified library test (CI)
 
@@ -41,6 +41,28 @@ After the unmodified archive rebuild, run `bash tools/test_lgpl_relink.sh <extra
 
 The test APK and its exported games are validation artifacts, not official release binaries. Their embedded revision refers to the original source checkout; the isolated test changes are described and reproduced by tools/test_lgpl_relink.sh. Distribute official binaries with the matching unmodified source package and relevant notices.
 
-For a fresh Git checkout, generate the exact-version JVM source notice supplement with `python3 tools/collect_jvm_source_notices.py` before building (requires network access to Maven Central and curl). An extracted source candidate already contains the generated supplement; do not regenerate it for an unmodified rebuild. This is a developer/CI step only, not an Android runtime network requirement.
+For a fresh Git checkout, run the following from the repository root on a configured Linux Android build host. An extracted release source archive already contains the generated inputs; skip their regeneration when building from that archive.
 
-Build 558 completed the planned exact-version notice and rebuild checks. For the official release, regenerate the source candidate from the same commit as the signed APK and publish both together. The source artifact from build 558 corresponds only to its own revision, not later commits.
+```sh
+python3 tools/write_source_revision.py
+python3 tools/prepare_ndk_runtime_notice.py "$ANDROID_HOME/ndk/27.3.13750724"
+python3 tools/collect_jvm_source_notices.py
+mkdir -p app/src/embed/assets app/src/normal/assets/offline
+python3 - <<'PY'
+from zipfile import ZipFile
+with ZipFile('app/src/embed/assets/game.love', 'x') as game:
+    game.writestr('main.lua', "error('CodeLove template placeholder')")
+PY
+bash ./gradlew assembleEmbedNoRecordRelease \
+  '-Papp.name=CodeLove Offline Template' \
+  '-Papp.application_id=com.example.codelove.offlinetemplate' \
+  '-Papp.version_name=1.0.0' '-Papp.version_code=1'
+cp app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk app/src/normal/assets/offline/embed-unsigned.apk
+rm app/src/embed/assets/game.love
+python3 tools/check_embed_template.py app/src/normal/assets/offline/embed-unsigned.apk
+bash ./gradlew assembleNormalRecordDebug
+```
+
+Use a clean checkout/extraction, without release signing environment variables when building the unsigned template. The NDK notice script expects the pinned Linux NDK; install it first. Source notice generation requires access to Maven Central and curl. The template placeholder is not a real game. An extracted source candidate already contains the generated supplement; do not regenerate it for an unmodified rebuild. This is a developer/CI step only, not an Android runtime network requirement.
+
+Builds 558 and 561 completed the planned exact-version notice and rebuild checks. For the official release, regenerate the source candidate from the same commit as the signed APK and publish both together. The source artifact from build 558 corresponds only to its own revision, not later commits.
