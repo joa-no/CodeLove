@@ -15,11 +15,32 @@ A native Lua and LÖVE development environment for Android.
   <img src="https://img.shields.io/badge/version-1.0.1-A78BFA?style=for-the-badge&labelColor=242436" alt="Version 1.0.1" />
 </p>
 
-[Downloads](https://github.com/joa-no/CodeLove/releases) · [Features](#features) · [Installation](#installation) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
+[Downloads](https://github.com/joa-no/CodeLove/releases) · [Screenshots](#screenshots) · [Features](#features) · [Installation](#installation) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
 
 </div>
 
 ---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="screenshots/editor.jpg" alt="Code editor" width="260" /></td>
+    <td align="center"><img src="screenshots/project-explorer.jpg" alt="Project explorer" width="260" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Code Editor</strong></td>
+    <td align="center"><strong>Project Explorer</strong></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="screenshots/export.jpg" alt="APK export" width="260" /></td>
+    <td align="center"><img src="screenshots/settings.jpg" alt="Settings" width="260" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>APK Export</strong></td>
+    <td align="center"><strong>Settings</strong></td>
+  </tr>
+</table>
 
 ## About CodeLove
 
@@ -32,7 +53,7 @@ CodeLove combines a native Android interface, Sora Editor and the [LÖVE](https:
 - Create, move, rename and delete files and folders.
 - Run projects with the integrated LÖVE runtime and inspect output using the collapsible in-game console controls.
 - Export .love archives and standalone, individually signed APKs offline.
-- Portrait and landscape layouts with adjustable split panels and automatically saved panel proportions.
+- Portrait and landscape layouts, with adjustable split panels and automatically saved panel proportions in landscape mode.
 - Slim, discreet editor scrollbars with full-size touch targets.
 - Light/dark/system themes and English, Portuguese and Spanish localization.
 
