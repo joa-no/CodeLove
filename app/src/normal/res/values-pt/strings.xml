@@ -227,4 +227,8 @@
     <string name="cl_locale_sign_63">Falha na exportação.</string>
     <string name="cl_external_media_no_app">Nenhum aplicativo compatível instalado.</string>
     <string name="cl_external_media_failed">Não foi possível abrir este arquivo externamente.</string>
+    <string name="cl_license_back">Voltar</string>
+    <string name="cl_license_native">Bibliotecas nativas</string>
+    <string name="cl_license_jvm">Dependências JVM</string>
+    <string name="cl_license_kotlin">Kotlin — terceiros</string>
 </resources>

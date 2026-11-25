@@ -1266,7 +1266,7 @@ public final class Workspace {
 
     private void showAbout() {
         ui.showAbout("joa-no", activity.getString(R.string.cl_credits_full),
-            new String[] {"CodeLove / Sora Editor", "GPL-3.0-only", "Runtime / zlib", "LÖVE / ENet / LuaHTTPS", "Native libraries", "JVM dependencies", "Kotlin third-party", "Android NDK / LLVM"},
+            new String[] {"CodeLove / Sora Editor", "GPL-3.0-only", "Runtime / zlib", "LÖVE / ENet / LuaHTTPS", activity.getString(R.string.cl_license_native), activity.getString(R.string.cl_license_jvm), activity.getString(R.string.cl_license_kotlin), "Android NDK / LLVM"},
             new String[] {readAssetText("codelove-licenses.txt"),
                 readAssetText("codelove-own-license.txt"), readAssetText("runtime-own-license.txt"),
                 readAssetText("love-upstream-notices.txt"), readAssetText("native-license-notices.txt"),

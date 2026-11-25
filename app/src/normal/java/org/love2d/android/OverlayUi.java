@@ -336,36 +336,76 @@ final class OverlayUi {
         card.addView(scroll, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        // botoes: alterna entre agradecimentos e licencas; fechar
+        // Keep credits, the license list and documents inside the same themed card.
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        scroll.removeView(body);
+        scroll.addView(content, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.END);
-
         final TextView toggle = button(activity.getString(R.string.cl_licenses), Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
-        final boolean[] showingLicenses = {false};
-        toggle.setOnClickListener(v -> {
-            if (showingLicenses[0]) {
-                showingLicenses[0] = false;
-                body.setText(credits);
-                body.setTextSize(14);
-                toggle.setText(activity.getString(R.string.cl_licenses));
-                scroll.scrollTo(0, 0);
-                return;
-            }
-            android.widget.PopupMenu menu = new android.widget.PopupMenu(activity, toggle);
+        final int[] page = {0}; // 0 credits, 1 list, 2 document
+        final Runnable resetScroll = () -> scroll.post(() -> scroll.scrollTo(0, 0));
+        final Runnable showCredits = () -> {
+            page[0] = 0;
+            content.removeAllViews();
+            body.setText(credits);
+            body.setTextSize(14);
+            content.addView(body);
+            toggle.setText(activity.getString(R.string.cl_licenses));
+            resetScroll.run();
+        };
+        final Runnable showList = () -> {
+            page[0] = 1;
+            content.removeAllViews();
+            TextView heading = new TextView(activity);
+            heading.setText(R.string.cl_licenses);
+            heading.setTextColor(Workspace.COLOR_MUTED);
+            heading.setTextSize(14);
+            heading.setTypeface(Typeface.DEFAULT_BOLD);
+            heading.setPadding(0, 0, 0, dp(8));
+            content.addView(heading);
             for (int i = 0; i < licenseNames.length; i++) {
-                menu.getMenu().add(0, i, i, licenseNames[i]);
+                final int index = i;
+                TextView item = new TextView(activity);
+                item.setText(licenseNames[i]);
+                item.setTextSize(14);
+                item.setTextColor(Workspace.COLOR_TEXT);
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setPadding(dp(12), dp(10), dp(12), dp(10));
+                item.setMinHeight(dp(44));
+                item.setBackground(box(Workspace.COLOR_FIELD, 10, false));
+                item.setOnClickListener(v -> {
+                    page[0] = 2;
+                    content.removeAllViews();
+                    TextView documentTitle = new TextView(activity);
+                    documentTitle.setText(licenseNames[index]);
+                    documentTitle.setTextColor(Workspace.COLOR_TEXT);
+                    documentTitle.setTextSize(15);
+                    documentTitle.setTypeface(Typeface.DEFAULT_BOLD);
+                    documentTitle.setPadding(0, 0, 0, dp(12));
+                    content.addView(documentTitle);
+                    body.setText(licenses[index]);
+                    body.setTextSize(12);
+                    content.addView(body);
+                    toggle.setText(activity.getString(R.string.cl_license_back));
+                    resetScroll.run();
+                });
+                LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                itemLp.bottomMargin = dp(6);
+                content.addView(item, itemLp);
             }
-            menu.setOnMenuItemClickListener(item -> {
-                showingLicenses[0] = true;
-                body.setText(licenses[item.getItemId()]);
-                body.setTextSize(11);
-                toggle.setText(activity.getString(R.string.cl_acknowledgements));
-                scroll.scrollTo(0, 0);
-                return true;
-            });
-            menu.show();
+            toggle.setText(activity.getString(R.string.cl_acknowledgements));
+            resetScroll.run();
+        };
+        toggle.setOnClickListener(v -> {
+            if (page[0] == 1) showCredits.run();
+            else showList.run();
         });
+        showCredits.run();
         row.addView(toggle, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));
 
