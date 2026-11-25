@@ -38,7 +38,7 @@ The selected project folder is the source of truth. CodeLove does not maintain a
 
 ## Installation
 
-Get the signed APK from [GitHub Releases](https://github.com/joa-no/CodeLove/releases). If no release is listed, publication is still pending. Development builds are available through [GitHub Actions](https://github.com/joa-no/CodeLove/actions) for testing only. Android 6.0 (API 23) is the configured minimum SDK, not a claim that every supported Android version and device has been tested. Shipped native ABIs: arm64-v8a, armeabi-v7a and x86_64.
+Download the signed app-release.apk from [GitHub Releases](https://github.com/joa-no/CodeLove/releases/latest). Development builds are available through [GitHub Actions](https://github.com/joa-no/CodeLove/actions) for testing only. Android 6.0 (API 23) is the configured minimum SDK, not a claim that every supported Android version and device has been tested. Shipped native ABIs: arm64-v8a, armeabi-v7a and x86_64.
 
 For distribution, use the signed Release APK rather than a Debug, relink-test or prototype APK. Debug and Release signatures differ. Back up your projects and per-game signing keys before uninstalling a previous build. Android may require permission to install an APK from your browser or file manager.
 
@@ -87,7 +87,7 @@ app/src/normal/     CodeLove editor, workspace and offline exporter
 app/src/embed/      Standalone game runtime
 app/src/testOffline/ SDK-free Java checks
 tools/              Export validation and source packaging tools
-docs/               Developer and release documentation
+docs/               Developer documentation
 .github/workflows/  Development CI and validation
 ```
 
@@ -96,9 +96,9 @@ docs/               Developer and release documentation
 
 The main workflow compiles Debug and Release, verifies the actual offline export assembler, checks license/source preservation and validates archive-only and modified-library rebuilds. Additional workflows test game signing and SDK-free APK repackaging; the separate export-smoke-test exercises a developer-only Gradle export route. These are development checks, not steps required to export games from the Android application.
 
-Android App Bundles are optional development outputs, not required for the first GitHub release. The main workflow's manual build_aab option enables them when needed.
+Android App Bundles are optional development outputs, not required for GitHub APK distribution. The main workflow's manual build_aab option enables them when needed.
 
-See the [release checklist](docs/release-1.0.0.md) and [dependency audit](docs/dependency-audit.md).
+See the [dependency inventory and validation](docs/dependency-audit.md).
 
 </details>
 
@@ -106,7 +106,7 @@ See the [release checklist](docs/release-1.0.0.md) and [dependency audit](docs/d
 
 Original CodeLove editor and tooling contributions: [GPL-3.0-only](LICENSE). Original CodeLove contributions to the standalone game runtime: [zlib](LICENSE-runtime.txt). LÖVE and all third-party components retain their respective terms and credits. See [licensing scope](LICENSING.md), [original notices](license.txt), and the documents available offline under **About → Licenses**.
 
-The corresponding source, checksum and revision inventory must accompany the official APK release. See [rebuild and relink instructions](docs/rebuild-and-relink.md).
+The corresponding source, SHA-256 checksums and revision inventory are available alongside the official APK on [GitHub Releases](https://github.com/joa-no/CodeLove/releases). See [rebuild and relink instructions](docs/rebuild-and-relink.md).
 
 CodeLove is a modified distribution based on LÖVE and is not affiliated with or endorsed by the LÖVE project.
 

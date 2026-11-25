@@ -6,6 +6,6 @@ Original CodeLove contributions to the standalone runtime shipped in exported ga
 
 LÖVE and all third-party components retain their respective licenses and copyright notices. See license.txt, app/src/normal/assets/codelove-licenses.txt and the corresponding upstream sources. The scope of this grant does not impose GPL on independently authored game content merely by using CodeLove to export it. Games must still comply with the licenses of the runtime and any other libraries they distribute.
 
-Before release, verify the complete shipped dependency inventory, runtime boundaries, corresponding source availability and LGPL relinking requirements. This statement is not a certification of third-party compliance.
+The shipped dependency inventory, runtime boundaries, source availability and relinking procedures are documented in [dependency inventory and validation](docs/dependency-audit.md). This statement is not a certification of third-party compliance.
 
-See [source identification and rebuild instructions](docs/rebuild-and-relink.md) for the pending release procedure.
+See [source identification and rebuild instructions](docs/rebuild-and-relink.md) for the corresponding source and rebuild procedure.
