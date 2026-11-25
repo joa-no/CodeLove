@@ -204,7 +204,21 @@ android {
 dependencies {
     implementation 'androidx.core:core:1.15.0'
     // Sora Editor: motor de edicao com suporte a Lua, abas e autocomplete.
-    normalImplementation 'io.github.rosemoe:editor:0.24.7'
+    // Optional local rebuild of the LGPL library; default release stays unchanged.
+    def localSora = providers.gradleProperty('codelove.localSoraAar').orNull
+    if (localSora != null) {
+        def aar = file(localSora)
+        if (!aar.isFile() || !aar.name.endsWith('.aar')) {
+            throw new GradleException('codelove.localSoraAar must identify a local Sora AAR')
+        }
+        normalImplementation files(aar)
+        // A file AAR has no transitive metadata. Match the pinned upstream editor module.
+        normalImplementation 'androidx.annotation:annotation:1.11.0'
+        normalImplementation 'androidx.collection:collection:1.6.0'
+        normalImplementation 'org.jetbrains.kotlin:kotlin-stdlib:2.4.10'
+    } else {
+        normalImplementation 'io.github.rosemoe:editor:0.24.7'
+    }
     // APK signing is only for the CodeLove editor; never package it inside games.
     normalImplementation 'com.android.tools.build:apksig:8.13.2'
     // Per-game offline PKCS#12 identities and self-signed X.509 certificates.
