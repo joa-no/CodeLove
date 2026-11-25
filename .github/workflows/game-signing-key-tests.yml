@@ -4,6 +4,8 @@ name: game-signing-key-tests
 # including encrypted backup and restore. Only offline development tests.
 on:
   push:
+    branches:
+      - '**'
     paths:
       - '.github/workflows/game-signing-key-tests.yml'
       - 'app/src/normal/java/org/love2d/android/GameSigningKeyStore.java'

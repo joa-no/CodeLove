@@ -3,6 +3,8 @@ name: offline-apk-prototype
 # Feasibility test only: no project upload, no server, no user credentials.
 on:
   push:
+    branches:
+      - '**'
     paths:
       - '.github/workflows/offline-apk-prototype.yml'
       - 'tools/offline_apk_prototype.py'

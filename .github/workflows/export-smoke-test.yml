@@ -2,6 +2,8 @@ name: export-smoke-test
 
 on:
   push:
+    branches:
+      - '**'
     paths:
       - '.github/workflows/export-smoke-test.yml'
       - 'tools/prepare_game_export.py'
