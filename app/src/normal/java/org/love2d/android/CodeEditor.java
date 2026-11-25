@@ -18,11 +18,7 @@ import android.graphics.drawable.RippleDrawable;
 import android.widget.ImageButton;
 
 import android.text.InputType;
-import android.text.SpannableString;
-import android.text.Spanned;
 import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.RelativeSizeSpan;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -542,18 +538,8 @@ final class CodeEditor {
             cell.setOnClickListener(v -> open(tab.file));
 
             TextView name = new TextView(activity);
-            // O circulo claro da aba permanece, apenas um pouco maior.
-            SpannableString tabLabel = new SpannableString(
-                tab.file.getName() + (unsaved ? " \u2022" : ""));
-            if (unsaved) {
-                int dotIndex = tabLabel.length() - 1;
-                tabLabel.setSpan(new RelativeSizeSpan(1.45f),
-                    dotIndex, dotIndex + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                tabLabel.setSpan(new ForegroundColorSpan(
-                    Workspace.isLightTheme() ? 0xFF303849 : 0xFFF1F3F8),
-                    dotIndex, dotIndex + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
-            name.setText(tabLabel);
+            // Keep the filename and its ellipsis independent of the dirty indicator.
+            name.setText(tab.file.getName());
             name.setContentDescription(tab.file.getName() + (unsaved
                 ? ". " + activity.getString(R.string.cl_unsaved_mark) : ""));
             name.setTextSize(12);
@@ -563,6 +549,15 @@ final class CodeEditor {
             name.setEllipsize(TextUtils.TruncateAt.END);
             cell.addView(name);
             name.setOnClickListener(v -> open(tab.file));
+            // Reserve the same space for clean and dirty tabs.
+            TextView dirtyMark = new TextView(activity);
+            dirtyMark.setText("\u2022");
+            dirtyMark.setTextSize(17.4f);
+            dirtyMark.setGravity(Gravity.CENTER);
+            dirtyMark.setTextColor(Workspace.isLightTheme() ? 0xFF303849 : 0xFFF1F3F8);
+            dirtyMark.setVisibility(unsaved ? View.VISIBLE : View.INVISIBLE);
+            dirtyMark.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            cell.addView(dirtyMark, new LinearLayout.LayoutParams(dp(12), dp(36)));
             TextView close = new TextView(activity);
             close.setText("\u00D7");
             close.setTextSize(21);

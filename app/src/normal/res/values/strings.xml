@@ -125,6 +125,8 @@
     <string name="cl_save_before_restart">Save changes in all tabs before restarting the game.</string>
     <string name="cl_collapse_console">Collapse console</string>
     <string name="cl_toggle_console">Open or close console</string>
+    <string name="cl_collapse_runtime_controls">Collapse game controls</string>
+    <string name="cl_expand_runtime_controls">Expand game controls</string>
     <string name="cl_export_button">Export</string>
     <string name="cl_export_title">Export APK</string>
     <string name="cl_export_not_ready">Configure the game here. APK generation is not available yet.</string>

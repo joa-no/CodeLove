@@ -247,7 +247,8 @@ public class GameActivity extends SDLActivity {
         android.widget.LinearLayout actions = new android.widget.LinearLayout(this);
         actions.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         actions.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        // Um unico fundo arredondado para Console e Sair; cada metade mantem seu clique.
+        actions.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        // One capsule for console, exit and the edge collapse handle.
         android.graphics.drawable.GradientDrawable actionsBackground =
             new android.graphics.drawable.GradientDrawable();
         actionsBackground.setColor(Workspace.COLOR_FIELD);
@@ -255,23 +256,39 @@ public class GameActivity extends SDLActivity {
         actionsBackground.setStroke(Math.max(1, Math.round(density)), Workspace.COLOR_BORDER);
         actions.setBackground(actionsBackground);
 
+        android.widget.LinearLayout controls = new android.widget.LinearLayout(this);
+        controls.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        controls.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        actions.addView(controls, new android.widget.LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT, size));
+
         android.widget.LinearLayout consoleButton = CodeLoveConsolePanel.iconButton(this,
             Workspace.IconView.CONSOLE, Workspace.COLOR_FOLDER,
             () -> setStandaloneConsoleOpen(!standaloneConsoleOpen),
             localized.getString(R.string.cl_toggle_console), 44);
         consoleButton.setBackground(null);
-        actions.addView(consoleButton, new android.widget.LinearLayout.LayoutParams(size, size));
+        controls.addView(consoleButton, new android.widget.LinearLayout.LayoutParams(size, size));
 
         android.view.View separator = new android.view.View(this);
         separator.setBackgroundColor(Workspace.COLOR_BORDER);
-        actions.addView(separator, new android.widget.LinearLayout.LayoutParams(
+        controls.addView(separator, new android.widget.LinearLayout.LayoutParams(
             Math.max(1, Math.round(density)), Math.round(22 * density)));
 
         android.widget.LinearLayout close = CodeLoveConsolePanel.iconButton(this,
             Workspace.IconView.CLOSE, Workspace.COLOR_TEXT,
             this::returnToEditor, localized.getString(R.string.cl_back_to_codelove), 44);
         close.setBackground(null);
-        actions.addView(close, new android.widget.LinearLayout.LayoutParams(size, size));
+        controls.addView(close, new android.widget.LinearLayout.LayoutParams(size, size));
+
+        android.widget.LinearLayout toggle = new android.widget.LinearLayout(this);
+        toggle.setGravity(android.view.Gravity.CENTER);
+        Workspace.IconView toggleIcon = new Workspace.IconView(this,
+            Workspace.IconView.CHEVRON_RIGHT, Workspace.COLOR_TEXT);
+        int iconSize = Math.round(20 * density);
+        toggle.addView(toggleIcon, new android.widget.LinearLayout.LayoutParams(iconSize, iconSize));
+        toggle.setContentDescription(localized.getString(R.string.cl_collapse_runtime_controls));
+        actions.addView(toggle, new android.widget.LinearLayout.LayoutParams(
+            Math.round(32 * density), size));
 
         android.widget.RelativeLayout.LayoutParams buttonsLp =
             new android.widget.RelativeLayout.LayoutParams(
@@ -281,6 +298,20 @@ public class GameActivity extends SDLActivity {
         buttonsLp.topMargin = margin;
         buttonsLp.rightMargin = margin;
         mLayout.addView(actions, buttonsLp);
+        toggle.setOnClickListener(v -> {
+            boolean collapse = controls.getVisibility() == View.VISIBLE;
+            controls.setVisibility(collapse ? View.GONE : View.VISIBLE);
+            if (collapse) setStandaloneConsoleOpen(false);
+            toggleIcon.setRotation(collapse ? 180f : 0f);
+            toggle.setContentDescription(localized.getString(collapse
+                ? R.string.cl_expand_runtime_controls : R.string.cl_collapse_runtime_controls));
+            float radius = 12 * density;
+            actionsBackground.setCornerRadii(collapse
+                ? new float[] {radius, radius, 0f, 0f, 0f, 0f, radius, radius}
+                : new float[] {radius, radius, radius, radius, radius, radius, radius, radius});
+            buttonsLp.rightMargin = collapse ? 0 : margin;
+            actions.setLayoutParams(buttonsLp);
+        });
 
         standaloneConsole = new CodeLoveConsolePanel(this,
             () -> setStandaloneConsoleOpen(false), null, null);
