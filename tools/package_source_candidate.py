@@ -94,10 +94,10 @@ with archive.open("rb") as stream:
         digest.update(chunk)
 (destination / "SHA256SUMS").write_text(f"{digest.hexdigest()}  {archive.name}\n")
 (destination / "source-inventory.json").write_text(json.dumps({
-    "status": "candidate, not yet a complete corresponding-source release",
+    "status": "validated source candidate; official release publication pending",
     "repositories": [{"path": prefix, "revision": sha} for _, prefix, sha in sources],
     "archived_entries": len(seen),
     "sha256": digest.hexdigest(),
-    "known_pending": ["final third-party notice/source review", "publish matching source with official binaries"]
+    "known_pending": ["validate integrated release candidate", "publish matching source with official binaries"]
 }, indent=2) + "\n")
 print(f"Source candidate: {archive.name}, {len(seen)} entries, {archive.stat().st_size} bytes")

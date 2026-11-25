@@ -16,12 +16,14 @@ Estado: em preparação, ainda **não lançado**. A branch funcional é `feature
 
 ## Antes de publicar no GitHub
 
+- [ ] Integrar a auditoria experimental à branch funcional e validar a candidata integrada (somente com autorização).
+
 - [ ] Executar a compilação com a nova verificação independente da assinatura do APK **CodeLove Release**, introduzida após o workflow #44665273830 (não executá-la sem autorização).
 - [ ] Verificar `apksigner verify` e o certificado do APK destinado ao público; manter backup seguro da chave de release e de sua senha. **Nunca publicar com a chave de debug**.
 - [x] Definir os termos das contribuições próprias: GPL-3.0-only para editor e ferramentas, zlib para o runtime independente. Ver `LICENSING.md`.
 - [ ] Confirmar a delimitação de todos os arquivos e componentes distribuídos e a disponibilidade do código-fonte correspondente.
-- [ ] Revisar obrigações de todas as dependências, em particular a LGPL-2.1 do Sora Editor 0.24.7 (avisos, código-fonte disponível e condições aplicáveis à substituição/religação da biblioteca), com atenção a futuras opções proprietárias. A inclusão do aviso não substitui a avaliação de conformidade.
-- [ ] Concluir a revisão do suplemento dos JARs de código-fonte Guava ListenableFuture 1.0 e JetBrains Annotations 13.0 e verificar seu empacotamento na build candidata.
+- [x] Concluir a auditoria técnica de avisos e substituição de bibliotecas LGPL para o inventário revisado (builds #555–558). Não constitui certificação jurídica; publicar o código correspondente permanece obrigatório conforme os termos aplicáveis.
+- [x] Revisar o suplemento dos JARs Guava ListenableFuture 1.0 e JetBrains Annotations 13.0 e verificar o APK Release #558 e seu runtime.
 - [ ] Anexar o pacote de código-fonte correspondente, SHA256SUMS e inventário à mesma GitHub Release do APK assinado; não usar artefatos temporários do Actions como distribuição permanente.
 - [ ] Fazer regressão manual da interface nos layouts vertical e horizontal, em celular e tablet: SAF, troca de pasta principal, abas, edição, salvamento, console, execução, exportação e falhas/cancelamentos.
 - [ ] Validar a instalação limpa e a atualização do próprio CodeLove com o APK Release, sem misturar a assinatura pública com a de debug usada nos testes.

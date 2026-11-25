@@ -42,3 +42,5 @@ After the unmodified archive rebuild, run `bash tools/test_lgpl_relink.sh <extra
 The test APK and its exported games are validation artifacts, not official release binaries. Their embedded revision refers to the original source checkout; the isolated test changes are described and reproduced by tools/test_lgpl_relink.sh. Distribute official binaries with the matching unmodified source package and relevant notices.
 
 For a fresh Git checkout, generate the exact-version JVM source notice supplement with `python3 tools/collect_jvm_source_notices.py` before building (requires network access to Maven Central and curl). An extracted source candidate already contains the generated supplement; do not regenerate it for an unmodified rebuild. This is a developer/CI step only, not an Android runtime network requirement.
+
+Build 558 completed the planned exact-version notice and rebuild checks. For the official release, regenerate the source candidate from the same commit as the signed APK and publish both together. The source artifact from build 558 corresponds only to its own revision, not later commits.
