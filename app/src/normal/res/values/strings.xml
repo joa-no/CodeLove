@@ -233,4 +233,5 @@
     <string name="cl_license_native">Native libraries</string>
     <string name="cl_license_jvm">JVM dependencies</string>
     <string name="cl_license_kotlin">Kotlin third-party</string>
+    <string name="cl_resize_panel">Resize file and editor panels</string>
 </resources>

@@ -63,6 +63,7 @@ public final class Workspace {
     private static final String PREF_WORKSPACE_ORIENTATION = "workspace_orientation";
     private static final String PREF_APPEARANCE = "appearance_theme";
     private static final String PREF_LANGUAGE = "workspace_language";
+    private static final String PREF_PANEL_FRACTION = "landscape_panel_fraction";
     private static volatile Workspace currentInstance;
 
     /** Apenas caminhos: nenhuma Activity ou view e guardada na recriacao de tema. */
@@ -168,6 +169,14 @@ public final class Workspace {
     private CodeEditor editor;
     private View editorView;
     private View drawerScrim;
+    private android.widget.FrameLayout splitDivider;
+    private View splitGrip;
+    private float landscapePanelFraction;
+    private int displayedPanelWidth;
+    private int splitPointerId = -1;
+    private float splitDownX;
+    private int splitStartWidth;
+    private boolean splitStartOnLeft;
     private boolean fileDrawerOpen;
     // 0 = fora da tela; 1 = totalmente aberto. Independente de fileDrawerOpen
     // enquanto o usuario arrasta o painel ou a animacao termina.
@@ -209,6 +218,7 @@ public final class Workspace {
         configureTheme(activity);
         this.onLeft = prefs.getBoolean("panel_left", true);
         this.panelWidth = dp(PANEL_WIDTH_DP);
+        this.landscapePanelFraction = prefs.getFloat(PREF_PANEL_FRACTION, -1f);
         this.margin = dp(MARGIN_DP);
     }
 
@@ -491,6 +501,7 @@ public final class Workspace {
         drawerScrim.setOnClickListener(v -> setDrawerOpen(false));
         root.addView(drawerScrim);
         root.addView(panel);
+        buildSplitDivider();
 
         // Acompanha as barras do sistema (relogio no topo, gestos embaixo).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -1480,6 +1491,102 @@ public final class Workspace {
         return swipeCaptured ? 2 : 0;
     }
 
+    private void buildSplitDivider() {
+        splitDivider = new android.widget.FrameLayout(activity);
+        splitDivider.setVisibility(View.GONE);
+        splitDivider.setFocusable(true);
+        splitDivider.setClickable(true);
+        bindLanguage(() -> splitDivider.setContentDescription(
+            activity.getString(R.string.cl_resize_panel)));
+        splitGrip = new View(activity);
+        android.widget.FrameLayout.LayoutParams gripParams =
+            new android.widget.FrameLayout.LayoutParams(dp(3), dp(36), Gravity.CENTER);
+        splitDivider.addView(splitGrip, gripParams);
+        bindAppearance(() -> splitGrip.setBackground(box(COLOR_MUTED, 2, false)));
+        splitDivider.setOnTouchListener((v, event) -> {
+            int action = event.getActionMasked();
+            if (action == MotionEvent.ACTION_DOWN) {
+                if (!canResizePanels()) return false;
+                splitPointerId = event.getPointerId(0);
+                splitDownX = event.getRawX();
+                splitStartWidth = displayedPanelWidth;
+                splitStartOnLeft = onLeft;
+                v.getParent().requestDisallowInterceptTouchEvent(true);
+                splitGrip.setBackground(box(COLOR_FOLDER, 2, false));
+                return true;
+            }
+            if (splitPointerId == -1) return false;
+            if (action == MotionEvent.ACTION_MOVE) {
+                if (!canResizePanels() || splitStartOnLeft != onLeft
+                    || event.getPointerCount() != 1) {
+                    finishSplitResize();
+                    return true;
+                }
+                float dx = event.getRawX() - splitDownX;
+                resizePanelTo(splitStartWidth + Math.round(onLeft ? dx : -dx));
+                return true;
+            }
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
+                || action == MotionEvent.ACTION_POINTER_DOWN) {
+                finishSplitResize();
+                return true;
+            }
+            return true;
+        });
+        splitDivider.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() != android.view.KeyEvent.ACTION_DOWN
+                || !canResizePanels()) return false;
+            int direction;
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT) direction = -1;
+            else if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT) direction = 1;
+            else return false;
+            resizePanelTo(displayedPanelWidth + dp(16) * (onLeft ? direction : -direction));
+            saveSplitFraction();
+            return true;
+        });
+        root.addView(splitDivider);
+    }
+
+    private int availableSplitWidth() {
+        return Math.max(0, root.getWidth() - insetLeft - insetRight - 2 * margin);
+    }
+
+    private boolean canResizePanels() {
+        return root.getWidth() > 0 && root.getHeight() > 0
+            && root.getWidth() >= root.getHeight() && availableSplitWidth() > 1
+            && splitDivider.getVisibility() == View.VISIBLE;
+    }
+
+    private int clampPanelWidth(int requested, int available) {
+        if (available <= 1) return Math.max(0, available);
+        // Preserve at least half of the usable width for the editor.
+        int max = Math.min(available / 2, available - Math.min(dp(240), available / 2));
+        int min = Math.min(max, Math.max(dp(220), Math.round(available * 0.20f)));
+        return Math.max(min, Math.min(max, requested));
+    }
+
+    private void resizePanelTo(int requested) {
+        int available = availableSplitWidth();
+        if (available <= 1) return;
+        int next = clampPanelWidth(requested, available);
+        if (next == displayedPanelWidth) return;
+        landscapePanelFraction = (float) next / available;
+        applyLayout();
+    }
+
+    private void saveSplitFraction() {
+        if (landscapePanelFraction >= 0f) {
+            prefs.edit().putFloat(PREF_PANEL_FRACTION, landscapePanelFraction).apply();
+        }
+    }
+
+    private void finishSplitResize() {
+        splitPointerId = -1;
+        splitGrip.setBackground(box(COLOR_MUTED, 2, false));
+        splitDivider.getParent().requestDisallowInterceptTouchEvent(false);
+        saveSplitFraction();
+    }
+
     private void applyLayout() {
         // Antes do primeiro layout, 0x0 nao pode ser interpretado como horizontal:
         // isso fechava a gaveta restaurada e ocultava momentaneamente o editor.
@@ -1517,9 +1624,16 @@ public final class Workspace {
 
         float baseW = root.getWidth() - insetLeft - insetRight;
 
-        // No modo horizontal, mantemos a largura original do painel.
-        // No vertical, o painel de arquivos vira uma gaveta sobreposta.
+        // Horizontal: keep the original default until the user resizes.
+        // Portrait: keep the existing overlaid file drawer.
+        int available = availableSplitWidth();
         int effectivePanelWidth = panelWidth;
+        if (!verticalMode && available > 1) {
+            int requested = landscapePanelFraction >= 0f
+                ? Math.round(available * landscapePanelFraction) : panelWidth;
+            effectivePanelWidth = clampPanelWidth(requested, available);
+            displayedPanelWidth = effectivePanelWidth;
+        }
         int cursor = sideInset;
         int panelOffset = 0;
         int editorOffset = 0;
@@ -1610,6 +1724,22 @@ public final class Workspace {
         }
         editorView.setLayoutParams(editorLp);
         editorView.setVisibility(View.VISIBLE);
+
+        if (verticalMode || available <= 1) {
+            if (splitPointerId != -1) finishSplitResize();
+            splitDivider.setVisibility(View.GONE);
+        } else {
+            RelativeLayout.LayoutParams splitLp = new RelativeLayout.LayoutParams(
+                2 * margin, ViewGroup.LayoutParams.MATCH_PARENT);
+            splitLp.addRule(onLeft ? RelativeLayout.ALIGN_PARENT_LEFT
+                : RelativeLayout.ALIGN_PARENT_RIGHT);
+            splitLp.topMargin = insetTop;
+            splitLp.bottomMargin = insetBottomIme;
+            if (onLeft) splitLp.leftMargin = insetLeft + effectivePanelWidth;
+            else splitLp.rightMargin = insetRight + effectivePanelWidth;
+            splitDivider.setLayoutParams(splitLp);
+            splitDivider.setVisibility(View.VISIBLE);
+        }
 
     }
 
