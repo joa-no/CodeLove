@@ -251,9 +251,11 @@ public class GameActivity extends SDLActivity {
         // One capsule for console, exit and the edge collapse handle.
         android.graphics.drawable.GradientDrawable actionsBackground =
             new android.graphics.drawable.GradientDrawable();
-        actionsBackground.setColor(Workspace.COLOR_FIELD);
+        // 70% transparent capsule background; keep the control icons opaque.
+        actionsBackground.setColor((Workspace.COLOR_FIELD & 0x00FFFFFF) | 0x4D000000);
         actionsBackground.setCornerRadius(Math.round(12 * density));
-        actionsBackground.setStroke(Math.max(1, Math.round(density)), Workspace.COLOR_BORDER);
+        actionsBackground.setStroke(Math.max(1, Math.round(density)),
+            (Workspace.COLOR_BORDER & 0x00FFFFFF) | 0x4D000000);
         actions.setBackground(actionsBackground);
 
         android.widget.LinearLayout controls = new android.widget.LinearLayout(this);
@@ -270,7 +272,7 @@ public class GameActivity extends SDLActivity {
         controls.addView(consoleButton, new android.widget.LinearLayout.LayoutParams(size, size));
 
         android.view.View separator = new android.view.View(this);
-        separator.setBackgroundColor(Workspace.COLOR_BORDER);
+        separator.setBackgroundColor((Workspace.COLOR_BORDER & 0x00FFFFFF) | 0x4D000000);
         controls.addView(separator, new android.widget.LinearLayout.LayoutParams(
             Math.max(1, Math.round(density)), Math.round(22 * density)));
 
