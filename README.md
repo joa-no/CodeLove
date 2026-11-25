@@ -12,7 +12,7 @@ A native Lua and LÖVE development environment for Android.
   <img src="https://img.shields.io/badge/Android-6.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white&labelColor=242436" alt="Android 6.0+" />
   <img src="https://img.shields.io/badge/Lua-A78BFA?style=for-the-badge&logo=lua&logoColor=white" alt="Lua" />
   <img src="https://img.shields.io/badge/L%C3%96VE-242436?style=for-the-badge" alt="LÖVE" />
-  <img src="https://img.shields.io/badge/version-1.0.0-A78BFA?style=for-the-badge&labelColor=242436" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/version-1.0.1-A78BFA?style=for-the-badge&labelColor=242436" alt="Version 1.0.1" />
 </p>
 
 [Downloads](https://github.com/joa-no/CodeLove/releases) · [Features](#features) · [Installation](#installation) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
@@ -32,7 +32,9 @@ CodeLove combines a native Android interface, Sora Editor and the [LÖVE](https:
 - Create, move, rename and delete files and folders.
 - Run projects with the integrated LÖVE runtime and inspect output using the collapsible in-game console controls.
 - Export .love archives and standalone, individually signed APKs offline.
-- Portrait and landscape layouts, light/dark/system themes, and English, Portuguese and Spanish localization.
+- Portrait and landscape layouts with adjustable split panels and automatically saved panel proportions.
+- Slim, discreet editor scrollbars with full-size touch targets.
+- Light/dark/system themes and English, Portuguese and Spanish localization.
 
 CodeLove works directly with your selected project folder.
 
@@ -92,7 +94,7 @@ See the [dependency inventory and validation](docs/dependency-audit.md) for tech
 
 Original CodeLove editor and tooling contributions: [GPL-3.0-only](LICENSE). Original CodeLove contributions to the standalone game runtime: [zlib](LICENSE-runtime.txt). LÖVE and all third-party components retain their respective terms and credits. See [licensing scope](LICENSING.md), [original notices](license.txt), and the documents available offline under **About → Licenses**.
 
-The corresponding source, SHA-256 checksums and revision inventory are available alongside the official APK on [GitHub Releases](https://github.com/joa-no/CodeLove/releases). See [rebuild and relink instructions](docs/rebuild-and-relink.md).
+The corresponding source, SHA-256 checksums and revision inventory are available in `codelove-source.zip` alongside the official APK on [GitHub Releases](https://github.com/joa-no/CodeLove/releases). See [rebuild and relink instructions](docs/rebuild-and-relink.md).
 
 CodeLove is a modified distribution based on LÖVE and is not affiliated with or endorsed by the LÖVE project.
 
