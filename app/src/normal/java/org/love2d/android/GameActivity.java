@@ -287,7 +287,7 @@ public class GameActivity extends SDLActivity {
         int iconSize = Math.round(20 * density);
         toggle.addView(toggleIcon, new android.widget.LinearLayout.LayoutParams(iconSize, iconSize));
         toggle.setContentDescription(localized.getString(R.string.cl_collapse_runtime_controls));
-        actions.addView(toggle, new android.widget.LinearLayout.LayoutParams(
+        actions.addView(toggle, 0, new android.widget.LinearLayout.LayoutParams(
             Math.round(32 * density), size));
 
         android.widget.RelativeLayout.LayoutParams buttonsLp =
