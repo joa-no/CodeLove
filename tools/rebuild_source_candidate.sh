@@ -13,6 +13,7 @@ cd "$destination/codelove"
 test ! -e .git
 test -s app/src/main/resources/META-INF/CODELOVE-SOURCE.txt
 test -s app/src/main/assets/ndk-runtime-notice.txt
+test -s app/src/main/assets/jvm-source-notices.txt
 # Avoid inheriting release credentials; this is a disposable debug rebuild.
 unset CODELOVE_RELEASE_STORE_FILE CODELOVE_RELEASE_STORE_PASSWORD CODELOVE_RELEASE_KEY_ALIAS CODELOVE_RELEASE_KEY_PASSWORD
 mkdir -p app/src/embed/assets app/src/normal/assets/offline
@@ -38,6 +39,7 @@ with ZipFile("app/build/outputs/apk/normalRecord/debug/app-normal-record-debug.a
         for archive in (editor, runtime):
             assert archive.read("META-INF/CODELOVE-SOURCE.txt") == Path("app/src/main/resources/META-INF/CODELOVE-SOURCE.txt").read_bytes()
             assert archive.read("assets/ndk-runtime-notice.txt") == Path("app/src/main/assets/ndk-runtime-notice.txt").read_bytes()
+            assert archive.read("assets/jvm-source-notices.txt") == Path("app/src/main/assets/jvm-source-notices.txt").read_bytes()
             assert "lib/arm64-v8a/liblove.so" in archive.namelist()
 print("Archive-only unmodified debug editor and unsigned runtime rebuilt successfully")
 PY

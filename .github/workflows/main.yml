@@ -62,6 +62,8 @@ jobs:
           sdkmanager "ndk;27.3.13750724"
         fi
         python3 tools/prepare_ndk_runtime_notice.py "$NDK"
+    - name: Collect exact Guava and JetBrains source notices
+      run: python3 tools/collect_jvm_source_notices.py
     - name: Prepare bundled offline embed template
       shell: bash
       run: |
@@ -127,7 +129,7 @@ jobs:
                 for name in ("assets/runtime-licenses.txt", "assets/native-license-notices.txt",
                              "assets/jvm-dependency-notices.txt", "assets/ndk-runtime-notice.txt",
                              "assets/runtime-own-license.txt", "assets/love-upstream-notices.txt",
-                             "assets/kotlin-third-party-notices.txt", "META-INF/CODELOVE-SOURCE.txt"):
+                             "assets/kotlin-third-party-notices.txt", "assets/jvm-source-notices.txt", "META-INF/CODELOVE-SOURCE.txt"):
                     assert template.read(name) == game.read(name), name
                 assert "assets/codelove-licenses.txt" not in game.namelist()
                 assert "assets/codelove-own-license.txt" not in game.namelist()
@@ -175,7 +177,7 @@ jobs:
                 assert embed.read("assets/ndk-runtime-notice.txt") == ndk_notice, "NDK notice missing or changed in runtime"
                 assert embed.read("assets/jvm-dependency-notices.txt") == runtime_jvm, "JVM runtime notices missing or changed"
                 assert "assets/codelove-licenses.txt" not in embed.namelist(), "Editor notices leaked into runtime"
-        shared = ("runtime-own-license.txt", "love-upstream-notices.txt")
+        shared = ("runtime-own-license.txt", "love-upstream-notices.txt", "jvm-source-notices.txt")
         assert Path("app/src/main/assets/runtime-own-license.txt").read_bytes() == Path("LICENSE-runtime.txt").read_bytes()
         assert Path("app/src/normal/assets/codelove-own-license.txt").read_bytes() == Path("LICENSE").read_bytes()
         upstream = Path("app/src/main/assets/love-upstream-notices.txt").read_bytes()

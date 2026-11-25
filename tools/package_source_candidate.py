@@ -63,10 +63,11 @@ with tempfile.TemporaryDirectory() as temp:
                     seen.add(name)
                     output.addfile(member, part.extractfile(member) if member.isfile() else None)
 
-        # Include only the two explicitly reviewed generated inputs, not the
+        # Include only the explicitly listed generated inputs, not the
         # working tree, signing material, build output, or cached credentials.
         for relative in ("app/src/main/resources/META-INF/CODELOVE-SOURCE.txt",
-                         "app/src/main/assets/ndk-runtime-notice.txt"):
+                         "app/src/main/assets/ndk-runtime-notice.txt",
+                         "app/src/main/assets/jvm-source-notices.txt"):
             name = "codelove/" + relative
             source = root / relative
             if name in seen or not source.is_file() or source.is_symlink():
@@ -82,6 +83,7 @@ required = {
     "third-party/sora-editor/LICENSE",
     "codelove/app/src/main/resources/META-INF/CODELOVE-SOURCE.txt",
     "codelove/app/src/main/assets/ndk-runtime-notice.txt",
+    "codelove/app/src/main/assets/jvm-source-notices.txt",
 }
 missing = required - seen
 if missing:

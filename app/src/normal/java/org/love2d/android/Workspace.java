@@ -1270,7 +1270,7 @@ public final class Workspace {
             new String[] {readAssetText("codelove-licenses.txt"),
                 readAssetText("codelove-own-license.txt"), readAssetText("runtime-own-license.txt"),
                 readAssetText("love-upstream-notices.txt"), readAssetText("native-license-notices.txt"),
-                readAssetText("jvm-dependency-notices.txt"), readAssetText("kotlin-third-party-notices.txt"),
+                readAssetText("jvm-dependency-notices.txt") + "\n\n" + readAssetText("jvm-source-notices.txt"), readAssetText("kotlin-third-party-notices.txt"),
                 readAssetText("ndk-runtime-notice.txt")});
     }
 
