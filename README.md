@@ -12,10 +12,10 @@ A native Android workspace for writing Lua, managing projects, running LÖVE gam
   <img src="https://img.shields.io/badge/Android-242436?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Android" />
   <img src="https://img.shields.io/badge/Lua-A78BFA?style=for-the-badge&logo=lua&logoColor=white" alt="Lua" />
   <img src="https://img.shields.io/badge/L%C3%96VE-242436?style=for-the-badge" alt="LÖVE" />
-  <img src="https://img.shields.io/badge/1.0.0-Release_candidate-A78BFA?style=for-the-badge&labelColor=242436" alt="1.0.0 release candidate" />
+  <img src="https://img.shields.io/badge/version-1.0.0-A78BFA?style=for-the-badge&labelColor=242436" alt="Version 1.0.0" />
 </p>
 
-[Features](#features) · [Installation](#installation) · [Export](#offline-android-export) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
+[Downloads](https://github.com/joa-no/CodeLove/releases) · [Features](#features) · [Installation](#installation) · [Export](#offline-android-export) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
 
 </div>
 
@@ -30,7 +30,7 @@ CodeLove combines a native Android interface, Sora Editor and the [LÖVE](https:
 - Lua and LÖVE syntax highlighting, autocomplete, parameter hints, auto-pairs, indentation and line numbers.
 - File tabs, explicit saving and direct project-folder access through Android's Storage Access Framework (SAF).
 - Create, move, rename and delete files and folders.
-- Run projects with the integrated LÖVE runtime and inspect output using the in-game console.
+- Run projects with the integrated LÖVE runtime and inspect output using the collapsible in-game console controls.
 - Export .love archives and standalone, individually signed APKs offline.
 - Portrait and landscape layouts, light/dark/system themes, and English, Portuguese and Spanish localization.
 
@@ -38,7 +38,7 @@ The selected project folder is the source of truth. CodeLove does not maintain a
 
 ## Installation
 
-The first stable GitHub Release is being prepared. Development builds are available through [GitHub Actions](https://github.com/joa-no/CodeLove/actions); they are intended for testing. Android 6.0 (API 23) is the configured minimum SDK, not a claim that every supported Android version and device has been tested. Shipped native ABIs: arm64-v8a, armeabi-v7a and x86_64.
+Get the signed APK from [GitHub Releases](https://github.com/joa-no/CodeLove/releases). If no release is listed, publication is still pending. Development builds are available through [GitHub Actions](https://github.com/joa-no/CodeLove/actions) for testing only. Android 6.0 (API 23) is the configured minimum SDK, not a claim that every supported Android version and device has been tested. Shipped native ABIs: arm64-v8a, armeabi-v7a and x86_64.
 
 For distribution, use the signed Release APK rather than a Debug, relink-test or prototype APK. Debug and Release signatures differ. Back up your projects and per-game signing keys before uninstalling a previous build. Android may require permission to install an APK from your browser or file manager.
 
@@ -75,7 +75,7 @@ git clone --recurse-submodules https://github.com/joa-no/CodeLove.git
 cd CodeLove
 ```
 
-The integrated editor requires an unsigned runtime template and the generated provenance/notice files before compilation. Follow the exact steps in [rebuilding and relinking](docs/rebuild-and-relink.md), or use the build sequence in [the main workflow](.github/workflows/main.yml). The source archive accompanying the official release will contain the exact native submodules, Sora source and generated notice inputs. An automatic GitHub source ZIP alone is not equivalent.
+The integrated editor requires an unsigned runtime template and the generated provenance/notice files before compilation. Follow the exact steps in [rebuilding and relinking](docs/rebuild-and-relink.md), or use the build sequence in [the main workflow](.github/workflows/main.yml). Use the corresponding source archive supplied with the release for the exact native submodules, Sora source and generated notice inputs. An automatic GitHub source ZIP alone is not equivalent.
 
 The debug key in app/codelove-debug.p12 is public and intentionally committed for test installations. Never use it for public releases. The official signing key remains private.
 
