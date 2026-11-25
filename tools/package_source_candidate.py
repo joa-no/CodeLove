@@ -96,7 +96,6 @@ with archive.open("rb") as stream:
     "repositories": [{"path": prefix, "revision": sha} for _, prefix, sha in sources],
     "archived_entries": len(seen),
     "sha256": digest.hexdigest(),
-    "known_pending": ["verify archive-only rebuild", "modified LGPL-library rebuild and installation",
-                      "reconcile all required third-party build/source materials"]
+    "known_pending": ["final third-party notice/source review", "publish matching source with official binaries"]
 }, indent=2) + "\n")
 print(f"Source candidate: {archive.name}, {len(seen)} entries, {archive.stat().st_size} bytes")

@@ -13,7 +13,7 @@ Editor integrado — Sora Editor 0.24.7
 -------------------------------------
 Projeto: https://github.com/Rosemoe/sora-editor
 Fonte da versao utilizada: https://github.com/Rosemoe/sora-editor/tree/0.24.7
-Licenca: GNU Lesser General Public License v2.1 (LGPL-2.1).
+Licenca: GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later).
 O texto integral da LGPL-2.1 ja esta incluido abaixo, na secao "LGPL 2.1".
 A biblioteca Sora Editor e utilizada apenas no aplicativo CodeLove e nao e
 empacotada nos APKs dos jogos exportados. Os direitos concedidos pela LGPL

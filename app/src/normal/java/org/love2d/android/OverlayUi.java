@@ -281,7 +281,7 @@ final class OverlayUi {
     // ------------------------------------------------------------------
 
     /** Tela com a logo, o autor, os agradecimentos ao LOVE e as licencas. */
-    void showAbout(String author, final String credits, final String licenses) {
+    void showAbout(String author, final String credits, final String[] licenseNames, final String[] licenses) {
         FrameLayout scrim = openScrim(0xCC000000);
 
         LinearLayout card = new LinearLayout(activity);
@@ -344,11 +344,27 @@ final class OverlayUi {
         final TextView toggle = button(activity.getString(R.string.cl_licenses), Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
         final boolean[] showingLicenses = {false};
         toggle.setOnClickListener(v -> {
-            showingLicenses[0] = !showingLicenses[0];
-            body.setText(showingLicenses[0] ? licenses : credits);
-            body.setTextSize(showingLicenses[0] ? 11 : 14);
-            toggle.setText(showingLicenses[0] ? activity.getString(R.string.cl_acknowledgements) : activity.getString(R.string.cl_licenses));
-            scroll.scrollTo(0, 0);
+            if (showingLicenses[0]) {
+                showingLicenses[0] = false;
+                body.setText(credits);
+                body.setTextSize(14);
+                toggle.setText(activity.getString(R.string.cl_licenses));
+                scroll.scrollTo(0, 0);
+                return;
+            }
+            android.widget.PopupMenu menu = new android.widget.PopupMenu(activity, toggle);
+            for (int i = 0; i < licenseNames.length; i++) {
+                menu.getMenu().add(0, i, i, licenseNames[i]);
+            }
+            menu.setOnMenuItemClickListener(item -> {
+                showingLicenses[0] = true;
+                body.setText(licenses[item.getItemId()]);
+                body.setTextSize(11);
+                toggle.setText(activity.getString(R.string.cl_acknowledgements));
+                scroll.scrollTo(0, 0);
+                return true;
+            });
+            menu.show();
         });
         row.addView(toggle, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));

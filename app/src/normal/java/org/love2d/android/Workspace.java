@@ -1266,7 +1266,12 @@ public final class Workspace {
 
     private void showAbout() {
         ui.showAbout("joa-no", activity.getString(R.string.cl_credits_full),
-            readAssetText("codelove-licenses.txt"));
+            new String[] {"CodeLove / Sora Editor", "GPL-3.0-only", "Runtime / zlib", "LÖVE / ENet / LuaHTTPS", "Native libraries", "JVM dependencies", "Kotlin third-party", "Android NDK / LLVM"},
+            new String[] {readAssetText("codelove-licenses.txt"),
+                readAssetText("codelove-own-license.txt"), readAssetText("runtime-own-license.txt"),
+                readAssetText("love-upstream-notices.txt"), readAssetText("native-license-notices.txt"),
+                readAssetText("jvm-dependency-notices.txt"), readAssetText("kotlin-third-party-notices.txt"),
+                readAssetText("ndk-runtime-notice.txt")});
     }
 
     /** Le um arquivo de texto de dentro do app (assets). */

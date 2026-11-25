@@ -125,9 +125,12 @@ jobs:
         with ZipFile("app/src/normal/assets/offline/embed-unsigned.apk") as template:
             with ZipFile(Path(os.environ["RUNNER_TEMP"]) / "notice-export-test" / "sample.apk") as game:
                 for name in ("assets/runtime-licenses.txt", "assets/native-license-notices.txt",
-                             "assets/jvm-dependency-notices.txt", "assets/ndk-runtime-notice.txt", "META-INF/CODELOVE-SOURCE.txt"):
+                             "assets/jvm-dependency-notices.txt", "assets/ndk-runtime-notice.txt",
+                             "assets/runtime-own-license.txt", "assets/love-upstream-notices.txt",
+                             "assets/kotlin-third-party-notices.txt", "META-INF/CODELOVE-SOURCE.txt"):
                     assert template.read(name) == game.read(name), name
                 assert "assets/codelove-licenses.txt" not in game.namelist()
+                assert "assets/codelove-own-license.txt" not in game.namelist()
                 assert game.read("assets/main.lua") == b"function love.load() end"
         print("Runtime notices and source revision preserved by the production Java exporter")
         PY
@@ -172,6 +175,22 @@ jobs:
                 assert embed.read("assets/ndk-runtime-notice.txt") == ndk_notice, "NDK notice missing or changed in runtime"
                 assert embed.read("assets/jvm-dependency-notices.txt") == runtime_jvm, "JVM runtime notices missing or changed"
                 assert "assets/codelove-licenses.txt" not in embed.namelist(), "Editor notices leaked into runtime"
+        shared = ("runtime-own-license.txt", "love-upstream-notices.txt")
+        assert Path("app/src/main/assets/runtime-own-license.txt").read_bytes() == Path("LICENSE-runtime.txt").read_bytes()
+        assert Path("app/src/normal/assets/codelove-own-license.txt").read_bytes() == Path("LICENSE").read_bytes()
+        upstream = Path("app/src/main/assets/love-upstream-notices.txt").read_bytes()
+        for relative in ("license.txt", "src/libraries/enet/libenet/LICENSE", "src/libraries/luahttps/license.txt"):
+            assert (Path("app/src/main/cpp/love") / relative).read_bytes() in upstream, relative
+        with ZipFile(apk) as normal:
+            with ZipFile(BytesIO(normal.read("assets/offline/embed-unsigned.apk"))) as embed:
+                for name in shared:
+                    expected = (Path("app/src/main/assets") / name).read_bytes()
+                    assert normal.read("assets/" + name) == embed.read("assets/" + name) == expected, name
+                assert normal.read("assets/codelove-own-license.txt") == Path("LICENSE").read_bytes()
+                assert "assets/codelove-own-license.txt" not in embed.namelist()
+                for flavor, archive in (("normal", normal), ("embed", embed)):
+                    expected = (Path("app/src") / flavor / "assets/kotlin-third-party-notices.txt").read_bytes()
+                    assert archive.read("assets/kotlin-third-party-notices.txt") == expected
         print("Packaged editor and embedded runtime license assets verified")
         PY
     - name: Collect runtime dependency reports
