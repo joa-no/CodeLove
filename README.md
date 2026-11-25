@@ -9,7 +9,7 @@
 A native Lua and LÖVE development environment for Android.
 
 <p>
-  <img src="https://img.shields.io/badge/Android-6.0%2B-242436?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Android 6.0+" />
+  <img src="https://img.shields.io/badge/Android-6.0%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white&labelColor=242436" alt="Android 6.0+" />
   <img src="https://img.shields.io/badge/Lua-A78BFA?style=for-the-badge&logo=lua&logoColor=white" alt="Lua" />
   <img src="https://img.shields.io/badge/L%C3%96VE-242436?style=for-the-badge" alt="LÖVE" />
   <img src="https://img.shields.io/badge/version-1.0.0-A78BFA?style=for-the-badge&labelColor=242436" alt="Version 1.0.0" />
