@@ -55,8 +55,21 @@ jobs:
       if: ${{ matrix.build_type == 'Release' }}
       env:
         CODELOVE_KEYSTORE_BASE64: ${{ secrets.CODELOVE_KEYSTORE_BASE64 }}
+        CODELOVE_RELEASE_STORE_PASSWORD: ${{ secrets.CODELOVE_KEYSTORE_PASSWORD }}
+        CODELOVE_RELEASE_KEY_ALIAS: ${{ secrets.CODELOVE_KEY_ALIAS }}
       run: |
-        echo "$CODELOVE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/codelove-release.jks"
+        set -euo pipefail
+        printf '%s' "$CODELOVE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/codelove-release.jks"
+        # Reject unexpected subject metadata without printing the certificate subject.
+        subject=$(keytool -exportcert -storetype PKCS12 \
+          -keystore "$RUNNER_TEMP/codelove-release.jks" \
+          -alias "$CODELOVE_RELEASE_KEY_ALIAS" \
+          -storepass:env CODELOVE_RELEASE_STORE_PASSWORD \
+          | openssl x509 -inform DER -noout -subject -nameopt RFC2253)
+        if [ "$subject" != "subject=CN=CodeLove,O=CodeLove" ]; then
+          echo "::error::Release signing certificate must use the approved CodeLove-only subject."
+          exit 1
+        fi
     - name: Record corresponding source revisions
       shell: bash
       run: python3 tools/write_source_revision.py
@@ -296,7 +309,7 @@ jobs:
         test -s "$APK"
         APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
         test -x "$APKSIGNER"
-        "$APKSIGNER" verify --verbose --print-certs "$APK"
+        "$APKSIGNER" verify --verbose "$APK"
     - name: Build Release-specific Binaries
       if: ${{ matrix.build_type == 'Release' && github.event_name == 'workflow_dispatch' && inputs.build_aab }}
       env:
