@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/icon-codelove.svg" alt="CodeLove icon" width="136" />
+<img src="assets/icon-codelove.png" alt="CodeLove icon" width="136" />
 
 # CodeLove
 
