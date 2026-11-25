@@ -1,0 +1,311 @@
+name: offline-apk-prototype
+
+# Feasibility test only: no project upload, no server, no user credentials.
+on:
+  push:
+    paths:
+      - '.github/workflows/offline-apk-prototype.yml'
+      - 'tools/offline_apk_prototype.py'
+      - 'tools/test_offline_apk_prototype.py'
+      - 'tools/prepare_game_export.py'
+      - 'app/src/normal/java/org/love2d/android/OfflineGameApk.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkIdentity.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkIcon.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkIconResources.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkExportPipeline.java'
+      - 'app/src/normal/java/org/love2d/android/GameExportApk.java'
+      - 'tools/OfflineGameApkTest.java'
+      - 'app/src/normal/java/org/love2d/android/OfflineApkSigner.java'
+      - 'tools/OfflineApkSignerTest.java'
+      - 'app/src/normal/java/org/love2d/android/GameSigningKeyStore.java'
+      - 'tools/GameSigningKeyStoreTest.java'
+      - 'app/build.gradle'
+  workflow_dispatch:
+
+jobs:
+  repack-template:
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx4G'"
+    steps:
+      - name: Checkout with native LÖVE submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: gradle
+      - name: Download verified APK signing library for JVM test
+        run: |
+          curl --fail --location --retry 3 --silent --show-error \
+            -o "$RUNNER_TEMP/apksig.jar" \
+            "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.13.2/apksig-8.13.2.jar"
+          echo "c070ed1394629d74641aa0906f60b2ffa1ee77e6366a1f93437f59717b1aeb89  $RUNNER_TEMP/apksig.jar" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/bc"
+          for artifact in bcprov-jdk18on bcutil-jdk18on bcpkix-jdk18on; do
+            curl --fail --location --retry 3 --silent --show-error \
+              "https://repo.maven.apache.org/maven2/org/bouncycastle/$artifact/1.86/$artifact-1.86.jar" \
+              -o "$RUNNER_TEMP/bc/$artifact-1.86.jar"
+            unzip -tq "$RUNNER_TEMP/bc/$artifact-1.86.jar" > /dev/null
+          done
+      - name: Unit test SDK-free ZIP replacement
+        run: |
+          python3 tools/test_offline_apk_prototype.py
+          mkdir -p "$RUNNER_TEMP/offline-jvm"
+          javac --release 17 -cp "$RUNNER_TEMP/apksig.jar:$RUNNER_TEMP/bc/*" \
+            -d "$RUNNER_TEMP/offline-jvm" \
+            app/src/normal/java/org/love2d/android/OfflineGameApk.java \
+            app/src/normal/java/org/love2d/android/OfflineBinaryManifest.java \
+            app/src/normal/java/org/love2d/android/OfflineApkIdentity.java \
+            app/src/normal/java/org/love2d/android/OfflineApkIconResources.java \
+            tools/OfflineGameApkTest.java \
+            app/src/normal/java/org/love2d/android/OfflineApkSigner.java \
+            tools/OfflineApkSignerTest.java \
+            app/src/normal/java/org/love2d/android/GameSigningKeyStore.java \
+            tools/GameSigningKeyStoreTest.java
+          java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/bc/*" \
+            org.love2d.android.GameSigningKeyStoreTest
+          java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineGameApkTest
+          java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          curl -Lo kitware-archive.sh https://apt.kitware.com/kitware-archive.sh
+          sudo bash ./kitware-archive.sh
+          sudo apt-get install -y ninja-build cmake
+      - name: Prepare base and replacement LOVE games
+        run: |
+          set -euo pipefail
+          test ! -e app/src/embed/assets/main.lua
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path(os.environ["RUNNER_TEMP"])
+          template = Path("app/src/embed/assets/game.love")
+          template.parent.mkdir(parents=True, exist_ok=True)
+          with ZipFile(template, "w", ZIP_DEFLATED) as archive:
+              archive.writestr("main.lua", "error('Template is not a finished game')")
+          game = root / "offline-sample.love"
+          with ZipFile(game, "w", ZIP_DEFLATED) as archive:
+              archive.writestr("main.lua",
+                  "function love.draw()\n"
+                  "  love.graphics.print('Offline APK prototype', 32, 32)\n"
+                  "end\n")
+              archive.writestr("scripts/helper.lua", "return 'nested Lua'")
+              archive.writestr("images/test.bin", b"\x00\xfe\xff\x01")
+          PY
+      - name: Build unsigned embed template once
+        run: |
+          bash ./gradlew assembleEmbedNoRecordRelease \
+            '-Papp.name=CodeLove Offline Template' \
+            '-Papp.application_id=com.example.codelove.offlinetemplate' \
+            '-Papp.version_name=1.0.0' \
+            '-Papp.version_code=1'
+      - name: Replace game.love without running Gradle
+        run: |
+          set -euo pipefail
+          TEMPLATE="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release-unsigned.apk"
+          test -s "$TEMPLATE"
+          unzip -Z1 "$TEMPLATE" | grep -Fx 'assets/game.love'
+          if unzip -Z1 "$TEMPLATE" | grep -Fxq 'assets/main.lua'; then
+            echo "Unexpected loose main.lua in template" >&2
+            exit 1
+          fi
+          python3 tools/offline_apk_prototype.py \
+            --template "$TEMPLATE" \
+            --love "$RUNNER_TEMP/offline-sample.love" \
+            --out "$RUNNER_TEMP/offline-repacked-unsigned.apk"
+          unzip -p "$RUNNER_TEMP/offline-repacked-unsigned.apk" assets/game.love \
+            > "$RUNNER_TEMP/embedded-game.love"
+          cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/embedded-game.love"
+          unzip -Z1 "$RUNNER_TEMP/offline-repacked-unsigned.apk" \
+            | grep -Fx 'lib/arm64-v8a/liblove.so'
+          java -cp "$RUNNER_TEMP/offline-jvm" \
+            org.love2d.android.OfflineGameApkTest --repack \
+            "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
+            "$RUNNER_TEMP/offline-java-unsigned.apk"
+          unzip -p "$RUNNER_TEMP/offline-java-unsigned.apk" assets/game.love \
+            > "$RUNNER_TEMP/java-embedded-game.love"
+          cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/java-embedded-game.love"
+          # Recommended LÖVE 11.4+ mode: add Lua/asset files directly
+          # under assets/; no assets/game.love in the finished APK.
+          java -cp "$RUNNER_TEMP/offline-jvm" \
+            org.love2d.android.OfflineGameApkTest --repack-assets \
+            "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
+            "$RUNNER_TEMP/offline-direct-unsigned.apk"
+          # Build a game-specific APK without Gradle using the real template.
+          java -cp "$RUNNER_TEMP/offline-jvm" \
+            org.love2d.android.OfflineGameApkTest --repack-assets-identity-icon \
+            "$TEMPLATE" "$RUNNER_TEMP/offline-sample.love" \
+            "$RUNNER_TEMP/offline-personalized-unsigned.apk" \
+            org.example.offlineprototype 2.7.1 271
+          unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/main.lua \
+            | grep -F "Offline APK prototype"
+          unzip -p "$RUNNER_TEMP/offline-direct-unsigned.apk" assets/scripts/helper.lua \
+            | grep -Fx "return 'nested Lua'"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          apk = Path(os.environ["RUNNER_TEMP"]) / "offline-direct-unsigned.apk"
+          with ZipFile(apk) as package:
+              assert package.testzip() is None
+              assert package.read("assets/images/test.bin") == b"\x00\xfe\xff\x01"
+              assert "assets/game.love" not in package.namelist()
+          PY
+          if unzip -Z1 "$RUNNER_TEMP/offline-direct-unsigned.apk" | grep -Fxq 'assets/game.love'; then
+            echo "Legacy game.love must not remain in recommended embedded APK" >&2
+            exit 1
+          fi
+      - name: Align and sign test APK
+        run: |
+          set -euo pipefail
+          ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign -type f | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -x "$ZIPALIGN"
+          test -x "$APKSIGNER"
+          # The Java assembler must align stored .so files itself,
+          # without running zipalign to modify the APK.
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-java-unsigned.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-unsigned.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-personalized-unsigned.apk"
+          # A game-scoped key is created by CodeLove's actual Java code.
+          # The constant password is for a throwaway CI identity only.
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/bc/*" \
+            org.love2d.android.GameSigningKeyStoreTest --generate \
+            "$RUNNER_TEMP/offline-test-only.p12"
+          # Sign with the exact Java class shipped in CodeLove, without
+          # invoking the host apksigner to produce the signatures.
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-java-unsigned.apk" \
+            "$RUNNER_TEMP/offline-prototype-test.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-java-unsigned.apk" \
+            "$RUNNER_TEMP/offline-prototype-again.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-direct-unsigned.apk" \
+            "$RUNNER_TEMP/offline-direct-prototype.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
+          GAME_TEST_KEY_PASSWORD="offline-test-only-pass" \
+            java -cp "$RUNNER_TEMP/offline-jvm:$RUNNER_TEMP/apksig.jar" \
+            org.love2d.android.OfflineApkSignerTest --sign \
+            "$RUNNER_TEMP/offline-personalized-unsigned.apk" \
+            "$RUNNER_TEMP/offline-personalized-prototype.apk" \
+            "$RUNNER_TEMP/offline-test-only.p12" game-key
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-personalized-prototype.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-personalized-prototype.apk"
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-direct-prototype.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-direct-prototype.apk"
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-prototype-test.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-test.apk"
+          "$APKSIGNER" verify --verbose --print-certs \
+            "$RUNNER_TEMP/offline-prototype-again.apk"
+          "$ZIPALIGN" -c -P 16 4 "$RUNNER_TEMP/offline-prototype-again.apk"
+          # Both APKs use the same signing certificate, allowing updates.
+          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/offline-prototype-test.apk" \
+            | sed -nE 's/^.*certificate SHA-256 digest: ([0-9a-f]+).*$/\1/p' \
+            | head -n 1 > "$RUNNER_TEMP/signer1.txt"
+          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/offline-prototype-again.apk" \
+            | sed -nE 's/^.*certificate SHA-256 digest: ([0-9a-f]+).*$/\1/p' \
+            | head -n 1 > "$RUNNER_TEMP/signer2.txt"
+          test -s "$RUNNER_TEMP/signer1.txt"
+          test -s "$RUNNER_TEMP/signer2.txt"
+          cmp "$RUNNER_TEMP/signer1.txt" "$RUNNER_TEMP/signer2.txt"
+      - name: Validate embedded game, native libraries and identity
+        run: |
+          set -euo pipefail
+          APK="$RUNNER_TEMP/offline-prototype-test.apk"
+          test -s "$APK"
+          unzip -p "$APK" assets/game.love > "$RUNNER_TEMP/signed-game.love"
+          cmp "$RUNNER_TEMP/offline-sample.love" "$RUNNER_TEMP/signed-game.love"
+          # The new direct-asset APK must also retain its game after signing.
+          unzip -p "$RUNNER_TEMP/offline-direct-prototype.apk" assets/main.lua \
+            | grep -F "Offline APK prototype"
+          unzip -p "$RUNNER_TEMP/offline-direct-prototype.apk" assets/scripts/helper.lua \
+            | grep -Fx "return 'nested Lua'"
+          if unzip -Z1 "$RUNNER_TEMP/offline-direct-prototype.apk" | grep -Fxq 'assets/game.love'; then
+            echo "Signed direct APK unexpectedly includes game.love" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import io
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          apk = Path(os.environ["RUNNER_TEMP"]) / "offline-prototype-test.apk"
+          with ZipFile(apk) as package:
+              assert package.testzip() is None
+              names = package.namelist()
+              assert names.count("assets/game.love") == 1
+              assert "assets/main.lua" not in names
+              assert "lib/arm64-v8a/liblove.so" in names
+              with ZipFile(io.BytesIO(package.read("assets/game.love"))) as love:
+                  assert "main.lua" in love.namelist()
+                  assert "scripts/helper.lua" in love.namelist()
+                  assert love.read("images/test.bin") == b"\x00\xfe\xff\x01"
+                  assert b"Template is not a finished game" not in love.read("main.lua")
+          PY
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/offline-badging.txt"
+          grep -F "name='com.example.codelove.offlinetemplate'" \
+            "$RUNNER_TEMP/offline-badging.txt"
+          grep -F "application-label:'CodeLove Offline Template'" \
+            "$RUNNER_TEMP/offline-badging.txt"
+          "$AAPT" dump badging "$RUNNER_TEMP/offline-personalized-prototype.apk" \
+            > "$RUNNER_TEMP/offline-personalized-badging.txt"
+          grep -F "name='org.example.offlineprototype' versionCode='271' versionName='2.7.1'" \
+            "$RUNNER_TEMP/offline-personalized-badging.txt"
+          grep -F "application-label:'Prototype Test'" \
+            "$RUNNER_TEMP/offline-personalized-badging.txt"
+          echo "Manifest rewrite, ZIP alignment and test signature verified"
+      # CI check for the new unobtrusive attribution in each signed and unsigned export.
+      - name: Verify CodeLove stamp survives APK signing
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          expected = "Built with CodeLove\nAndroid development environment for LÖVE2D\nhttps://github.com/joa-no/CodeLove\n\nPowered by LÖVE2D\nhttps://love2d.org\n".encode("utf-8")
+          path = "META-INF/CODELOVE.txt"
+          outputs = (
+              "offline-java-unsigned.apk",
+              "offline-direct-unsigned.apk",
+              "offline-personalized-unsigned.apk",
+              "offline-prototype-test.apk",
+              "offline-prototype-again.apk",
+              "offline-direct-prototype.apk",
+              "offline-personalized-prototype.apk",
+          )
+          for filename in outputs:
+              with ZipFile(Path(os.environ["RUNNER_TEMP"]) / filename) as package:
+                  assert package.namelist().count(path) == 1, filename
+                  assert package.read(path) == expected, filename
+          print("CodeLove attribution verified in unsigned and signed APKs")
+          PY
+      - name: Upload prototype test APK (not ready for distribution)
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-apk-prototype-test-only
+          path: |
+            ${{ runner.temp }}/offline-prototype-test.apk
+            ${{ runner.temp }}/offline-direct-prototype.apk
+            ${{ runner.temp }}/offline-personalized-prototype.apk

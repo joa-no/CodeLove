@@ -13,7 +13,7 @@ android {
         versionCode project.properties["app.version_code"].toInteger()
         versionName project.properties["app.version_name"]
         minSdk 23
-        compileSdk = 35
+        compileSdk = 37
         targetSdk 35
 
         externalNativeBuild {
@@ -105,17 +105,38 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+
+        // Release signing is supplied only by CI through environment variables.
+        // No private signing material is stored in the repository.
+        release {
+            def releaseStoreFile = System.getenv("CODELOVE_RELEASE_STORE_FILE")
+            if (releaseStoreFile) {
+                storeFile file(releaseStoreFile)
+                storeType 'pkcs12'
+                storePassword System.getenv("CODELOVE_RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("CODELOVE_RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("CODELOVE_RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // Local release builds remain unsigned unless the release signing
+            // environment is explicitly provided.
+            if (System.getenv("CODELOVE_RELEASE_STORE_FILE")) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
     buildFeatures {
         prefab true
+        // GameActivity distingue o APK normal do jogo incorporado por BuildConfig.FLAVOR.
+        buildConfig true
     }
 
     flavorDimensions = ['mode', 'recording']
@@ -151,11 +172,8 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-    buildFeatures {
-        viewBinding true
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
     externalNativeBuild {
         cmake {
@@ -169,6 +187,9 @@ android {
         }
     }
     packagingOptions {
+        resources {
+            excludes += ['META-INF/LICENSE.md']
+        }
         jniLibs {
             excludes += [
                 'lib/armeabi-v7a/libOpenSLES.so',
@@ -182,6 +203,28 @@ android {
 
 dependencies {
     implementation 'androidx.core:core:1.15.0'
+    // Sora Editor: motor de edicao com suporte a Lua, abas e autocomplete.
+    // Optional local rebuild of the LGPL library; default release stays unchanged.
+    def localSora = providers.gradleProperty('codelove.localSoraAar').orNull
+    if (localSora != null) {
+        def aar = file(localSora)
+        if (!aar.isFile() || !aar.name.endsWith('.aar')) {
+            throw new GradleException('codelove.localSoraAar must identify a local Sora AAR')
+        }
+        normalImplementation files(aar)
+        // A file AAR has no transitive metadata. Match the pinned upstream editor module.
+        normalImplementation 'androidx.annotation:annotation:1.11.0'
+        normalImplementation 'androidx.collection:collection:1.6.0'
+        normalImplementation 'org.jetbrains.kotlin:kotlin-stdlib:2.4.10'
+    } else {
+        normalImplementation 'io.github.rosemoe:editor:0.24.7'
+    }
+    // APK signing is only for the CodeLove editor; never package it inside games.
+    normalImplementation 'com.android.tools.build:apksig:8.13.2'
+    // Per-game offline PKCS#12 identities and self-signed X.509 certificates.
+    // Included only in the CodeLove editor flavor, never the exported runtime.
+    normalImplementation 'org.bouncycastle:bcprov-jdk18on:1.86'
+    normalImplementation 'org.bouncycastle:bcpkix-jdk18on:1.86'
     implementation 'com.google.oboe:oboe:1.9.3'
 }
 

@@ -1,0 +1,574 @@
+/*
+ * CodeLove - menus e janelinhas (nome, confirmacao) desenhados DENTRO da tela
+ * do app, por cima de tudo. Assim nao abrem outra janela do Android e o jogo
+ * nao e pausado enquanto voce usa o menu.
+ *
+ * Baseado no LOVE para Android (licenca zlib). Versao alterada.
+ */
+
+package org.love2d.android;
+
+import android.app.Activity;
+import android.content.Context;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+import java.util.List;
+
+final class OverlayUi {
+    /** Confere o texto digitado. Devolve a mensagem de erro, ou nulo se estiver ok. */
+    interface Validator {
+        String check(String text);
+    }
+
+    interface TextDone {
+        void accept(String text);
+    }
+
+    // A cor de perigo acompanha o tema ativo definido pelo Workspace.
+
+    private final Activity activity;
+    private final RelativeLayout root;
+    private FrameLayout current;
+    private EditText currentField;
+
+    /** Altura da barra de status; o Workspace atualiza. */
+    int topInset;
+
+    OverlayUi(Activity activity, RelativeLayout root) {
+        this.activity = activity;
+        this.root = root;
+    }
+
+    boolean isShowing() {
+        return current != null;
+    }
+
+    void dismiss() {
+        if (current == null) {
+            return;
+        }
+        if (currentField != null) {
+            InputMethodManager imm =
+                (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.hideSoftInputFromWindow(currentField.getWindowToken(), 0);
+            }
+            currentField = null;
+        }
+        root.removeView(current);
+        current = null;
+    }
+
+    // ------------------------------------------------------------------
+    // Menu
+    // ------------------------------------------------------------------
+
+    /** Menu de opcoes junto de um elemento da tela. */
+    void showMenu(View anchor, List<String> labels, List<Runnable> actions) {
+        FrameLayout scrim = openScrim(0x00000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 14, true));
+        card.setPadding(0, dp(6), 0, dp(6));
+        card.setClickable(true);
+
+        for (int i = 0; i < labels.size(); i++) {
+            final Runnable action = actions.get(i);
+            TextView item = new TextView(activity);
+            item.setText(labels.get(i));
+            item.setTextSize(15);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(16), 0, dp(16), 0);
+            item.setSingleLine(true);
+            item.setTextColor(labels.get(i).startsWith(activity.getString(R.string.cl_delete)) ? Workspace.COLOR_DANGER : Workspace.COLOR_TEXT);
+            item.setOnClickListener(v -> {
+                dismiss();
+                action.run();
+            });
+            card.addView(item, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        }
+
+        int margin = dp(8);
+        // largura pelo texto mais comprido (para nada ficar cortado)
+        Paint paint = new Paint();
+        paint.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 15,
+            activity.getResources().getDisplayMetrics()));
+        int widest = 0;
+        for (String label : labels) {
+            widest = Math.max(widest, (int) Math.ceil(paint.measureText(label)));
+        }
+        int cardWidth = Math.min(Math.max(dp(200), widest + dp(44)), root.getWidth() - margin * 2);
+        int cardHeight = labels.size() * dp(44) + dp(12);
+
+        int[] anchorPos = new int[2];
+        int[] rootPos = new int[2];
+        anchor.getLocationInWindow(anchorPos);
+        root.getLocationInWindow(rootPos);
+        int anchorLeft = anchorPos[0] - rootPos[0];
+        int anchorTop = anchorPos[1] - rootPos[1];
+
+        // alinha pela borda direita do elemento e mantem dentro da tela
+        int left = anchorLeft + anchor.getWidth() - cardWidth;
+        left = Math.max(margin, Math.min(left, root.getWidth() - cardWidth - margin));
+        int top = anchorTop + anchor.getHeight();
+        if (top + cardHeight > root.getHeight() - margin) {
+            top = anchorTop - cardHeight; // sem espaco embaixo: abre para cima
+        }
+        top = Math.max(topInset + margin, top);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            cardWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = left;
+        lp.topMargin = top;
+        scrim.addView(card, lp);
+    }
+
+    /** Menu com rolagem para listas longas, usado pelo seletor de destino. */
+    void showScrollableMenu(View anchor, String title, List<String> labels,
+                            List<Runnable> actions) {
+        FrameLayout scrim = openScrim(0x00000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 14, true));
+        card.setPadding(0, dp(8), 0, dp(8));
+        card.setClickable(true);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextColor(Workspace.COLOR_TEXT);
+        titleView.setTextSize(15);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setPadding(dp(16), dp(8), dp(16), dp(8));
+        card.addView(titleView);
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(Workspace.COLOR_BORDER);
+        card.addView(divider, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
+
+        ScrollView scroll = new ScrollView(activity);
+        LinearLayout items = new LinearLayout(activity);
+        items.setOrientation(LinearLayout.VERTICAL);
+        for (int i = 0; i < labels.size(); i++) {
+            final Runnable action = actions.get(i);
+            TextView item = new TextView(activity);
+            item.setText(labels.get(i));
+            item.setTextSize(15);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(16), 0, dp(16), 0);
+            item.setSingleLine(true);
+            item.setTextColor(Workspace.COLOR_TEXT);
+            item.setOnClickListener(v -> {
+                dismiss();
+                action.run();
+            });
+            items.addView(item, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        }
+        scroll.addView(items, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        int margin = dp(8);
+        int width = Math.min(dp(360), root.getWidth() - margin * 2);
+        int maxHeight = Math.max(dp(180), root.getHeight() - topInset - dp(32));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, maxHeight);
+        lp.gravity = Gravity.CENTER;
+        scrim.addView(card, lp);
+    }
+
+    // ------------------------------------------------------------------
+    // Janela para digitar um nome
+    // ------------------------------------------------------------------
+
+    void askText(String title, String initial, String confirmLabel,
+                 final Validator validator, final TextDone done) {
+        FrameLayout scrim = openScrim(0x99000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        card.setPadding(dp(18), dp(16), dp(18), dp(14));
+        card.setClickable(true);
+
+        TextView titleView = new TextView(activity);
+        titleView.setText(title);
+        titleView.setTextColor(Workspace.COLOR_TEXT);
+        titleView.setTextSize(17);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(titleView);
+
+        final EditText field = new EditText(activity);
+        field.setText(initial);
+        field.setSelection(initial.length());
+        field.setTextColor(Workspace.COLOR_TEXT);
+        field.setTextSize(15);
+        field.setSingleLine(true);
+        field.setBackground(box(Workspace.COLOR_FIELD, 12, true));
+        field.setPadding(dp(12), dp(10), dp(12), dp(10));
+        field.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_ACTION_DONE);
+        LinearLayout.LayoutParams fieldLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        fieldLp.setMargins(0, dp(12), 0, 0);
+        card.addView(field, fieldLp);
+
+        final TextView error = new TextView(activity);
+        error.setTextColor(Workspace.COLOR_DANGER);
+        error.setTextSize(12);
+        error.setPadding(dp(4), dp(6), dp(4), 0);
+        error.setVisibility(View.GONE);
+        card.addView(error);
+
+        final Runnable confirm = new Runnable() {
+            @Override
+            public void run() {
+                String text = field.getText().toString().trim();
+                String problem = validator == null ? null : validator.check(text);
+                if (problem != null) {
+                    error.setText(problem);
+                    error.setVisibility(View.VISIBLE);
+                    return;
+                }
+                dismiss();
+                done.accept(text);
+            }
+        };
+        field.setOnEditorActionListener((v, actionId, event) -> {
+            confirm.run();
+            return true;
+        });
+
+        card.addView(buttons(activity.getString(R.string.cl_cancel), confirmLabel, Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT,
+            confirm), buttonsParams());
+
+        int width = Math.min(dp(360), root.getWidth() - dp(32));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        scrim.addView(card, lp);
+
+        currentField = field;
+        field.requestFocus();
+        field.post(() -> {
+            InputMethodManager imm =
+                (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showSoftInput(field, InputMethodManager.SHOW_IMPLICIT);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // Sobre / agradecimentos
+    // ------------------------------------------------------------------
+
+    /** Tela com a logo, o autor, os agradecimentos ao LOVE e as licencas. */
+    void showAbout(String author, final String credits, final String[] licenseNames, final String[] licenses) {
+        FrameLayout scrim = openScrim(0xCC000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        card.setPadding(dp(20), dp(18), dp(20), dp(14));
+        card.setClickable(true);
+
+        int logoId = activity.getResources().getIdentifier(
+            "codelove_brand_logo", "drawable", activity.getPackageName());
+        if (logoId != 0) {
+            ImageView logo = new ImageView(activity);
+            logo.setImageResource(logoId);
+            LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(96), dp(96));
+            logoLp.gravity = Gravity.CENTER_HORIZONTAL;
+            card.addView(logo, logoLp);
+        }
+
+        TextView title = new TextView(activity);
+        title.setText("CodeLove");
+        title.setTextColor(Workspace.COLOR_TEXT);
+        title.setTextSize(22);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        card.addView(title, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView by = new TextView(activity);
+        by.setText(activity.getString(R.string.cl_developed_by, author));
+        by.setTextColor(Workspace.COLOR_MUTED);
+        by.setTextSize(14);
+        by.setGravity(Gravity.CENTER);
+        by.setPadding(0, dp(2), 0, 0);
+        card.addView(by, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        View divider = new View(activity);
+        divider.setBackgroundColor(Workspace.COLOR_BORDER);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        dividerLp.setMargins(0, dp(12), 0, dp(10));
+        card.addView(divider, dividerLp);
+
+        final TextView body = new TextView(activity);
+        body.setText(credits);
+        body.setTextColor(Workspace.COLOR_TEXT);
+        body.setTextSize(14);
+        body.setLineSpacing(0f, 1.15f);
+        final ScrollView scroll = new ScrollView(activity);
+        scroll.addView(body, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // Keep credits, the license list and documents inside the same themed card.
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        scroll.removeView(body);
+        scroll.addView(content, new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.END);
+        final TextView toggle = button(activity.getString(R.string.cl_licenses), Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
+        final int[] page = {0}; // 0 credits, 1 list, 2 document
+        final Runnable resetScroll = () -> scroll.post(() -> scroll.scrollTo(0, 0));
+        final Runnable showCredits = () -> {
+            page[0] = 0;
+            content.removeAllViews();
+            body.setText(credits);
+            body.setTextSize(14);
+            content.addView(body);
+            toggle.setText(activity.getString(R.string.cl_licenses));
+            resetScroll.run();
+        };
+        final Runnable showList = () -> {
+            page[0] = 1;
+            content.removeAllViews();
+            TextView heading = new TextView(activity);
+            heading.setText(R.string.cl_licenses);
+            heading.setTextColor(Workspace.COLOR_MUTED);
+            heading.setTextSize(14);
+            heading.setTypeface(Typeface.DEFAULT_BOLD);
+            heading.setPadding(0, 0, 0, dp(8));
+            content.addView(heading);
+            for (int i = 0; i < licenseNames.length; i++) {
+                final int index = i;
+                TextView item = new TextView(activity);
+                item.setText(licenseNames[i]);
+                item.setTextSize(14);
+                item.setTextColor(Workspace.COLOR_TEXT);
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                item.setPadding(dp(12), dp(10), dp(12), dp(10));
+                item.setMinHeight(dp(44));
+                item.setBackground(box(Workspace.COLOR_FIELD, 10, false));
+                item.setOnClickListener(v -> {
+                    page[0] = 2;
+                    content.removeAllViews();
+                    TextView documentTitle = new TextView(activity);
+                    documentTitle.setText(licenseNames[index]);
+                    documentTitle.setTextColor(Workspace.COLOR_TEXT);
+                    documentTitle.setTextSize(15);
+                    documentTitle.setTypeface(Typeface.DEFAULT_BOLD);
+                    documentTitle.setPadding(0, 0, 0, dp(12));
+                    content.addView(documentTitle);
+                    body.setText(licenses[index]);
+                    body.setTextSize(12);
+                    content.addView(body);
+                    toggle.setText(activity.getString(R.string.cl_license_back));
+                    resetScroll.run();
+                });
+                LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                itemLp.bottomMargin = dp(6);
+                content.addView(item, itemLp);
+            }
+            toggle.setText(activity.getString(R.string.cl_acknowledgements));
+            resetScroll.run();
+        };
+        toggle.setOnClickListener(v -> {
+            if (page[0] == 1) showCredits.run();
+            else showList.run();
+        });
+        showCredits.run();
+        row.addView(toggle, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));
+
+        TextView close = button(activity.getString(R.string.cl_close), Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT);
+        close.setTypeface(Typeface.DEFAULT_BOLD);
+        close.setOnClickListener(v -> dismiss());
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(44));
+        closeLp.setMargins(dp(10), 0, 0, 0);
+        row.addView(close, closeLp);
+
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.setMargins(0, dp(12), 0, 0);
+        card.addView(row, rowLp);
+
+        int width = Math.min(dp(480), root.getWidth() - dp(32));
+        int height = Math.min(dp(600), root.getHeight() - topInset - dp(48));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            width, height, Gravity.CENTER);
+        scrim.addView(card, lp);
+    }
+
+    // ------------------------------------------------------------------
+    // Janela de confirmacao
+    // ------------------------------------------------------------------
+
+    void message(String title, String message, String cancelLabel,
+                 String confirmLabel, Runnable onYes) {
+        FrameLayout scrim = openScrim(0x99000000);
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        card.setPadding(dp(18), dp(18), dp(18), dp(14));
+        card.setClickable(true);
+        TextView heading = new TextView(activity);
+        heading.setText(title);
+        heading.setTextColor(Workspace.COLOR_TEXT);
+        heading.setTextSize(17);
+        heading.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(heading);
+        TextView body = new TextView(activity);
+        body.setText(message);
+        body.setTextColor(Workspace.COLOR_MUTED);
+        body.setTextSize(15);
+        body.setPadding(0, dp(12), 0, 0);
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(body);
+        card.addView(scroll, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        Runnable confirm = () -> { dismiss(); onYes.run(); };
+        if (cancelLabel != null) {
+            card.addView(buttons(cancelLabel, confirmLabel, Workspace.COLOR_FOLDER,
+                Workspace.COLOR_ACCENT_TEXT, confirm), buttonsParams());
+        } else {
+            TextView ok = button(confirmLabel, Workspace.COLOR_FOLDER, Workspace.COLOR_ACCENT_TEXT);
+            ok.setOnClickListener(v -> confirm.run());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+            lp.topMargin = dp(16);
+            card.addView(ok, lp);
+        }
+        int width = Math.min(dp(360), Math.max(dp(1), root.getWidth() - dp(32)));
+        int height = Math.min(dp(260), Math.max(dp(1), root.getHeight() - dp(24)));
+        scrim.addView(card, new FrameLayout.LayoutParams(width, height, Gravity.CENTER));
+    }
+
+    void confirm(String message, String confirmLabel, final Runnable onYes) {
+        FrameLayout scrim = openScrim(0x99000000);
+
+        LinearLayout card = new LinearLayout(activity);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(box(Workspace.COLOR_PANEL, 16, true));
+        card.setPadding(dp(18), dp(18), dp(18), dp(14));
+        card.setClickable(true);
+
+        TextView text = new TextView(activity);
+        text.setText(message);
+        text.setTextColor(Workspace.COLOR_TEXT);
+        text.setTextSize(15);
+        card.addView(text);
+
+        card.addView(buttons(activity.getString(R.string.cl_cancel), confirmLabel, Workspace.COLOR_DANGER, Workspace.COLOR_ACCENT_TEXT, new Runnable() {
+            @Override
+            public void run() {
+                dismiss();
+                onYes.run();
+            }
+        }), buttonsParams());
+
+        int width = Math.min(dp(360), root.getWidth() - dp(32));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+            width, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        scrim.addView(card, lp);
+    }
+
+    // ------------------------------------------------------------------
+
+    private LinearLayout.LayoutParams buttonsParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, dp(16), 0, 0);
+        return lp;
+    }
+
+    /** Linha com os botoes "cancelar" e "confirmar", alinhados a direita. */
+    private LinearLayout buttons(String cancelLabel, String confirmLabel, int confirmColor,
+                                 int confirmTextColor, final Runnable onConfirm) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.END);
+
+        TextView cancel = button(cancelLabel, Workspace.COLOR_FIELD, Workspace.COLOR_TEXT);
+        cancel.setOnClickListener(v -> dismiss());
+        row.addView(cancel, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)));
+
+        TextView ok = button(confirmLabel, confirmColor, confirmTextColor);
+        ok.setTypeface(Typeface.DEFAULT_BOLD);
+        ok.setOnClickListener(v -> onConfirm.run());
+        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, dp(40));
+        okLp.setMargins(dp(10), 0, 0, 0);
+        row.addView(ok, okLp);
+        return row;
+    }
+
+    private TextView button(String label, int background, int textColor) {
+        TextView button = new TextView(activity);
+        button.setText(label);
+        button.setTextColor(textColor);
+        button.setTextSize(15);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(18), 0, dp(18), 0);
+        button.setBackground(box(background, 12, false));
+        return button;
+    }
+
+    /** Fundo que cobre a tela toda: tocar fora fecha. */
+    private FrameLayout openScrim(int color) {
+        dismiss();
+        FrameLayout scrim = new FrameLayout(activity);
+        scrim.setBackgroundColor(color);
+        scrim.setClickable(true);
+        scrim.setOnClickListener(v -> dismiss());
+        root.addView(scrim, new RelativeLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        current = scrim;
+        return scrim;
+    }
+
+    private int dp(int value) {
+        float density = activity.getResources().getDisplayMetrics().density;
+        return Math.round(value * density);
+    }
+
+    private GradientDrawable box(int color, int radiusDp, boolean border) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radiusDp));
+        if (border) {
+            drawable.setStroke(Math.max(1, dp(1)), Workspace.COLOR_BORDER);
+        }
+        return drawable;
+    }
+}

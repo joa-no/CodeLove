@@ -1,0 +1,219 @@
+name: export-smoke-test
+
+on:
+  push:
+    paths:
+      - '.github/workflows/export-smoke-test.yml'
+      - 'tools/prepare_game_export.py'
+      - 'tools/test_prepare_game_export.py'
+      - 'app/src/normal/java/org/love2d/android/GameExportArchive.java'
+      - 'app/src/embed/java/org/love2d/android/GameActivity.java'
+      - 'app/build.gradle'
+  workflow_dispatch:
+
+jobs:
+  embed-game:
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs='-Xmx4G'"
+    steps:
+      - name: Checkout with LÖVE native submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install isolated Python icon tooling
+        run: |
+          python3 -m venv "$RUNNER_TEMP/export-python"
+          "$RUNNER_TEMP/export-python/bin/pip" install --disable-pip-version-check 'Pillow==11.3.0'
+          echo "$RUNNER_TEMP/export-python/bin" >> "$GITHUB_PATH"
+      - name: Validate LOVE archive and icon staging
+        run: python3 tools/test_prepare_game_export.py
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: gradle
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          curl -Lo kitware-archive.sh https://apt.kitware.com/kitware-archive.sh
+          sudo bash ./kitware-archive.sh
+          sudo apt-get install -y ninja-build cmake
+      - name: Prepare runtime notices and source provenance
+        run: |
+          set -euo pipefail
+          python3 tools/write_source_revision.py
+          NDK="$ANDROID_HOME/ndk/27.3.13750724"
+          if [ ! -f "$NDK/source.properties" ]; then
+            sdkmanager "ndk;27.3.13750724"
+          fi
+          python3 tools/prepare_ndk_runtime_notice.py "$NDK"
+          python3 tools/collect_jvm_source_notices.py
+      - name: Prepare isolated sample game
+        run: |
+          mkdir -p "$RUNNER_TEMP/export-sample"
+          cat > "$RUNNER_TEMP/export-sample/main.lua" <<'LUA'
+          function love.draw()
+              love.graphics.print("CodeLove export smoke test", 24, 24)
+          end
+          LUA
+          mkdir -p "$RUNNER_TEMP/export-sample/scripts" "$RUNNER_TEMP/export-sample/assets"
+          cat > "$RUNNER_TEMP/export-sample/scripts/helper.lua" <<'LUA'
+          return { label = "nested Lua asset" }
+          LUA
+          echo 'asset-preservation-test' > "$RUNNER_TEMP/export-sample/assets/data.txt"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path(os.environ["RUNNER_TEMP"]) / "export-sample"
+          output = Path(os.environ["RUNNER_TEMP"]) / "sample.love"
+          with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file, file.relative_to(root).as_posix())
+          PY
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from PIL import Image
+          Image.new("RGBA", (512, 512), (160, 90, 240, 255)).save(
+              Path(os.environ["RUNNER_TEMP"]) / "game-icon.png")
+          PY
+          python3 tools/prepare_game_export.py \
+            --love "$RUNNER_TEMP/sample.love" \
+            --assets "$RUNNER_TEMP/staged-game-assets" \
+            --icon "$RUNNER_TEMP/game-icon.png" \
+            --name "CodeLove Export Test" \
+            --package com.example.codelove.exporttest \
+            --version-name 1.0.0 --version-code 1
+          # Stage into an empty directory, then add only the sample game files.
+          # Keep all tracked/runtime notices intact; never overwrite any asset.
+          python3 - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+          staged = Path(os.environ["RUNNER_TEMP"]) / "staged-game-assets"
+          embed = Path("app/src/embed/assets")
+          shared = Path("app/src/main/assets")
+          files = sorted(p for p in staged.rglob("*") if p.is_file())
+          assert files, "No staged game files"
+          for source in files:
+              relative = source.relative_to(staged)
+              for destination in (embed, shared):
+                  target = destination / relative
+                  if target.exists() or target.is_symlink():
+                      raise SystemExit("Refusing asset collision: " + str(target))
+                  for parent in target.parents:
+                      if parent == destination:
+                          break
+                      if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+                          raise SystemExit("Unsafe asset parent: " + str(parent))
+          for source in files:
+              target = embed / source.relative_to(staged)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              with source.open("rb") as reader, target.open("xb") as writer:
+                  shutil.copyfileobj(reader, writer)
+          PY
+          test -s app/src/embed/assets/main.lua
+          test -s app/src/embed/res/drawable-mdpi/love.png
+          test -s app/src/embed/res/drawable-xxxhdpi/love.png
+          test ! -e app/src/normal/res/drawable-mdpi/love.png
+      - name: Generate temporary test-only signing key
+        run: |
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/export-test-only.p12" \
+            -storetype PKCS12 -alias export-test \
+            -keyalg RSA -keysize 3072 -validity 2 \
+            -storepass "export-only-demo-pass" \
+            -keypass "export-only-demo-pass" \
+            -dname "CN=CodeLove Export Smoke Test"
+      - name: Build isolated release game APK (temporary test signature)
+        env:
+          CODELOVE_RELEASE_STORE_FILE: ${{ runner.temp }}/export-test-only.p12
+          CODELOVE_RELEASE_STORE_PASSWORD: export-only-demo-pass
+          CODELOVE_RELEASE_KEY_ALIAS: export-test
+          CODELOVE_RELEASE_KEY_PASSWORD: export-only-demo-pass
+        run: |
+          bash ./gradlew assembleEmbedNoRecordRelease \
+            '-Papp.name=CodeLove Export Test' \
+            '-Papp.application_id=com.example.codelove.exporttest' \
+            '-Papp.version_name=1.0.0' \
+            '-Papp.version_code=1'
+      - name: Validate APK contents and Android identity
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release.apk"
+          test -s "$APK"
+          unzip -Z1 "$APK" | grep -Fx 'assets/main.lua'
+          unzip -Z1 "$APK" | grep -Fx 'assets/scripts/helper.lua'
+          unzip -Z1 "$APK" | grep -Fx 'assets/assets/data.txt'
+          unzip -p "$APK" assets/assets/data.txt | grep -Fx 'asset-preservation-test'
+          if unzip -Z1 "$APK" | grep -Fq 'assets/codelove-licenses.txt'; then
+            echo "Unexpected normal-flavor assets in exported APK" >&2
+            exit 1
+          fi
+          python3 - "$APK" <<'PY'
+          import sys
+          from pathlib import Path
+          from zipfile import ZipFile
+          shared = Path("app/src/main/assets")
+          embed = Path("app/src/embed/assets")
+          with ZipFile(sys.argv[1]) as apk:
+              for root, names in (
+                  (shared, ("native-license-notices.txt", "ndk-runtime-notice.txt",
+                            "runtime-own-license.txt", "love-upstream-notices.txt",
+                            "jvm-source-notices.txt")),
+                  (embed, ("runtime-licenses.txt", "jvm-dependency-notices.txt",
+                           "kotlin-third-party-notices.txt")),
+              ):
+                  for name in names:
+                      assert apk.read("assets/" + name) == (root / name).read_bytes(), name
+              assert apk.read("META-INF/CODELOVE-SOURCE.txt") == Path(
+                  "app/src/main/resources/META-INF/CODELOVE-SOURCE.txt").read_bytes()
+              assert "assets/codelove-own-license.txt" not in apk.namelist()
+          PY
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
+          test -x "$AAPT"
+          "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/export-badging.txt"
+          grep -F "name='com.example.codelove.exporttest'" "$RUNNER_TEMP/export-badging.txt"
+          grep -F "application-label:'CodeLove Export Test'" "$RUNNER_TEMP/export-badging.txt"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          # Resource names may be optimized/renamed in a release APK.
+          # Resolve the launcher icon from Android's badging metadata.
+          python3 - "$APK" "$RUNNER_TEMP/export-badging.txt" <<'PY'
+          import io
+          import re
+          import sys
+          import zipfile
+          from pathlib import Path
+          from PIL import Image
+
+          apk, badging = sys.argv[1:3]
+          metadata = Path(badging).read_text()
+          icon_entries = re.findall(
+              r"^application-icon-(\d+):'([^']+)'$", metadata, re.MULTILINE)
+          if not icon_entries:
+              raise SystemExit("No launcher icons in APK badging metadata")
+          density, resource = next(
+              ((d, p) for d, p in icon_entries if d == "160"),
+              icon_entries[0])
+          with zipfile.ZipFile(apk) as archive:
+              with Image.open(io.BytesIO(archive.read(resource))) as icon:
+                  icon.load()
+                  center = icon.convert("RGBA").getpixel(
+                      (icon.width // 2, icon.height // 2))
+                  if center[:3] != (160, 90, 240):
+                      raise SystemExit(
+                          f"Embedded launcher icon color mismatch: {center}")
+          print(f"Verified custom launcher icon at {density} dpi: {resource}")
+          PY
+          echo "Smoke test: assets, icon resources, identity and APK signature verified"
+      - name: Upload signed test APK (ephemeral key, cannot be updated)
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-smoke-test-release-testkey-apk
+          path: app/build/outputs/apk/embedNoRecord/release/app-embed-noRecord-release.apk

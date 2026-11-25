@@ -18,14 +18,25 @@
             </intent-filter>
         </activity>
 
+        <!-- Area de desenvolvimento sem SDL. -->
+        <activity
+            android:name=".EditorActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation" />
+
         <!--
             Important: GameActivity class name MUST be explicitly written as
             "org.love2d.android.GameActivity" without any shortcuts.
         -->
         <activity
             android:name="org.love2d.android.GameActivity"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:exported="false"
-            tools:replace="android:exported">
+            android:launchMode="standard"
+            android:process=":codelove_runtime"
+            android:screenOrientation="behind"
+            tools:replace="android:exported,android:launchMode,android:screenOrientation">
             <intent-filter tools:node="removeAll" />
             <intent-filter>
                 <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />

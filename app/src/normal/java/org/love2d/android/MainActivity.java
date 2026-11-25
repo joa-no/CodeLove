@@ -46,7 +46,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        startActivity(new Intent(this, GameActivity.class));
+        startActivity(new Intent(this, EditorActivity.class));
         overridePendingTransition(0, 0);
         finish();
     }

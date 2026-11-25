@@ -22,6 +22,28 @@ captures/
 Thumbs.db
 
 # Assets generated locally for embedded game variants.
-# Keep the placeholder so the directory exists in a fresh checkout.
+# Keep the placeholder and tracked runtime notices; ignore locally staged games.
 app/src/embed/assets/*
 !app/src/embed/assets/.gitkeep
+!app/src/embed/assets/runtime-licenses.txt
+!app/src/embed/assets/jvm-dependency-notices.txt
+!app/src/embed/assets/kotlin-third-party-notices.txt
+
+# Materiais privados de assinatura e configuracoes locais.
+# A chave de debug do CodeLove e versionada propositalmente para testes.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+!app/codelove-debug.p12
+
+# Generated release provenance and NDK notice (included in the source candidate).
+app/src/main/resources/META-INF/CODELOVE-SOURCE.txt
+app/src/main/assets/ndk-runtime-notice.txt
+
+app/src/main/assets/jvm-source-notices.txt

@@ -1,0 +1,44 @@
+name: game-signing-key-tests
+
+# No actual game APK is built here. Validate one per-game signing key at a time,
+# including encrypted backup and restore. Only offline development tests.
+on:
+  push:
+    paths:
+      - '.github/workflows/game-signing-key-tests.yml'
+      - 'app/src/normal/java/org/love2d/android/GameSigningKeyStore.java'
+      - 'tools/GameSigningKeyStoreTest.java'
+      - 'app/build.gradle'
+  workflow_dispatch:
+
+jobs:
+  test-pkcs12-backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+      - name: Download pinned certificate-generation dependencies
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bc"
+          for artifact in bcprov-jdk18on bcutil-jdk18on bcpkix-jdk18on; do
+            curl --fail --location --retry 3 --silent --show-error \
+              "https://repo.maven.apache.org/maven2/org/bouncycastle/$artifact/1.86/$artifact-1.86.jar" \
+              -o "$RUNNER_TEMP/bc/$artifact-1.86.jar"
+            unzip -tq "$RUNNER_TEMP/bc/$artifact-1.86.jar" >/dev/null
+          done
+      - name: Compile Java key manager and run backup/restore checks
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/classes"
+          javac --release 17 \
+            -cp "$RUNNER_TEMP/bc/*" \
+            -d "$RUNNER_TEMP/classes" \
+            app/src/normal/java/org/love2d/android/GameSigningKeyStore.java \
+            tools/GameSigningKeyStoreTest.java
+          java -cp "$RUNNER_TEMP/classes:$RUNNER_TEMP/bc/*" \
+            org.love2d.android.GameSigningKeyStoreTest

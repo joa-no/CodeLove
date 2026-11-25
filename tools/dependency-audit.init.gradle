@@ -1,0 +1,24 @@
+// Read-only release audit: collect original resolved JARs/AARs, not transformed DEX.
+import groovy.json.JsonOutput
+
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.project(':app')
+    app.tasks.register('collectAuditArtifacts') {
+        doLast {
+            def names = ['normalRecordReleaseRuntimeClasspath',
+                         'normalNoRecordReleaseRuntimeClasspath',
+                         'embedRecordReleaseRuntimeClasspath',
+                         'embedNoRecordReleaseRuntimeClasspath']
+            def rows = []
+            names.each { name ->
+                app.configurations.getByName(name).resolvedConfiguration.resolvedArtifacts.each { a ->
+                    rows << [configuration: name, coordinate: a.moduleVersion.id.toString(),
+                             path: a.file.absolutePath]
+                }
+            }
+            def output = new File(System.getenv('CODELOVE_AUDIT_DIR'), 'resolved-artifacts.json')
+            output.parentFile.mkdirs()
+            output.text = JsonOutput.prettyPrint(JsonOutput.toJson(rows))
+        }
+    }
+}
