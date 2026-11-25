@@ -6,16 +6,16 @@
 
 **Create with Lua. Play with LÖVE.**
 
-A native Android workspace for writing Lua, managing projects, running LÖVE games and exporting standalone Android APKs directly on your device.
+A native Lua and LÖVE development environment for Android.
 
 <p>
-  <img src="https://img.shields.io/badge/Android-242436?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Android" />
+  <img src="https://img.shields.io/badge/Android-6.0%2B-242436?style=for-the-badge&logo=android&logoColor=3DDC84" alt="Android 6.0+" />
   <img src="https://img.shields.io/badge/Lua-A78BFA?style=for-the-badge&logo=lua&logoColor=white" alt="Lua" />
   <img src="https://img.shields.io/badge/L%C3%96VE-242436?style=for-the-badge" alt="LÖVE" />
   <img src="https://img.shields.io/badge/version-1.0.0-A78BFA?style=for-the-badge&labelColor=242436" alt="Version 1.0.0" />
 </p>
 
-[Downloads](https://github.com/joa-no/CodeLove/releases) · [Features](#features) · [Installation](#installation) · [Export](#offline-android-export) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
+[Downloads](https://github.com/joa-no/CodeLove/releases) · [Features](#features) · [Installation](#installation) · [Build from source](#build-from-source) · [Licenses](#licenses--credits)
 
 </div>
 
@@ -34,25 +34,20 @@ CodeLove combines a native Android interface, Sora Editor and the [LÖVE](https:
 - Export .love archives and standalone, individually signed APKs offline.
 - Portrait and landscape layouts, light/dark/system themes, and English, Portuguese and Spanish localization.
 
-The selected project folder is the source of truth. CodeLove does not maintain a persistent synchronized working copy of the project. Temporary runtime or export staging is separate from the original files.
+CodeLove works directly with your selected project folder.
 
 ## Installation
 
-Download the signed app-release.apk from [GitHub Releases](https://github.com/joa-no/CodeLove/releases/latest). Development builds are available through [GitHub Actions](https://github.com/joa-no/CodeLove/actions) for testing only. Android 6.0 (API 23) is the configured minimum SDK, not a claim that every supported Android version and device has been tested. Shipped native ABIs: arm64-v8a, armeabi-v7a and x86_64.
+Download and install the signed `app-release.apk` from [GitHub Releases](https://github.com/joa-no/CodeLove/releases/latest).
 
-For distribution, use the signed Release APK rather than a Debug, relink-test or prototype APK. Debug and Release signatures differ. Back up your projects and per-game signing keys before uninstalling a previous build. Android may require permission to install an APK from your browser or file manager.
+- **Minimum Android version:** Android 6.0 (API 23).
+- **Architectures:** ARM64, ARMv7 and x86_64.
 
-## Offline Android export
+Android may require permission to install APKs from your browser or file manager. Compatibility with every device has not been verified. Back up your projects and signing keys before uninstalling a previous build; debug and official release signatures differ.
 
-Open a project, select **Export APK**, configure its name, application ID, version and icon, and generate or restore its signing key. Exported games include the LÖVE runtime and do not need CodeLove installed on the destination device.
+## Exporting games
 
-**Keep a secure backup of each game's .p12 file and its password.** Retain the same application ID and signing identity, and increase the version code for updates. CodeLove does not provide a remote key recovery service.
-
-The APK contains a discreet CodeLove identification and source provenance in META-INF, plus the applicable runtime license notices. It does not include the Sora editor. The original editor/tooling GPL does not automatically apply to independently authored game content. Redistributors remain responsible for applicable runtime and other library licenses.
-
-No hosting, account, cloud compilation or upload of game projects is required for this export flow. The LÖVE runtime retains its own networking capabilities.
-
-See [export implementation and validation](docs/exportacao-apk.md).
+Export standard `.love` files or standalone Android APKs directly on your device, without a build server. Keep a secure backup of each game's signing key (`.p12`) and password. For game updates, retain the application ID and signing key and increase the version code. See the [export guide](docs/exportacao-apk.md) for details.
 
 ## Built with
 
@@ -75,9 +70,9 @@ git clone --recurse-submodules https://github.com/joa-no/CodeLove.git
 cd CodeLove
 ```
 
-The integrated editor requires an unsigned runtime template and the generated provenance/notice files before compilation. Follow the exact steps in [rebuilding and relinking](docs/rebuild-and-relink.md), or use the build sequence in [the main workflow](.github/workflows/main.yml). Use the corresponding source archive supplied with the release for the exact native submodules, Sora source and generated notice inputs. An automatic GitHub source ZIP alone is not equivalent.
+Follow the [build and relink instructions](docs/rebuild-and-relink.md) to prepare the runtime template and compile CodeLove. For the exact release source, including native submodules and Sora Editor, use the corresponding source archive provided with the release rather than GitHub's automatic source ZIP.
 
-The debug key in app/codelove-debug.p12 is public and intentionally committed for test installations. Never use it for public releases. The official signing key remains private.
+The committed debug key is public and intended only for testing. Never use it for public releases.
 
 ## Project structure
 
@@ -91,16 +86,7 @@ docs/               Developer documentation
 .github/workflows/  Development CI and validation
 ```
 
-<details>
-<summary><strong>Developer validation</strong></summary>
-
-The main workflow compiles Debug and Release, verifies the actual offline export assembler, checks license/source preservation and validates archive-only and modified-library rebuilds. Additional workflows test game signing and SDK-free APK repackaging; the separate export-smoke-test exercises a developer-only Gradle export route. These are development checks, not steps required to export games from the Android application.
-
-Android App Bundles are optional development outputs, not required for GitHub APK distribution. The main workflow's manual build_aab option enables them when needed.
-
-See the [dependency inventory and validation](docs/dependency-audit.md).
-
-</details>
+See the [dependency inventory and validation](docs/dependency-audit.md) for technical details.
 
 ## Licenses & credits
 
