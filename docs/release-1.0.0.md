@@ -16,9 +16,10 @@ Estado: em preparação, ainda **não lançado**. A branch funcional é `feature
 
 ## Antes de publicar no GitHub
 
-- [ ] Integrar a auditoria experimental à branch funcional e validar a candidata integrada (somente com autorização).
+- [x] Integrar a auditoria experimental à branch funcional (build #559, autorizada).
+- [ ] Validar a candidata integrada: build principal e teste de chaves aprovados na #559; teste auxiliar export-smoke-test #22 falhou na preparação de assets e requer nova execução após correção.
 
-- [ ] Executar a compilação com a nova verificação independente da assinatura do APK **CodeLove Release**, introduzida após o workflow #44665273830 (não executá-la sem autorização).
+- [x] Executar a compilação com a verificação independente da assinatura do APK **CodeLove Release** (build #559, etapa de assinatura aprovada).
 - [ ] Verificar `apksigner verify` e o certificado do APK destinado ao público; manter backup seguro da chave de release e de sua senha. **Nunca publicar com a chave de debug**.
 - [x] Definir os termos das contribuições próprias: GPL-3.0-only para editor e ferramentas, zlib para o runtime independente. Ver `LICENSING.md`.
 - [ ] Confirmar a delimitação de todos os arquivos e componentes distribuídos e a disponibilidade do código-fonte correspondente.

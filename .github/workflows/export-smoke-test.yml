@@ -40,6 +40,16 @@ jobs:
           curl -Lo kitware-archive.sh https://apt.kitware.com/kitware-archive.sh
           sudo bash ./kitware-archive.sh
           sudo apt-get install -y ninja-build cmake
+      - name: Prepare runtime notices and source provenance
+        run: |
+          set -euo pipefail
+          python3 tools/write_source_revision.py
+          NDK="$ANDROID_HOME/ndk/27.3.13750724"
+          if [ ! -f "$NDK/source.properties" ]; then
+            sdkmanager "ndk;27.3.13750724"
+          fi
+          python3 tools/prepare_ndk_runtime_notice.py "$NDK"
+          python3 tools/collect_jvm_source_notices.py
       - name: Prepare isolated sample game
         run: |
           mkdir -p "$RUNNER_TEMP/export-sample"
@@ -73,10 +83,39 @@ jobs:
           PY
           python3 tools/prepare_game_export.py \
             --love "$RUNNER_TEMP/sample.love" \
+            --assets "$RUNNER_TEMP/staged-game-assets" \
             --icon "$RUNNER_TEMP/game-icon.png" \
             --name "CodeLove Export Test" \
             --package com.example.codelove.exporttest \
             --version-name 1.0.0 --version-code 1
+          # Stage into an empty directory, then add only the sample game files.
+          # Keep all tracked/runtime notices intact; never overwrite any asset.
+          python3 - <<'PY'
+          import os
+          import shutil
+          from pathlib import Path
+          staged = Path(os.environ["RUNNER_TEMP"]) / "staged-game-assets"
+          embed = Path("app/src/embed/assets")
+          shared = Path("app/src/main/assets")
+          files = sorted(p for p in staged.rglob("*") if p.is_file())
+          assert files, "No staged game files"
+          for source in files:
+              relative = source.relative_to(staged)
+              for destination in (embed, shared):
+                  target = destination / relative
+                  if target.exists() or target.is_symlink():
+                      raise SystemExit("Refusing asset collision: " + str(target))
+                  for parent in target.parents:
+                      if parent == destination:
+                          break
+                      if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+                          raise SystemExit("Unsafe asset parent: " + str(parent))
+          for source in files:
+              target = embed / source.relative_to(staged)
+              target.parent.mkdir(parents=True, exist_ok=True)
+              with source.open("rb") as reader, target.open("xb") as writer:
+                  shutil.copyfileobj(reader, writer)
+          PY
           test -s app/src/embed/assets/main.lua
           test -s app/src/embed/res/drawable-mdpi/love.png
           test -s app/src/embed/res/drawable-xxxhdpi/love.png
@@ -115,6 +154,26 @@ jobs:
             echo "Unexpected normal-flavor assets in exported APK" >&2
             exit 1
           fi
+          python3 - "$APK" <<'PY'
+          import sys
+          from pathlib import Path
+          from zipfile import ZipFile
+          shared = Path("app/src/main/assets")
+          embed = Path("app/src/embed/assets")
+          with ZipFile(sys.argv[1]) as apk:
+              for root, names in (
+                  (shared, ("native-license-notices.txt", "ndk-runtime-notice.txt",
+                            "runtime-own-license.txt", "love-upstream-notices.txt",
+                            "jvm-source-notices.txt")),
+                  (embed, ("runtime-licenses.txt", "jvm-dependency-notices.txt",
+                           "kotlin-third-party-notices.txt")),
+              ):
+                  for name in names:
+                      assert apk.read("assets/" + name) == (root / name).read_bytes(), name
+              assert apk.read("META-INF/CODELOVE-SOURCE.txt") == Path(
+                  "app/src/main/resources/META-INF/CODELOVE-SOURCE.txt").read_bytes()
+              assert "assets/codelove-own-license.txt" not in apk.namelist()
+          PY
           AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -n 1)
           test -x "$AAPT"
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/export-badging.txt"
