@@ -165,7 +165,6 @@ public final class Workspace {
 
     private OverlayUi ui;
     private SharedPreferences prefs;
-    private File lastFolder = null; // ultima pasta tocada no projeto aberto
     private CodeEditor editor;
     private View editorView;
     private View drawerScrim;
@@ -1989,14 +1988,12 @@ public final class Workspace {
                 || !project.getAbsolutePath().equals(activeProject.getAbsolutePath()))) {
             selectProject(project);
             if (activeProject == null || !sameFile(activeProject, project)) return;
-            rememberFolder(row);
             if (!row.dir) {
                 openInEditor(row.file);
             }
             return;
         }
 
-        rememberFolder(row);
         if (row.dir) {
             renderTree();
         } else {
@@ -2123,27 +2120,6 @@ public final class Workspace {
         }
     }
 
-    private void rememberFolder(Row row) {
-        if (activeProject != null && isInside(row.file, activeProject)) {
-            lastFolder = row.dir ? row.file : row.file.getParentFile();
-        }
-    }
-
-    /** Pasta onde um arquivo novo cai pelo botao "+": a ultima tocada, ou a raiz do projeto. */
-    private File targetFolder() {
-        if (activeProject == null) {
-            return null;
-        }
-        boolean lastFolderIsDirectory = lastFolder != null
-            && (activeSafStorage != null && activeSafStorage.contains(lastFolder)
-                ? activeSafStorage.isDirectory(lastFolder)
-                : lastFolder.isDirectory());
-        if (lastFolderIsDirectory && isInside(lastFolder, activeProject)) {
-            return lastFolder;
-        }
-        return activeProject;
-    }
-
     private void showAddMenu(View anchor) {
         // Sem projeto aberto, o botao + inicia diretamente a selecao da pasta.
         if (activeProject == null || activeSafStorage == null) {
@@ -2151,12 +2127,8 @@ public final class Workspace {
             return;
         }
 
-        // Com um projeto aberto, o menu oferece apenas operacoes dentro dele.
-        final File folder = targetFolder();
-        if (folder == null) {
-            addExistingProject();
-            return;
-        }
+        // O botao global cria na raiz; o menu de contexto cria dentro de uma pasta.
+        final File folder = activeProject;
 
         List<String> labels = new ArrayList<String>();
         List<Runnable> actions = new ArrayList<Runnable>();
@@ -2479,7 +2451,6 @@ public final class Workspace {
             expanded.clear();
             expanded.addAll(next);
             expanded.add(destination.getAbsolutePath());
-            lastFolder = destination;
 
             if (activeSafStorage != null) {
                 queueRuntimePreparation();
@@ -2550,7 +2521,6 @@ public final class Workspace {
                 }
                 enterProjectOf(file);
                 expanded.add(folder.getAbsolutePath());
-                lastFolder = folder;
                 renderTree();
                 openInEditor(file);
             });
@@ -2585,7 +2555,6 @@ public final class Workspace {
                 enterProjectOf(folder);
                 expanded.add(parent.getAbsolutePath());
                 expanded.add(folder.getAbsolutePath());
-                lastFolder = folder;
                 renderTree();
             });
     }
@@ -2689,7 +2658,6 @@ public final class Workspace {
         }
         expanded.clear();
         expanded.addAll(next);
-        lastFolder = null;
 
         if (isActiveProject) {
             activeProject = dest;
@@ -2734,7 +2702,6 @@ public final class Workspace {
         }
 
         expanded.remove(target.getAbsolutePath());
-        lastFolder = null;
 
         if (isActiveProject) {
             deleteRuntimeProject();
@@ -2856,7 +2823,6 @@ public final class Workspace {
 
         activeSafStorage = storage;
         activeProject = project;
-        lastFolder = null;
         expanded.add(project.getAbsolutePath());
         playing = false;
 
