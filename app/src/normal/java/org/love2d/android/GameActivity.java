@@ -133,6 +133,10 @@ public class GameActivity extends SDLActivity {
             if (archive != null) {
                 try {
                     stagedLoveArchive = LoveArchivePlayback.checkedArchive(this, archive);
+                    // External archives must start independently of the editor's locked
+                    // orientation. Do not change the saved editor preference. Later
+                    // explicit orientation requests from the game still go through SDL.
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
                     defaultWindowOrientationPending = !LoveArchivePlayback.hasConf(stagedLoveArchive);
                     args = new String[]{"--renderers", "opengl", stagedLoveArchive.getAbsolutePath()};
                 } catch (IOException | RuntimeException e) {

@@ -38,6 +38,32 @@ final class CodeLoveModal {
         okay.setOnClickListener(v -> dialog.dismiss());
     }
 
+    static void confirm(Activity activity, String title, String detail,
+                        String label, Runnable onConfirm, Runnable onCancel) {
+        if (notReady(activity) || onConfirm == null || onCancel == null) return;
+        LinearLayout body = body(activity, title, detail);
+        LinearLayout actions = new LinearLayout(activity);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        TextView cancel = button(activity, activity.getString(R.string.cl_cancel), false);
+        TextView confirm = button(activity, label, true);
+        LinearLayout.LayoutParams cancelParams =
+                new LinearLayout.LayoutParams(0, dp(activity, 46), 1f);
+        cancelParams.rightMargin = dp(activity, 10);
+        actions.addView(cancel, cancelParams);
+        actions.addView(confirm, new LinearLayout.LayoutParams(0, dp(activity, 46), 1f));
+        LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(-1, -2);
+        actionsParams.topMargin = dp(activity, 20);
+        body.addView(actions, actionsParams);
+
+        Dialog dialog = show(activity, body);
+        dialog.setOnCancelListener(d -> onCancel.run());
+        cancel.setOnClickListener(v -> dialog.cancel());
+        confirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            onConfirm.run();
+        });
+    }
+
     static void password(Activity activity, String title, String detail,
                          String label, PasswordAction action) {
         if (notReady(activity) || action == null) return;

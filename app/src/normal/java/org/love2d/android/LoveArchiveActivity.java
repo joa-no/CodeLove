@@ -1,7 +1,6 @@
 package org.love2d.android;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -32,13 +31,11 @@ public final class LoveArchiveActivity extends Activity {
             return;
         }
         final Uri archive = uri;
-        new AlertDialog.Builder(this)
-            .setTitle(R.string.cl_love_open_title)
-            .setMessage(R.string.cl_love_open_confirm)
-            .setPositiveButton(R.string.cl_love_open_run,
-                (dialog, which) -> LoveArchivePlayback.open(this, archive, intent.getType(), true))
-            .setNegativeButton(R.string.cl_cancel, (dialog, which) -> finish())
-            .setOnCancelListener(dialog -> finish())
-            .show();
+        Workspace.configureTheme(this);
+        CodeLoveModal.confirm(this, getString(R.string.cl_love_open_title),
+            getString(R.string.cl_love_open_confirm),
+            getString(R.string.cl_love_open_run),
+            () -> LoveArchivePlayback.open(this, archive, intent.getType(), true),
+            this::finish);
     }
 }
