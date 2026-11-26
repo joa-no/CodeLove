@@ -64,6 +64,32 @@ final class CodeLoveModal {
         });
     }
 
+    static void choose(Activity activity, String title, String detail,
+                       String firstLabel, Runnable firstAction,
+                       String secondLabel, Runnable secondAction) {
+        if (notReady(activity)) return;
+        LinearLayout body = body(activity, title, detail);
+        TextView first = button(activity, firstLabel, true);
+        TextView second = button(activity, secondLabel, false);
+        TextView cancel = button(activity, activity.getString(R.string.cl_cancel), false);
+        for (TextView view : new TextView[]{first, second, cancel}) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(activity, 46));
+            params.topMargin = dp(activity, 10);
+            body.addView(view, params);
+        }
+        Dialog dialog = show(activity, body);
+        first.setOnClickListener(v -> { dialog.dismiss(); firstAction.run(); });
+        second.setOnClickListener(v -> { dialog.dismiss(); secondAction.run(); });
+        cancel.setOnClickListener(v -> dialog.dismiss());
+    }
+
+    static Dialog progress(Activity activity, String title, String detail) {
+        LinearLayout content = body(activity, title, detail);
+        Dialog dialog = show(activity, content);
+        dialog.setCancelable(false);
+        return dialog;
+    }
+
     static void password(Activity activity, String title, String detail,
                          String label, PasswordAction action) {
         if (notReady(activity) || action == null) return;

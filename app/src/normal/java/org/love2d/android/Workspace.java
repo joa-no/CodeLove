@@ -60,6 +60,11 @@ import java.util.Set;
 public final class Workspace {
     private static final String TAG = "CodeLove";
     private static final int REQUEST_ADD_PROJECT_TREE = 4102;
+    private static final int REQUEST_IMPORT_LOVE_FILE = 4190;
+    private static final int REQUEST_IMPORT_LOVE_DESTINATION = 4191;
+    private Uri pendingLoveImport;
+    private String pendingLoveName;
+    private boolean importingLove;
     private static final String PREF_WORKSPACE_ORIENTATION = "workspace_orientation";
     private static final String PREF_APPEARANCE = "appearance_theme";
     private static final String PREF_LANGUAGE = "workspace_language";
@@ -2121,9 +2126,13 @@ public final class Workspace {
     }
 
     private void showAddMenu(View anchor) {
-        // Sem projeto aberto, o botao + inicia diretamente a selecao da pasta.
+        if (importingLove) return;
         if (activeProject == null || activeSafStorage == null) {
-            addExistingProject();
+            List<String> labels = Arrays.asList(
+                activity.getString(R.string.cl_change_main_folder),
+                activity.getString(R.string.cl_love_import));
+            List<Runnable> actions = Arrays.asList(this::addExistingProject, this::chooseLoveImport);
+            ui.showMenu(anchor, labels, actions);
             return;
         }
 
@@ -2138,6 +2147,8 @@ public final class Workspace {
         actions.add(() -> newFolder(folder));
         labels.add(activity.getString(R.string.cl_change_main_folder));
         actions.add(this::addExistingProject);
+        labels.add(activity.getString(R.string.cl_love_import));
+        actions.add(this::chooseLoveImport);
         ui.showMenu(anchor, labels, actions);
     }
 
@@ -2188,6 +2199,112 @@ public final class Workspace {
                 });
     }
 
+    private void chooseLoveImport() {
+        if (disposed || importingLove || preparingPlayback || playing || LoveArchivePlayback.isBusy()) return;
+        if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        // Many providers report .love as a generic ZIP or binary document.
+        intent.setType("*/*");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            activity.startActivityForResult(intent, REQUEST_IMPORT_LOVE_FILE);
+        } catch (RuntimeException e) {
+            toast(activity.getString(R.string.cl_love_import_failed));
+        }
+    }
+
+    private void chooseLoveDestination(Uri source, String filename) {
+        if (disposed || importingLove || preparingPlayback || playing || LoveArchivePlayback.isBusy()) return;
+        if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
+        String name = LoveProjectImport.projectName(filename);
+        if (name == null) {
+            toast(activity.getString(R.string.cl_love_import_invalid_name));
+            return;
+        }
+        CodeLoveModal.confirm(activity, activity.getString(R.string.cl_love_import),
+            activity.getString(R.string.cl_love_import_destination, name),
+            activity.getString(R.string.cl_love_import_choose), () -> {
+                pendingLoveImport = source;
+                pendingLoveName = name;
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                    | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+                try {
+                    activity.startActivityForResult(intent, REQUEST_IMPORT_LOVE_DESTINATION);
+                } catch (RuntimeException e) {
+                    pendingLoveImport = null;
+                    pendingLoveName = null;
+                    toast(activity.getString(R.string.cl_choose_folder_failure));
+                }
+            }, () -> {});
+    }
+
+    private void handleLoveImportResult(int request, int result, Intent data) {
+        if (request == REQUEST_IMPORT_LOVE_FILE) {
+            if (result != Activity.RESULT_OK || data == null || data.getData() == null) return;
+            Uri source = data.getData();
+            chooseLoveDestination(source, LoveArchivePlayback.displayName(activity, source));
+            return;
+        }
+        Uri source = pendingLoveImport;
+        String name = pendingLoveName;
+        pendingLoveImport = null;
+        pendingLoveName = null;
+        if (result != Activity.RESULT_OK || data == null || data.getData() == null) return;
+        if (source == null || name == null || importingLove) {
+            toast(activity.getString(R.string.cl_love_import_failed));
+            return;
+        }
+        if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
+        Uri treeUri = data.getData();
+        int flags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        SafProjectManager.ProjectSelection selection = SafProjectManager.inspectProject(activity, treeUri);
+        if (!selection.isValid()) {
+            showProjectNotice(selection.error);
+            return;
+        }
+        int required = Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+        if (flags != required && !SafProjectManager.hasPersistedReadWritePermission(activity, treeUri)) {
+            toast(activity.getString(R.string.cl_saf_permission));
+            return;
+        }
+        importingLove = true;
+        android.app.Dialog progress = CodeLoveModal.progress(activity,
+            activity.getString(R.string.cl_love_import), activity.getString(R.string.cl_love_import_working));
+        new Thread(() -> {
+            LoveProjectImport.Result imported = LoveProjectImport.extract(
+                activity, source, treeUri, selection.documentId, selection.displayName, name);
+            activity.runOnUiThread(() -> {
+                importingLove = false;
+                if (disposed || currentInstance != this || activity.isFinishing() || activity.isDestroyed()) return;
+                progress.dismiss();
+                if (imported.error != 0) {
+                    CodeLoveModal.message(activity, activity.getString(R.string.cl_love_import),
+                        activity.getString(imported.error), activity.getString(android.R.string.ok));
+                    return;
+                }
+                // Never discard unsaved editor text or switch before extraction succeeds.
+                if (!editorChangesAreSaved(R.string.cl_save_before_play)) {
+                    toast(activity.getString(R.string.cl_love_import_saved_only));
+                    return;
+                }
+                String error = SafProjectManager.register(activity, treeUri, flags,
+                    imported.documentId, imported.name);
+                if (error != null) {
+                    showProjectNotice(error + "\n" + activity.getString(R.string.cl_love_import_saved_only));
+                    return;
+                }
+                selectDirectProject(new DirectSafStorage(activity, treeUri,
+                    imported.documentId, imported.name));
+                dismissProjectNotice();
+                toast(activity.getString(R.string.cl_love_import_done));
+            });
+        }, "CodeLove-love-import").start();
+    }
+
     private void addExistingProject() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -2204,6 +2321,13 @@ public final class Workspace {
 
     static void handleActivityResult(Activity activity, int requestCode,
                                      int resultCode, Intent data) {
+        if (requestCode == REQUEST_IMPORT_LOVE_FILE || requestCode == REQUEST_IMPORT_LOVE_DESTINATION) {
+            Workspace workspace = currentInstance;
+            if (workspace != null && workspace.activity == activity && !workspace.disposed) {
+                workspace.handleLoveImportResult(requestCode, resultCode, data);
+            }
+            return;
+        }
         // Signing controls exist only in the editor flavor.
         if (!BuildConfig.FLAVOR.startsWith("embed")) {
             try {
@@ -2734,7 +2858,12 @@ public final class Workspace {
             try {
                 Uri uri = activeSafStorage != null && activeSafStorage.contains(file)
                     ? activeSafStorage.uriForExternalView(file) : Uri.fromFile(file);
-                LoveArchivePlayback.open(activity, uri, null, false);
+                CodeLoveModal.choose(activity, file.getName(),
+                    activity.getString(R.string.cl_love_import_choice),
+                    activity.getString(R.string.cl_love_open_run),
+                    () -> LoveArchivePlayback.open(activity, uri, null, false),
+                    activity.getString(R.string.cl_love_import),
+                    () -> chooseLoveDestination(uri, file.getName()));
             } catch (IOException | RuntimeException e) {
                 toast(activity.getString(R.string.cl_love_open_failed));
             }

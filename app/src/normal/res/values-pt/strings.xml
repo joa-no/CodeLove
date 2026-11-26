@@ -240,4 +240,15 @@
     <string name="cl_love_open_preparing">Preparando jogo LÖVE...</string>
     <string name="cl_love_open_busy">Já existe um jogo LÖVE sendo preparado.</string>
     <string name="cl_love_open_failed">Não foi possível abrir o pacote .love. Use um arquivo .love válido com main.lua na raiz (até 512 MB).</string>
+    <string name="cl_love_import">Importar .love como projeto</string>
+    <string name="cl_love_import_choice">Escolha entre executar o jogo ou extrair seus arquivos como um projeto editável.</string>
+    <string name="cl_love_import_destination">Escolha uma pasta de destino. Uma nova pasta de projeto chamada %1$s será criada. Projetos existentes e o pacote original não serão sobrescritos.</string>
+    <string name="cl_love_import_choose">Escolher pasta</string>
+    <string name="cl_love_import_invalid_name">Selecione um arquivo .love válido com um nome compatível.</string>
+    <string name="cl_love_import_working">Validando e extraindo o pacote. Não feche o CodeLove.</string>
+    <string name="cl_love_import_exists">Já existe um arquivo ou pasta com esse nome de projeto. Escolha outro destino.</string>
+    <string name="cl_love_import_failed">Não foi possível importar o pacote. Use um .love válido com main.lua na raiz, caminhos seguros e até 512 MiB de dados compactados e extraídos.</string>
+    <string name="cl_love_import_cleanup_failed">A importação falhou e o provedor não conseguiu remover a nova pasta incompleta. Confira o destino antes de tentar novamente.</string>
+    <string name="cl_love_import_saved_only">Os arquivos foram extraídos, mas não foi possível abrir o projeto automaticamente. Selecione a pasta importada manualmente.</string>
+    <string name="cl_love_import_done">Projeto importado com sucesso.</string>
 </resources>

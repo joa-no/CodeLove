@@ -240,4 +240,15 @@
     <string name="cl_love_open_preparing">Preparing LOVE game...</string>
     <string name="cl_love_open_busy">A LOVE game is already being prepared.</string>
     <string name="cl_love_open_failed">Could not open the LOVE archive. Use a valid .love file with main.lua at its root (up to 512 MB).</string>
+    <string name="cl_love_import">Import .love as project</string>
+    <string name="cl_love_import_choice">Choose whether to run the game or extract it as an editable project.</string>
+    <string name="cl_love_import_destination">Choose a destination folder. A new project folder named %1$s will be created. Existing projects and the original archive will not be overwritten.</string>
+    <string name="cl_love_import_choose">Choose folder</string>
+    <string name="cl_love_import_invalid_name">Select a valid .love file with a supported filename.</string>
+    <string name="cl_love_import_working">Validating and extracting the archive. Do not close CodeLove.</string>
+    <string name="cl_love_import_exists">A file or folder with this project name already exists. Choose another destination.</string>
+    <string name="cl_love_import_failed">Could not import the archive. Use a valid .love with main.lua at the root, safe paths, and up to 512 MiB of compressed and extracted data.</string>
+    <string name="cl_love_import_cleanup_failed">Import failed and the provider could not remove the new incomplete folder. Check the selected destination before trying again.</string>
+    <string name="cl_love_import_saved_only">Files were extracted, but the project could not be opened automatically. Select the imported folder manually.</string>
+    <string name="cl_love_import_done">Project imported successfully.</string>
 </resources>
