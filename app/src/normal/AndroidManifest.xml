@@ -43,6 +43,39 @@
             </intent-filter>
         </activity>
 
+        <!-- Replace the inherited unrestricted share receiver in the editor variant. -->
+        <activity android:name=".IntentReceiverActivity" tools:node="remove" />
+        <activity
+            android:name=".LoveArchiveActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/x-love-game" />
+                <data android:mimeType="application/x-love" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.love" />
+                <data android:pathSuffix=".love" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/x-love-game" />
+                <data android:mimeType="application/x-love" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="org.love2d.android.LoveDocumentsProvider"
             android:authorities="${applicationId}.documents"

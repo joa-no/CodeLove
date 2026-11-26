@@ -2728,6 +2728,18 @@ public final class Workspace {
     }
 
     private void openInEditor(File file) {
+        if (LoveArchivePlayback.isLoveName(file.getName())) {
+            if (preparingPlayback || playing || disposed) return;
+            if (!editorChangesAreSaved(R.string.cl_save_before_play)) return;
+            try {
+                Uri uri = activeSafStorage != null && activeSafStorage.contains(file)
+                    ? activeSafStorage.uriForExternalView(file) : Uri.fromFile(file);
+                LoveArchivePlayback.open(activity, uri, null, false);
+            } catch (IOException | RuntimeException e) {
+                toast(activity.getString(R.string.cl_love_open_failed));
+            }
+            return;
+        }
         String extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(
             android.net.Uri.encode(file.getName()));
         String mime = android.webkit.MimeTypeMap.getSingleton()
@@ -2864,7 +2876,7 @@ public final class Workspace {
     }
 
     private void launchStandalonePlayback() {
-        if (preparingPlayback || playing || disposed) return;
+        if (preparingPlayback || playing || disposed || LoveArchivePlayback.isBusy()) return;
         if (activeProject == null) {
             toast(activity.getString(R.string.cl_select_project_hint));
             return;

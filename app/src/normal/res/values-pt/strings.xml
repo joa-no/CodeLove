@@ -234,4 +234,10 @@
     <string name="cl_license_jvm">Dependências JVM</string>
     <string name="cl_license_kotlin">Kotlin — terceiros</string>
     <string name="cl_resize_panel">Redimensionar painéis de arquivos e editor</string>
+    <string name="cl_love_open_title">Executar jogo LÖVE</string>
+    <string name="cl_love_open_confirm">Executar este pacote .love? Abra apenas jogos de fontes confiáveis. O jogo terá acesso às permissões concedidas ao CodeLove.</string>
+    <string name="cl_love_open_run">Executar</string>
+    <string name="cl_love_open_preparing">Preparando jogo LÖVE...</string>
+    <string name="cl_love_open_busy">Já existe um jogo LÖVE sendo preparado.</string>
+    <string name="cl_love_open_failed">Não foi possível abrir o pacote .love. Use um arquivo .love válido com main.lua na raiz (até 512 MB).</string>
 </resources>

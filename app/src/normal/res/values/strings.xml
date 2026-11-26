@@ -234,4 +234,10 @@
     <string name="cl_license_jvm">JVM dependencies</string>
     <string name="cl_license_kotlin">Kotlin third-party</string>
     <string name="cl_resize_panel">Resize file and editor panels</string>
+    <string name="cl_love_open_title">Run LOVE game</string>
+    <string name="cl_love_open_confirm">Run this LOVE archive? Only run games from sources you trust. The game will have access to the permissions granted to CodeLove.</string>
+    <string name="cl_love_open_run">Run</string>
+    <string name="cl_love_open_preparing">Preparing LOVE game...</string>
+    <string name="cl_love_open_busy">A LOVE game is already being prepared.</string>
+    <string name="cl_love_open_failed">Could not open the LOVE archive. Use a valid .love file with main.lua at its root (up to 512 MB).</string>
 </resources>

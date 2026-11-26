@@ -62,6 +62,7 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
+    private java.io.File stagedLoveArchive;
     private boolean defaultWindowOrientationPending;
     /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
     private final boolean exportedGame = BuildConfig.FLAVOR.startsWith("embed");
@@ -127,15 +128,29 @@ public class GameActivity extends SDLActivity {
 
         // Native preview: use the prepared project directly, without Lua commands.
         if (standaloneRuntime) {
+            String archive = intent.getStringExtra(LoveArchivePlayback.EXTRA_ARCHIVE);
             String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
-            if (project == null || !new java.io.File(project, "main.lua").isFile()) {
-                Log.e(TAG, "Missing runtime project");
-                super.onCreate(savedInstanceState);
-                finish();
-                return;
+            if (archive != null) {
+                try {
+                    stagedLoveArchive = LoveArchivePlayback.checkedArchive(this, archive);
+                    defaultWindowOrientationPending = !LoveArchivePlayback.hasConf(stagedLoveArchive);
+                    args = new String[]{"--renderers", "opengl", stagedLoveArchive.getAbsolutePath()};
+                } catch (IOException | RuntimeException e) {
+                    Log.e(TAG, "Invalid runtime archive");
+                    super.onCreate(savedInstanceState);
+                    finish();
+                    return;
+                }
+            } else {
+                if (project == null || !new java.io.File(project, "main.lua").isFile()) {
+                    Log.e(TAG, "Missing runtime project");
+                    super.onCreate(savedInstanceState);
+                    finish();
+                    return;
+                }
+                defaultWindowOrientationPending = !new java.io.File(project, "conf.lua").exists();
+                args = new String[]{"--renderers", "opengl", project};
             }
-            defaultWindowOrientationPending = !new java.io.File(project, "conf.lua").exists();
-            args = new String[]{"--renderers", "opengl", project};
             try {
                 nativeConsole = new NativeRuntimeConsole();
             } catch (Exception e) {
@@ -402,6 +417,9 @@ public class GameActivity extends SDLActivity {
             super.onDestroy();
         } finally {
             if (nativeConsole != null) nativeConsole.close();
+            if (stagedLoveArchive != null && isFinishing() && !isChangingConfigurations()) {
+                stagedLoveArchive.delete();
+            }
         }
     }
 
