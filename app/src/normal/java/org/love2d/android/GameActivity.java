@@ -66,6 +66,12 @@ public class GameActivity extends SDLActivity {
     private final android.os.Binder restartToken = new android.os.Binder() {
         @Override protected boolean onTransact(int code, android.os.Parcel data,
                 android.os.Parcel reply, int flags) throws android.os.RemoteException {
+            if (code == RuntimeRestartActivity.FINISH_RUNTIME && restartingRuntime) {
+                runOnUiThread(() -> {
+                    if (restartingRuntime && !isFinishing() && !isDestroyed()) finish();
+                });
+                return true;
+            }
             if (code == RuntimeRestartActivity.STOP_RUNTIME && restartingRuntime) {
                 android.os.Process.killProcess(android.os.Process.myPid());
                 return true;
@@ -141,13 +147,19 @@ public class GameActivity extends SDLActivity {
         if (standaloneRuntime) {
             String archive = intent.getStringExtra(LoveArchivePlayback.EXTRA_ARCHIVE);
             String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
+            int restartOrientation = intent.getIntExtra(RuntimeRestartActivity.EXTRA_ORIENTATION,
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            boolean hasRestartOrientation = RuntimeRestartActivity.isHandoffOrientation(restartOrientation);
+            if (hasRestartOrientation) setRequestedOrientation(restartOrientation);
             if (archive != null) {
                 try {
                     stagedLoveArchive = LoveArchivePlayback.checkedArchive(this, archive);
                     // External archives must start independently of the editor's locked
                     // orientation. Do not change the saved editor preference. Later
                     // explicit orientation requests from the game still go through SDL.
-                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+                    if (!hasRestartOrientation) {
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
+                    }
                     defaultWindowOrientationPending = !LoveArchivePlayback.hasConf(stagedLoveArchive);
                     args = new String[]{"--renderers", "opengl", stagedLoveArchive.getAbsolutePath()};
                 } catch (IOException | RuntimeException e) {
@@ -188,7 +200,12 @@ public class GameActivity extends SDLActivity {
         nativeSetDefaultStreamValues(getAudioFreq(), getAudioSMP());
 
         // Editor separado: o executor SDL fica livre de paineis.
-        if (standaloneRuntime) showStandaloneExit();
+        if (standaloneRuntime) {
+            showStandaloneExit();
+            // The handoff stays behind this Activity until its initial orientation
+            // is explicit and SDL has created the new runtime's views.
+            RuntimeRestartActivity.notifyRuntimeReady(intent);
+        }
 
         if (android.os.Build.VERSION.SDK_INT >= 28) {
             WindowManager.LayoutParams attr = getWindow().getAttributes();
@@ -250,13 +267,26 @@ public class GameActivity extends SDLActivity {
         Intent restart = new Intent(this, RuntimeRestartActivity.class);
         Bundle extras = new Bundle();
         extras.putBinder(RuntimeRestartActivity.EXTRA_TOKEN, restartToken);
+        int current = getRequestedOrientation();
+        boolean landscape = getResources().getConfiguration().orientation
+            == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+        int orientation;
+        if (landscape) {
+            orientation = current == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                ? current : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        } else {
+            orientation = current == ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+                ? current : ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+        }
+        extras.putInt(RuntimeRestartActivity.EXTRA_ORIENTATION, orientation);
         if (archive != null) extras.putString(LoveArchivePlayback.EXTRA_ARCHIVE, archive);
         else extras.putString(Workspace.EXTRA_RUNTIME_PROJECT, project);
         restart.putExtras(extras);
         try {
             startActivity(restart);
             overridePendingTransition(0, 0);
-            finish();
+            // The coordinator locks the handoff orientation before asking this
+            // Activity to finish. Do not expose the editor underneath first.
         } catch (RuntimeException e) {
             restartingRuntime = false;
             android.widget.Toast.makeText(this,
