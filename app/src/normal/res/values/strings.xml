@@ -251,4 +251,6 @@
     <string name="cl_love_import_cleanup_failed">Import failed and the provider could not remove the new incomplete folder. Check the selected destination before trying again.</string>
     <string name="cl_love_import_saved_only">Files were extracted, but the project could not be opened automatically. Select the imported folder manually.</string>
     <string name="cl_love_import_done">Project imported successfully.</string>
+    <string name="cl_restart_game">Restart game</string>
+    <string name="cl_restart_game_failed">Could not restart the game. Run it again from CodeLove.</string>
 </resources>

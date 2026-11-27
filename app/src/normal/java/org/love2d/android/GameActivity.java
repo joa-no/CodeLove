@@ -62,6 +62,17 @@ public class GameActivity extends SDLActivity {
     private String[] args;
     private boolean isFused;
     private boolean standaloneRuntime;
+    private volatile boolean restartingRuntime;
+    private final android.os.Binder restartToken = new android.os.Binder() {
+        @Override protected boolean onTransact(int code, android.os.Parcel data,
+                android.os.Parcel reply, int flags) throws android.os.RemoteException {
+            if (code == RuntimeRestartActivity.STOP_RUNTIME && restartingRuntime) {
+                android.os.Process.killProcess(android.os.Process.myPid());
+                return true;
+            }
+            return super.onTransact(code, data, reply, flags);
+        }
+    };
     private java.io.File stagedLoveArchive;
     private boolean defaultWindowOrientationPending;
     /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
@@ -218,7 +229,7 @@ public class GameActivity extends SDLActivity {
      * Reordena a Activity de desenvolvimento existente antes de encerrar.
      */
     private void returnToEditor() {
-        if (!standaloneRuntime) return;
+        if (!standaloneRuntime || restartingRuntime) return;
         // EditorActivity exists only in the normal flavor. Do not reference
         // its class symbol here: GameActivity must compile in embed flavors.
         Intent editorIntent = new Intent();
@@ -227,6 +238,31 @@ public class GameActivity extends SDLActivity {
             | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(editorIntent);
         finish();
+    }
+
+    /** Restart exactly the current runtime input, not the editor's selected folder. */
+    private void restartStandaloneRuntime() {
+        if (!standaloneRuntime || restartingRuntime || isFinishing() || isDestroyed()) return;
+        String archive = getIntent().getStringExtra(LoveArchivePlayback.EXTRA_ARCHIVE);
+        String project = getIntent().getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
+        if ((archive == null) == (project == null)) return;
+        restartingRuntime = true;
+        Intent restart = new Intent(this, RuntimeRestartActivity.class);
+        Bundle extras = new Bundle();
+        extras.putBinder(RuntimeRestartActivity.EXTRA_TOKEN, restartToken);
+        if (archive != null) extras.putString(LoveArchivePlayback.EXTRA_ARCHIVE, archive);
+        else extras.putString(Workspace.EXTRA_RUNTIME_PROJECT, project);
+        restart.putExtras(extras);
+        try {
+            startActivity(restart);
+            overridePendingTransition(0, 0);
+            finish();
+        } catch (RuntimeException e) {
+            restartingRuntime = false;
+            android.widget.Toast.makeText(this,
+                CodeLoveLocale.wrap(this).getString(R.string.cl_restart_game_failed),
+                android.widget.Toast.LENGTH_LONG).show();
+        }
     }
 
     /** Oculta a barra de status em modo de execucao; a navegacao permanece. */
@@ -289,6 +325,12 @@ public class GameActivity extends SDLActivity {
             localized.getString(R.string.cl_toggle_console), 44);
         consoleButton.setBackground(null);
         controls.addView(consoleButton, new android.widget.LinearLayout.LayoutParams(size, size));
+
+        android.widget.LinearLayout restart = CodeLoveConsolePanel.iconButton(this,
+            Workspace.IconView.RELOAD, Workspace.COLOR_FOLDER,
+            this::restartStandaloneRuntime, localized.getString(R.string.cl_restart_game), 44);
+        restart.setBackground(null);
+        controls.addView(restart, new android.widget.LinearLayout.LayoutParams(size, size));
 
         android.view.View separator = new android.view.View(this);
         separator.setBackgroundColor((Workspace.COLOR_BORDER & 0x00FFFFFF) | 0x4D000000);
@@ -421,7 +463,7 @@ public class GameActivity extends SDLActivity {
             super.onDestroy();
         } finally {
             if (nativeConsole != null) nativeConsole.close();
-            if (stagedLoveArchive != null && isFinishing() && !isChangingConfigurations()) {
+            if (stagedLoveArchive != null && !restartingRuntime && isFinishing() && !isChangingConfigurations()) {
                 stagedLoveArchive.delete();
             }
         }

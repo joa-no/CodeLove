@@ -43,6 +43,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Restart coordinator stays in the editor process, not the SDL process. -->
+        <activity
+            android:name=".RuntimeRestartActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="behind"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation" />
+
         <!-- Replace the inherited unrestricted share receiver in the editor variant. -->
         <activity android:name=".IntentReceiverActivity" tools:node="remove" />
         <activity

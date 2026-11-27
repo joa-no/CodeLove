@@ -251,4 +251,6 @@
     <string name="cl_love_import_cleanup_failed">La importación falló y el proveedor no pudo eliminar la nueva carpeta incompleta. Comprueba el destino antes de intentarlo de nuevo.</string>
     <string name="cl_love_import_saved_only">Los archivos se extrajeron, pero no se pudo abrir el proyecto automáticamente. Selecciona la carpeta importada manualmente.</string>
     <string name="cl_love_import_done">Proyecto importado correctamente.</string>
+    <string name="cl_restart_game">Reiniciar juego</string>
+    <string name="cl_restart_game_failed">No se pudo reiniciar el juego. Ejecútalo de nuevo desde CodeLove.</string>
 </resources>
