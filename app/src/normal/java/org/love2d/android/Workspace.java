@@ -710,6 +710,22 @@ public final class Workspace {
         dividerLp.setMargins(0, dp(10), 0, dp(10));
         content.addView(divider, dividerLp);
 
+        String renderer = RuntimeRenderer.selected(activity);
+        content.addView(buildSettingsRow(
+            IconView.RENDERER, activity.getString(R.string.cl_renderer),
+            activity.getString(R.string.cl_renderer_status,
+                RuntimeRenderer.VULKAN.equals(renderer) ? "Vulkan" : "OpenGL"),
+            v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                showRendererChooser();
+            }));
+        View rendererDivider = new View(activity);
+        rendererDivider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams rendererDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        rendererDividerLp.setMargins(0, dp(10), 0, dp(10));
+        content.addView(rendererDivider, rendererDividerLp);
+
         String currentFolderName = activeSafStorage != null
             ? activeSafStorage.getDisplayName() : null;
         content.addView(buildSettingsRow(
@@ -803,6 +819,104 @@ public final class Workspace {
         row.addView(new IconView(activity, IconView.CHEVRON_RIGHT, COLOR_MUTED),
             new LinearLayout.LayoutParams(dp(18), dp(18)));
         return row;
+    }
+
+    /** Select the renderer for the next integrated game execution. */
+    private void showRendererChooser() {
+        if (activity.isFinishing()) return;
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(18), dp(20), dp(20));
+        content.setBackground(box(COLOR_PANEL, 18, false));
+
+        TextView brand = new TextView(activity);
+        brand.setText("CODELOVE");
+        brand.setTextColor(COLOR_FOLDER);
+        brand.setTextSize(11);
+        brand.setTypeface(Typeface.DEFAULT_BOLD);
+        content.addView(brand);
+
+        TextView title = new TextView(activity);
+        title.setText(R.string.cl_renderer);
+        title.setTextColor(COLOR_TEXT);
+        title.setTextSize(20);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
+        titleLp.setMargins(0, dp(8), 0, dp(12));
+        content.addView(title, titleLp);
+
+        String current = RuntimeRenderer.selected(activity);
+        boolean vulkanSupported = RuntimeRenderer.supportsVulkan(activity);
+        Dialog dialog = new Dialog(activity);
+        String[] values = {RuntimeRenderer.OPENGL, RuntimeRenderer.VULKAN};
+        String[] names = {"OpenGL", "Vulkan"};
+        int[] descriptions = {R.string.cl_renderer_opengl_desc,
+            vulkanSupported ? R.string.cl_renderer_vulkan_desc : R.string.cl_renderer_vulkan_unavailable};
+        for (int i = 0; i < values.length; i++) {
+            final String value = values[i];
+            final boolean selected = value.equals(current);
+            final boolean enabled = i == 0 || vulkanSupported;
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(14), dp(12), dp(12), dp(12));
+            row.setBackground(box(selected ? COLOR_FIELD : COLOR_PANEL, 12, selected));
+            LinearLayout labels = new LinearLayout(activity);
+            labels.setOrientation(LinearLayout.VERTICAL);
+            TextView name = new TextView(activity);
+            name.setText(names[i]);
+            name.setTextColor(enabled ? COLOR_TEXT : COLOR_MUTED);
+            name.setTextSize(15);
+            name.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            labels.addView(name);
+            TextView description = new TextView(activity);
+            description.setText(descriptions[i]);
+            description.setTextColor(COLOR_MUTED);
+            description.setTextSize(12);
+            labels.addView(description);
+            row.addView(labels, new LinearLayout.LayoutParams(0, -2, 1f));
+            if (selected) {
+                row.addView(new IconView(activity, IconView.CHECK, COLOR_FOLDER),
+                    new LinearLayout.LayoutParams(dp(20), dp(20)));
+            }
+            row.setEnabled(enabled);
+            row.setClickable(enabled);
+            row.setFocusable(enabled);
+            row.setContentDescription(names[i] + (selected ? activity.getString(R.string.cl_selected) : ""));
+            if (enabled) row.setOnClickListener(v -> {
+                RuntimeRenderer.select(activity, value);
+                dialog.dismiss();
+                showSettings();
+            });
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(-1, -2);
+            if (i != 0) rowLp.topMargin = dp(8);
+            content.addView(row, rowLp);
+        }
+
+        TextView cancel = new TextView(activity);
+        cancel.setText(R.string.cl_cancel);
+        cancel.setTextColor(COLOR_MUTED);
+        cancel.setTextSize(13);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setPadding(dp(12), dp(10), dp(12), dp(10));
+        cancel.setBackground(box(COLOR_FIELD, 10, false));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(-2, -2);
+        cancelLp.gravity = Gravity.END;
+        cancelLp.topMargin = dp(14);
+        content.addView(cancel, cancelLp);
+        cancel.setOnClickListener(v -> dialog.dismiss());
+
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(content, new ScrollView.LayoutParams(-1, -2));
+        dialog.setContentView(scroll);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(android.graphics.Color.TRANSPARENT));
+            int width = activity.getResources().getDisplayMetrics().widthPixels - dp(40);
+            dialog.getWindow().setLayout(Math.min(dp(420), width), ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
     }
 
     /** Seleciona o tema, sem inserir controles inativos no painel principal. */
@@ -2129,7 +2243,7 @@ public final class Workspace {
         if (importingLove) return;
         if (activeProject == null || activeSafStorage == null) {
             List<String> labels = Arrays.asList(
-                activity.getString(R.string.cl_change_main_folder),
+                activity.getString(R.string.cl_select_main_folder),
                 activity.getString(R.string.cl_love_import));
             List<Runnable> actions = Arrays.asList(this::addExistingProject, this::chooseLoveImport);
             ui.showMenu(anchor, labels, actions);
@@ -3203,6 +3317,7 @@ public final class Workspace {
         static final int PALETTE = 19;
         static final int LANGUAGE = 20;
         static final int ANDROID = 21;
+        static final int RENDERER = 22;
 
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path path = new Path();
@@ -3230,6 +3345,17 @@ public final class Workspace {
 
             // Desenho em uma grade de 24 x 24.
             switch (kind) {
+                case RENDERER:
+                    path.addRoundRect(3f, 4f, 21f, 17f, 2f, 2f, Path.Direction.CW);
+                    path.moveTo(12f, 17f);
+                    path.lineTo(12f, 21f);
+                    path.moveTo(8f, 21f);
+                    path.lineTo(16f, 21f);
+                    path.moveTo(7f, 13f);
+                    path.lineTo(11f, 8f);
+                    path.lineTo(14f, 11f);
+                    path.lineTo(17f, 7f);
+                    break;
                 case FOLDER:
                     path.moveTo(3f, 6.5f);
                     path.lineTo(9f, 6.5f);

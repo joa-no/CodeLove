@@ -147,6 +147,8 @@ public class GameActivity extends SDLActivity {
         if (standaloneRuntime) {
             String archive = intent.getStringExtra(LoveArchivePlayback.EXTRA_ARCHIVE);
             String project = intent.getStringExtra(Workspace.EXTRA_RUNTIME_PROJECT);
+            String renderer = RuntimeRenderer.launchArgument(this);
+            Log.i(TAG, "Runtime renderer preference: " + renderer);
             int restartOrientation = intent.getIntExtra(RuntimeRestartActivity.EXTRA_ORIENTATION,
                 ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
             boolean hasRestartOrientation = RuntimeRestartActivity.isHandoffOrientation(restartOrientation);
@@ -161,7 +163,7 @@ public class GameActivity extends SDLActivity {
                         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_USER);
                     }
                     defaultWindowOrientationPending = !LoveArchivePlayback.hasConf(stagedLoveArchive);
-                    args = new String[]{"--renderers", "opengl", stagedLoveArchive.getAbsolutePath()};
+                    args = new String[]{"--renderers", renderer, stagedLoveArchive.getAbsolutePath()};
                 } catch (IOException | RuntimeException e) {
                     Log.e(TAG, "Invalid runtime archive");
                     super.onCreate(savedInstanceState);
@@ -176,7 +178,7 @@ public class GameActivity extends SDLActivity {
                     return;
                 }
                 defaultWindowOrientationPending = !new java.io.File(project, "conf.lua").exists();
-                args = new String[]{"--renderers", "opengl", project};
+                args = new String[]{"--renderers", renderer, project};
             }
             try {
                 nativeConsole = new NativeRuntimeConsole();

@@ -253,4 +253,10 @@
     <string name="cl_love_import_done">Project imported successfully.</string>
     <string name="cl_restart_game">Restart game</string>
     <string name="cl_restart_game_failed">Could not restart the game. Run it again from CodeLove.</string>
+    <string name="cl_select_main_folder">Select main folder</string>
+    <string name="cl_renderer">Graphics renderer</string>
+    <string name="cl_renderer_status">Preferred: %1$s</string>
+    <string name="cl_renderer_opengl_desc">Default for compatibility. Used on the next game launch.</string>
+    <string name="cl_renderer_vulkan_desc">Try Vulkan first, with OpenGL if graphics initialization fails. Used on the next game launch.</string>
+    <string name="cl_renderer_vulkan_unavailable">Unavailable: this device does not advertise Vulkan 1.1 or higher.</string>
 </resources>
