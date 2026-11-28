@@ -13,6 +13,7 @@ EDITOR_CLASSES = (
     b"Lorg/love2d/android/Workspace;",
     b"Lorg/love2d/android/CodeEditor;",
     b"Lorg/love2d/android/CodeLoveConsolePanel;",
+    b"Lorg/love2d/android/CodeLoveUpdater;",
     b"Lorg/love2d/android/CodeLoveLocale;",
     b"Lorg/love2d/android/GameExportDialog;",
     b"Lorg/love2d/android/GameExportArchive;",

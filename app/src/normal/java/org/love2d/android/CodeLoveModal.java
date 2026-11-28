@@ -83,8 +83,7 @@ final class CodeLoveModal {
         cancel.setOnClickListener(v -> dialog.dismiss());
     }
 
-    // Keep update notes scrollable on small landscape screens; buttons remain
-    // outside the notes and the entire panel can scroll if space is limited.
+    // Keep the update offer, including its actions, scrollable on small screens.
     static Dialog updateOffer(Activity activity, String detail, Runnable download,
                               Runnable skip) {
         if (notReady(activity)) return null;

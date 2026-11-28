@@ -124,14 +124,21 @@ final class CodeLoveUpdater {
         status.setText(activity.getString(R.string.cl_update_downloading, 0));
         dialog = CodeLoveModal.updateProgress(activity, status, () -> cancelled = true);
         worker.execute(() -> {
-            File dir = new File(activity.getCacheDir(), "updates");
-            File part = new File(dir, "update.part");
-            File apk = new File(dir, "update.apk");
+            File staging = new File(activity.getCacheDir(), "updates/staging");
+            File verifiedDir = new File(activity.getCacheDir(), "updates/verified");
+            File part = null;
+            File apk = null;
             boolean ok = false;
             try {
-                if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cache unavailable");
-                if (part.exists() && !part.delete()) throw new IOException("Old partial download");
-                if (apk.exists() && !apk.delete()) throw new IOException("Old APK");
+                if ((!staging.isDirectory() && !staging.mkdirs())
+                        || (!verifiedDir.isDirectory() && !verifiedDir.mkdirs()))
+                    throw new IOException("Cache unavailable");
+                // Each transfer gets an independent path, even across Activity recreation.
+                // The APK suffix is required by some Android package parsers.
+                part = File.createTempFile("update-", ".apk", staging);
+                apk = new File(verifiedDir, part.getName());
+                pruneOldUpdates(staging, part);
+                pruneOldUpdates(verifiedDir, apk);
                 downloadFile(release, part, status);
                 checkCancelled();
                 main.post(() -> { if (!closed && !cancelled) status.setText(R.string.cl_update_verifying); });
@@ -142,23 +149,26 @@ final class CodeLoveUpdater {
             } catch (Exception e) {
                 android.util.Log.w("CodeLoveUpdater", "Update download/verification failed", e);
             } finally {
-                part.delete();
-                if (!ok) apk.delete();
+                if (part != null) part.delete();
+                if (!ok && apk != null) apk.delete();
             }
-            final boolean verified = ok;
+            final File verified = ok ? apk : null;
             main.post(() -> {
-                if (closed) return;
-                dismissDialog();
-                busy = false;
-                if (cancelled) {
-                    apk.delete();
+                if (closed || cancelled) {
+                    if (verified != null) verified.delete();
+                    if (!closed) {
+                        dismissDialog();
+                        busy = false;
+                    }
                     return;
                 }
-                if (!verified) {
+                dismissDialog();
+                busy = false;
+                if (verified == null) {
                     message(R.string.cl_update_failed);
                     return;
                 }
-                installFile = apk;
+                installFile = verified;
                 CodeLoveModal.confirm(activity, activity.getString(R.string.cl_update_available),
                     activity.getString(R.string.cl_update_ready),
                     activity.getString(R.string.cl_update_install), this::requestInstall, () -> {});
@@ -230,7 +240,9 @@ final class CodeLoveUpdater {
     private void downloadFile(Release release, File part, TextView status) throws Exception {
         HttpURLConnection c = connect(release.url, false);
         try {
-            long length = c.getContentLengthLong();
+            // Read the header directly to remain compatible with Android API 23.
+            String contentLength = c.getHeaderField("Content-Length");
+            long length = contentLength == null ? -1 : Long.parseLong(contentLength);
             if (length > MAX_APK || (length >= 0 && length != release.size)) throw new IOException("Unexpected length");
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             long total = 0;
@@ -341,6 +353,16 @@ final class CodeLoveUpdater {
         StringBuilder out = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) out.append(String.format(Locale.ROOT, "%02x", b & 255));
         return out.toString();
+    }
+
+    private static void pruneOldUpdates(File directory, File keep) {
+        File[] files = directory.listFiles();
+        if (files == null) return;
+        long cutoff = System.currentTimeMillis() - 7 * DAY;
+        for (File file : files) {
+            if (!file.equals(keep) && file.isFile() && file.getName().startsWith("update-")
+                    && file.getName().endsWith(".apk") && file.lastModified() < cutoff) file.delete();
+        }
     }
 
     private void checkCancelled() throws IOException {
