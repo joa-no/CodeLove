@@ -11,6 +11,7 @@ import android.widget.RelativeLayout;
 public final class EditorActivity extends Activity {
     private Context originalLanguageContext;
     private android.content.res.Resources localizedResources;
+    private CodeLoveUpdater updater;
 
     void updateLanguageResources(String selected) {
         localizedResources = CodeLoveLocale.forLanguage(originalLanguageContext, selected)
@@ -37,6 +38,7 @@ public final class EditorActivity extends Activity {
         root.setFocusableInTouchMode(true);
         setContentView(root);
         Workspace.attachEditor(this, root);
+        updater = new CodeLoveUpdater(this);
     }
 
     @Override
@@ -44,6 +46,16 @@ public final class EditorActivity extends Activity {
         super.onResume();
         Workspace.applySavedOrientation(this);
         Workspace.onHostResume(this);
+    }
+
+    void checkForUpdates() {
+        if (updater != null) updater.check(true);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean focused) {
+        super.onWindowFocusChanged(focused);
+        if (focused && updater != null) updater.onEditorFocus();
     }
 
     /**
@@ -69,6 +81,7 @@ public final class EditorActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (updater != null) updater.close();
         Workspace.onHostDestroy(this);
         super.onDestroy();
     }
@@ -76,6 +89,7 @@ public final class EditorActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (updater != null && updater.onActivityResult(requestCode)) return;
         Workspace.handleActivityResult(this, requestCode, resultCode, data);
     }
 }

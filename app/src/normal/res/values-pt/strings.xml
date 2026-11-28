@@ -260,4 +260,23 @@
     <string name="cl_renderer_vulkan_desc">Prioriza Vulkan, com OpenGL caso a criação do renderizador falhe. Aplicado na próxima execução.</string>
     <string name="cl_renderer_vulkan_unavailable">Indisponível: este dispositivo não anuncia suporte a Vulkan 1.1 ou superior.</string>
     <string name="cl_console_metrics">%1$s FPS · %2$s ms · %3$s</string>
+    <string name="cl_update_check">Verificar atualizações</string>
+    <string name="cl_update_current">Instalada: %1$s · GitHub Releases</string>
+    <string name="cl_update_available">Atualização disponível</string>
+    <string name="cl_update_detail">Instalada: %1$s\nNova versão: %2$s\n\n%3$s</string>
+    <string name="cl_update_download">Baixar atualização</string>
+    <string name="cl_update_skip">Ignorar esta versão</string>
+    <string name="cl_update_later">Mais tarde</string>
+    <string name="cl_update_checking">Verificando GitHub Releases…</string>
+    <string name="cl_update_latest">Você já possui a versão mais recente disponível.</string>
+    <string name="cl_update_check_failed">Não foi possível verificar atualizações. Confira sua conexão e tente novamente.</string>
+    <string name="cl_update_downloading">Baixando: %1$d%%</string>
+    <string name="cl_update_verifying">Verificando a integridade e a assinatura do APK…</string>
+    <string name="cl_update_failed">Não foi possível baixar ou validar a atualização. Nenhum APK foi instalado.</string>
+    <string name="cl_update_save_first">Salve todos os arquivos abertos antes de instalar uma atualização.</string>
+    <string name="cl_update_permission">Permita que o CodeLove instale apps desta fonte nas configurações do Android e depois retorne.</string>
+    <string name="cl_update_install">Instalar atualização</string>
+    <string name="cl_update_install_failed">Não foi possível abrir o instalador. Confira as permissões de instalação do Android.</string>
+    <string name="cl_update_no_notes">Nenhuma nota de atualização disponível.</string>
+    <string name="cl_update_ready">A atualização foi validada. O Android solicitará a confirmação da instalação.</string>
 </resources>

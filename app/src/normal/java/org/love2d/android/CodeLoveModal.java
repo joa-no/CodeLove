@@ -83,6 +83,44 @@ final class CodeLoveModal {
         cancel.setOnClickListener(v -> dialog.dismiss());
     }
 
+    // Keep update notes scrollable on small landscape screens; buttons remain
+    // outside the notes and the entire panel can scroll if space is limited.
+    static Dialog updateOffer(Activity activity, String detail, Runnable download,
+                              Runnable skip) {
+        if (notReady(activity)) return null;
+        LinearLayout body = body(activity, activity.getString(R.string.cl_update_available), detail);
+        TextView first = button(activity, activity.getString(R.string.cl_update_download), true);
+        TextView second = button(activity, activity.getString(R.string.cl_update_skip), false);
+        TextView later = button(activity, activity.getString(R.string.cl_update_later), false);
+        for (TextView view : new TextView[]{first, second, later}) {
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(activity, 46));
+            params.topMargin = dp(activity, 10);
+            body.addView(view, params);
+        }
+        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+        scroll.addView(body, new android.widget.ScrollView.LayoutParams(-1, -2));
+        Dialog dialog = show(activity, scroll);
+        first.setOnClickListener(v -> { dialog.dismiss(); download.run(); });
+        second.setOnClickListener(v -> { dialog.dismiss(); skip.run(); });
+        later.setOnClickListener(v -> dialog.dismiss());
+        return dialog;
+    }
+
+    static Dialog updateProgress(Activity activity, TextView status, Runnable cancel) {
+        LinearLayout body = body(activity, activity.getString(R.string.cl_update_download), "");
+        status.setTextColor(Workspace.COLOR_MUTED);
+        status.setTextSize(14);
+        body.addView(status);
+        TextView stop = button(activity, activity.getString(R.string.cl_cancel), false);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(activity, 46));
+        params.topMargin = dp(activity, 16);
+        body.addView(stop, params);
+        Dialog dialog = show(activity, body);
+        dialog.setCancelable(false);
+        stop.setOnClickListener(v -> { cancel.run(); dialog.dismiss(); });
+        return dialog;
+    }
+
     static Dialog progress(Activity activity, String title, String detail) {
         LinearLayout content = body(activity, title, detail);
         Dialog dialog = show(activity, content);
@@ -167,7 +205,7 @@ final class CodeLoveModal {
         return body;
     }
 
-    private static Dialog show(Activity activity, LinearLayout content) {
+    private static Dialog show(Activity activity, android.view.View content) {
         Dialog dialog = new Dialog(activity);
         dialog.setContentView(content);
         dialog.setCanceledOnTouchOutside(false);

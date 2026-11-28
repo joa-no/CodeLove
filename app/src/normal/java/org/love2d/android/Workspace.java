@@ -324,6 +324,19 @@ public final class Workspace {
         }
     }
 
+    static boolean canPromptForUpdate(Activity activity) {
+        Workspace w = currentInstance;
+        return w != null && w.activity == activity && !w.disposed
+            && !w.playing && !w.preparingPlayback && !w.importingLove
+            && w.prefs.contains(PREF_WORKSPACE_ORIENTATION);
+    }
+
+    static boolean canInstallUpdate(Activity activity) {
+        Workspace w = currentInstance;
+        return canPromptForUpdate(activity) && w.editor != null
+            && !w.editor.hasUnsavedTabs();
+    }
+
     /** Contrato entre editor Android e executor SDL. */
     public static final String EXTRA_RUNTIME_ONLY = "org.love2d.android.RUNTIME_ONLY";
     public static final String EXTRA_RUNTIME_PROJECT = "org.love2d.android.RUNTIME_PROJECT";
@@ -744,6 +757,19 @@ public final class Workspace {
             ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
         folderDividerLp.setMargins(0, dp(10), 0, dp(10));
         content.addView(folderDivider, folderDividerLp);
+
+        content.addView(buildSettingsRow(
+            IconView.RELOAD, activity.getString(R.string.cl_update_check),
+            activity.getString(R.string.cl_update_current, BuildConfig.VERSION_NAME), v -> {
+                if (settingsDialog != null) settingsDialog.dismiss();
+                if (activity instanceof EditorActivity) ((EditorActivity) activity).checkForUpdates();
+            }));
+        View updateDivider = new View(activity);
+        updateDivider.setBackgroundColor(COLOR_BORDER);
+        LinearLayout.LayoutParams updateDividerLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1)));
+        updateDividerLp.setMargins(0, dp(10), 0, dp(10));
+        content.addView(updateDivider, updateDividerLp);
 
         content.addView(buildSettingsRow(
             IconView.INFO, activity.getString(R.string.cl_about),

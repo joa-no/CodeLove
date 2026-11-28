@@ -260,4 +260,23 @@
     <string name="cl_renderer_vulkan_desc">Try Vulkan first, with OpenGL if graphics initialization fails. Used on the next game launch.</string>
     <string name="cl_renderer_vulkan_unavailable">Unavailable: this device does not advertise Vulkan 1.1 or higher.</string>
     <string name="cl_console_metrics">%1$s FPS · %2$s ms · %3$s</string>
+    <string name="cl_update_check">Check for updates</string>
+    <string name="cl_update_current">Installed: %1$s · GitHub Releases</string>
+    <string name="cl_update_available">Update available</string>
+    <string name="cl_update_detail">Installed: %1$s\nNew version: %2$s\n\n%3$s</string>
+    <string name="cl_update_download">Download update</string>
+    <string name="cl_update_skip">Skip this version</string>
+    <string name="cl_update_later">Later</string>
+    <string name="cl_update_checking">Checking GitHub Releases…</string>
+    <string name="cl_update_latest">You already have the latest available version.</string>
+    <string name="cl_update_check_failed">Could not check for updates. Check your connection and try again.</string>
+    <string name="cl_update_downloading">Downloading: %1$d%%</string>
+    <string name="cl_update_verifying">Verifying APK integrity and signature…</string>
+    <string name="cl_update_failed">The update could not be downloaded or verified. No APK was installed.</string>
+    <string name="cl_update_save_first">Save all open files before installing an update.</string>
+    <string name="cl_update_permission">Allow CodeLove to install apps from this source in Android settings, then return.</string>
+    <string name="cl_update_install">Install update</string>
+    <string name="cl_update_install_failed">Could not open the installer. Check Android installation permissions.</string>
+    <string name="cl_update_no_notes">No release notes provided.</string>
+    <string name="cl_update_ready">The update was verified. Android will ask you to confirm installation.</string>
 </resources>
