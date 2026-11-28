@@ -143,6 +143,11 @@ android {
     productFlavors {
         normal {
             dimension 'mode'
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCODELOVE_PREVIEW_METRICS=ON"
+                }
+            }
         }
         embed {
             dimension 'mode'

@@ -18,6 +18,8 @@ import android.widget.TextView;
 final class CodeLoveConsolePanel extends LinearLayout {
     private final TextView logText;
     private final ScrollView logScroll;
+    private TextView runtimeStats;
+    private final LinearLayout.LayoutParams runtimeStatsParams;
 
     CodeLoveConsolePanel(Context context, Runnable collapse,
                          Runnable clearLog, Runnable reloadProject) {
@@ -75,6 +77,9 @@ final class CodeLoveConsolePanel extends LinearLayout {
         header.addView(collapseButton, collapseLp);
         addView(header, new LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 34)));
+        runtimeStatsParams = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT);
+        runtimeStatsParams.topMargin = dp(context, 3);
 
         View separator = new View(context);
         separator.setBackgroundColor(Workspace.COLOR_BORDER);
@@ -99,6 +104,24 @@ final class CodeLoveConsolePanel extends LinearLayout {
             ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(logScroll, new LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+    }
+
+    void enableRuntimeStats() {
+        if (runtimeStats != null) return;
+        runtimeStats = new TextView(getContext());
+        runtimeStats.setTextSize(11);
+        runtimeStats.setTextColor(Workspace.COLOR_MUTED);
+        runtimeStats.setTypeface(Typeface.MONOSPACE);
+        runtimeStats.setGravity(Gravity.START);
+        addView(runtimeStats, 1, runtimeStatsParams);
+        setRuntimeStats("—", "—", "—");
+    }
+
+    void setRuntimeStats(String fps, String frameTime, String renderer) {
+        if (runtimeStats == null) return;
+        String value = CodeLoveLocale.wrap(getContext()).getString(
+            R.string.cl_console_metrics, fps, frameTime, renderer);
+        if (!value.contentEquals(runtimeStats.getText())) runtimeStats.setText(value);
     }
 
     TextView output() { return logText; }

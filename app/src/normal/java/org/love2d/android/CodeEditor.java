@@ -245,6 +245,8 @@ final class CodeEditor {
 
         // Sora gerencia a edicao, os numeros de linha, a selecao e a rolagem.
         soraInput = new io.github.rosemoe.sora.widget.CodeEditor(activity);
+        // Keep blinking, but move the caret immediately with each edit.
+        soraInput.setCursorAnimationEnabled(false);
         soraInput.setTypefaceText(Typeface.MONOSPACE);
         soraInput.setTextSize(13f);
         // Desativa apenas o zoom com dois dedos; rolagens seguem nativas.

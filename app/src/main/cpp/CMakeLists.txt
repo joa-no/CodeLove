@@ -29,6 +29,37 @@ set(LOVE_ANDROID 1)
 set(MEGA_LOVE "${CMAKE_CURRENT_SOURCE_DIR}/love")
 add_subdirectory(megasource)
 
+# Preview-only instrumentation: generate an explicitly marked wrapper from
+# the pinned LÖVE source, leaving the upstream submodule and embed flavor intact.
+if(CODELOVE_PREVIEW_METRICS)
+    set(metrics_original "${MEGA_LOVE}/src/modules/graphics/wrap_Graphics.cpp")
+    set(metrics_header "${CMAKE_CURRENT_SOURCE_DIR}/codelove/PreviewMetrics.h")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${metrics_original}" "${metrics_header}")
+    file(READ "${metrics_original}" metrics_source)
+    set(metrics_anchor "luax_catchexcept(L, [&]() { instance()->present(L); });")
+    string(FIND "${metrics_source}" "${metrics_anchor}" metrics_index)
+    if(metrics_index EQUAL -1)
+        message(FATAL_ERROR "CodeLove preview metrics: upstream present wrapper changed")
+    endif()
+    string(REPLACE "${metrics_anchor}"
+        "luax_catchexcept(L, [&]() {\n        const bool active = instance()->isActive();\n        instance()->present(L);\n        if (active) codelove_preview::record(instance()->getRenderer() == RENDERER_VULKAN ? 2u : instance()->getRenderer() == RENDERER_OPENGL ? 1u : 0u);\n    });"
+        metrics_source "${metrics_source}")
+    set(metrics_generated "${CMAKE_CURRENT_BINARY_DIR}/codelove_wrap_Graphics.cpp")
+    file(WRITE "${metrics_generated}"
+        "// CodeLove altered preview wrapper; original LÖVE notice retained below.\n#include \"${metrics_header}\"\n${metrics_source}")
+    get_target_property(metrics_sources love_graphics_root SOURCES)
+    list(FIND metrics_sources "src/modules/graphics/wrap_Graphics.cpp" metrics_source_index)
+    if(metrics_source_index EQUAL -1)
+        message(FATAL_ERROR "CodeLove preview metrics: original graphics source not found")
+    endif()
+    list(REMOVE_ITEM metrics_sources "src/modules/graphics/wrap_Graphics.cpp")
+    list(APPEND metrics_sources "${metrics_generated}")
+    set_property(TARGET love_graphics_root PROPERTY SOURCES "${metrics_sources}")
+    target_include_directories(love_graphics_root PRIVATE "${MEGA_LOVE}/src/modules/graphics")
+endif()
+
+
 add_dependencies(love_android love OpenAL)
 
 find_package(Python 3.9 COMPONENTS Interpreter)

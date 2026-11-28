@@ -259,4 +259,5 @@
     <string name="cl_renderer_opengl_desc">Default for compatibility. Used on the next game launch.</string>
     <string name="cl_renderer_vulkan_desc">Try Vulkan first, with OpenGL if graphics initialization fails. Used on the next game launch.</string>
     <string name="cl_renderer_vulkan_unavailable">Unavailable: this device does not advertise Vulkan 1.1 or higher.</string>
+    <string name="cl_console_metrics">%1$s FPS · %2$s ms · %3$s</string>
 </resources>

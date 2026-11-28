@@ -86,6 +86,10 @@ public class GameActivity extends SDLActivity {
     private CodeLoveConsolePanel standaloneConsole;
     private boolean standaloneConsoleOpen;
     private String lastStandaloneConsole;
+    private long lastStatsNanos;
+    private int lastStatsFrames;
+    private boolean statsUnavailable;
+    private static native int nativeFrameStats();
     private final Runnable standaloneConsolePoller = new Runnable() {
         @Override public void run() {
             if (!standaloneRuntime || !standaloneConsoleOpen
@@ -410,6 +414,7 @@ public class GameActivity extends SDLActivity {
 
         standaloneConsole = new CodeLoveConsolePanel(this,
             () -> setStandaloneConsoleOpen(false), null, null);
+        standaloneConsole.enableRuntimeStats();
         standaloneConsole.setVisibility(View.GONE);
         android.widget.RelativeLayout.LayoutParams consoleLp =
             new android.widget.RelativeLayout.LayoutParams(
@@ -427,7 +432,7 @@ public class GameActivity extends SDLActivity {
             int height = bottom - top;
             if (height <= 0 || standaloneConsole == null) return;
             int panelHeight = Math.min(Math.round(240 * density),
-                Math.max(Math.round(90 * density), Math.round(height * 0.38f)));
+                Math.max(Math.round(124 * density), Math.round(height * 0.38f)));
             android.widget.RelativeLayout.LayoutParams lp =
                 (android.widget.RelativeLayout.LayoutParams) standaloneConsole.getLayoutParams();
             if (lp.height != panelHeight) {
@@ -440,6 +445,7 @@ public class GameActivity extends SDLActivity {
     private void setStandaloneConsoleOpen(boolean visible) {
         if (!standaloneRuntime || standaloneConsole == null) return;
         standaloneConsoleOpen = visible;
+        lastStatsNanos = 0;
         standaloneConsole.setVisibility(visible ? View.VISIBLE : View.GONE);
         standaloneConsole.removeCallbacks(standaloneConsolePoller);
         if (visible) {
@@ -451,6 +457,7 @@ public class GameActivity extends SDLActivity {
     /** Exibe a saida capturada do processo nativo. */
     private void updateStandaloneConsole() {
         if (standaloneConsole == null) return;
+        updateRuntimeStats();
         String value = nativeConsole != null ? nativeConsole.snapshot() : null;
         if (value == null) {
             value = CodeLoveLocale.wrap(this).getString(R.string.cl_console_waiting);
@@ -459,6 +466,36 @@ public class GameActivity extends SDLActivity {
             lastStandaloneConsole = value;
             standaloneConsole.setOutput(value);
         }
+    }
+
+    private void updateRuntimeStats() {
+        if (statsUnavailable) return;
+        int packed;
+        try {
+            packed = nativeFrameStats();
+        } catch (UnsatisfiedLinkError e) {
+            statsUnavailable = true;
+            return;
+        }
+        int renderer = packed >>> 30;
+        int frames = packed & 0x3fffffff;
+        long now = android.os.SystemClock.elapsedRealtimeNanos();
+        String fps = "—";
+        String frameTime = "—";
+        if (renderer != 0 && lastStatsNanos != 0) {
+            int delta = (frames - lastStatsFrames) & 0x3fffffff;
+            double seconds = (now - lastStatsNanos) / 1e9;
+            if (seconds > 0) {
+                java.util.Locale locale = CodeLoveLocale.wrap(this).getResources()
+                    .getConfiguration().locale;
+                fps = String.format(locale, "%.0f", delta / seconds);
+                if (delta > 0) frameTime = String.format(locale, "%.1f", seconds * 1000 / delta);
+            }
+        }
+        lastStatsNanos = now;
+        lastStatsFrames = frames;
+        String name = renderer == 1 ? "OpenGL" : renderer == 2 ? "Vulkan" : "—";
+        standaloneConsole.setRuntimeStats(fps, frameTime, name);
     }
 
     @Override
@@ -503,6 +540,7 @@ public class GameActivity extends SDLActivity {
 
     @Override
     protected void onPause() {
+        lastStatsNanos = 0;
         if (standaloneConsole != null) {
             standaloneConsole.removeCallbacks(standaloneConsolePoller);
         }

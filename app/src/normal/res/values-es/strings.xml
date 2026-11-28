@@ -259,4 +259,5 @@
     <string name="cl_renderer_opengl_desc">Predeterminado por compatibilidad. Se aplica al iniciar el próximo juego.</string>
     <string name="cl_renderer_vulkan_desc">Prioriza Vulkan, con OpenGL si falla la creación del renderizador. Se aplica en la próxima ejecución.</string>
     <string name="cl_renderer_vulkan_unavailable">No disponible: este dispositivo no anuncia compatibilidad con Vulkan 1.1 o superior.</string>
+    <string name="cl_console_metrics">%1$s FPS · %2$s ms · %3$s</string>
 </resources>
