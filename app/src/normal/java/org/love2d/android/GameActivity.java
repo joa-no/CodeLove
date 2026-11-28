@@ -84,6 +84,13 @@ public class GameActivity extends SDLActivity {
     /** Exported games run LÖVE directly; CodeLove workspace is normal-flavor only. */
     private final boolean exportedGame = BuildConfig.FLAVOR.startsWith("embed");
     private CodeLoveConsolePanel standaloneConsole;
+    private android.content.SharedPreferences floatingConsolePrefs;
+    private final Rect floatingConsoleBounds = new Rect();
+    private String floatingConsoleOrientation;
+    private float floatingConsoleX = 0.5f, floatingConsoleY = 1f;
+    private int floatingConsoleWidthDp, floatingConsoleHeightDp;
+    private int floatingConsoleOpacity = 80;
+    private int floatingStartLeft, floatingStartTop, floatingStartWidth, floatingStartHeight;
     private boolean standaloneConsoleOpen;
     private String lastStandaloneConsole;
     private long lastStatsNanos;
@@ -418,16 +425,34 @@ public class GameActivity extends SDLActivity {
         standaloneConsole = new CodeLoveConsolePanel(this,
             () -> setStandaloneConsoleOpen(false), null, null);
         standaloneConsole.enableRuntimeStats();
+        floatingConsolePrefs = getSharedPreferences("codelove_floating_console", Context.MODE_PRIVATE);
+        floatingConsoleOpacity = floatingConsolePrefs.getInt("opacity", 80);
+        if (floatingConsoleOpacity != 60 && floatingConsoleOpacity != 80
+                && floatingConsoleOpacity != 100) floatingConsoleOpacity = 80;
+        standaloneConsole.enableFloatingControls(
+            new CodeLoveConsolePanel.DragAction() {
+                @Override public void start() { beginFloatingGesture(); }
+                @Override public void move(float dx, float dy) { moveFloatingConsole(dx, dy, false); }
+                @Override public void end() { saveFloatingConsole(); }
+            },
+            new CodeLoveConsolePanel.DragAction() {
+                @Override public void start() { beginFloatingGesture(); }
+                @Override public void move(float dx, float dy) { moveFloatingConsole(dx, dy, true); }
+                @Override public void end() { saveFloatingConsole(); }
+            },
+            this::cycleFloatingOpacity, floatingConsoleOpacity);
         standaloneConsole.setVisibility(View.GONE);
         android.widget.RelativeLayout.LayoutParams consoleLp =
             new android.widget.RelativeLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 Math.round(220 * density));
-        consoleLp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_BOTTOM);
-        consoleLp.leftMargin = margin;
-        consoleLp.rightMargin = margin;
-        consoleLp.bottomMargin = margin;
+        consoleLp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_TOP);
+        consoleLp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_LEFT);
         mLayout.addView(standaloneConsole, consoleLp);
+        // Keep exit and restart available even when the panel is moved nearby.
+        actions.bringToFront();
+        // Distinct fingers can operate the game and panel in parallel.
+        mLayout.setMotionEventSplittingEnabled(true);
 
         // Recompute after a resize or navigation-bar inset change without
         // replacing SDL's own layout/inset handling.
@@ -450,26 +475,29 @@ public class GameActivity extends SDLActivity {
         android.content.res.Configuration config = getResources().getConfiguration();
         float density = getResources().getDisplayMetrics().density;
         int margin = Math.round(12 * density);
-        int safeLeft = 0, safeRight = 0, safeBottom = 0;
+        int safeLeft = 0, safeRight = 0, safeTop = 0, safeBottom = 0;
         View decor = getWindow().getDecorView();
         android.view.WindowInsets insets = decor.getRootWindowInsets();
         if (insets != null && decor.getWidth() > 0 && decor.getHeight() > 0) {
-            int left, right, bottom;
+            int left, right, top, bottom;
             if (android.os.Build.VERSION.SDK_INT >= 30) {
                 android.graphics.Insets bars = insets.getInsets(
                     android.view.WindowInsets.Type.navigationBars()
                     | android.view.WindowInsets.Type.displayCutout());
                 left = bars.left;
                 right = bars.right;
+                top = bars.top;
                 bottom = bars.bottom;
             } else {
                 left = insets.getSystemWindowInsetLeft();
                 right = insets.getSystemWindowInsetRight();
+                top = insets.getSystemWindowInsetTop();
                 bottom = insets.getSystemWindowInsetBottom();
                 if (android.os.Build.VERSION.SDK_INT >= 28 && insets.getDisplayCutout() != null) {
                     android.view.DisplayCutout cutout = insets.getDisplayCutout();
                     left = Math.max(left, cutout.getSafeInsetLeft());
                     right = Math.max(right, cutout.getSafeInsetRight());
+                    top = Math.max(top, cutout.getSafeInsetTop());
                     bottom = Math.max(bottom, cutout.getSafeInsetBottom());
                 }
             }
@@ -482,38 +510,111 @@ public class GameActivity extends SDLActivity {
             safeLeft = Math.max(0, decorPosition[0] + left - rootPosition[0]);
             safeRight = Math.max(0, rootPosition[0] + width
                 - (decorPosition[0] + decor.getWidth() - right));
+            safeTop = Math.max(0, decorPosition[1] + top - rootPosition[1]);
             safeBottom = Math.max(0, rootPosition[1] + height
                 - (decorPosition[1] + decor.getHeight() - bottom));
         }
-        int usableWidth = Math.max(1, width - safeLeft - safeRight - 2 * margin);
-        int usableHeight = Math.max(1, height - safeBottom - 2 * margin);
+        floatingConsoleBounds.set(safeLeft + margin, safeTop + margin,
+            Math.max(safeLeft + margin + 1, width - safeRight - margin),
+            Math.max(safeTop + margin + 1, height - safeBottom - margin));
+        String orientation = width > height ? "landscape" : "portrait";
+        if (!orientation.equals(floatingConsoleOrientation)) {
+            floatingConsoleOrientation = orientation;
+            floatingConsoleX = clampFraction(floatingConsolePrefs.getFloat(orientation + "_x", 0.5f));
+            floatingConsoleY = clampFraction(floatingConsolePrefs.getFloat(orientation + "_y", 1f));
+            floatingConsoleWidthDp = floatingConsolePrefs.getInt(orientation + "_width", 0);
+            floatingConsoleHeightDp = floatingConsolePrefs.getInt(orientation + "_height", 0);
+        }
+        int usableWidth = floatingConsoleBounds.width();
+        int usableHeight = floatingConsoleBounds.height();
         boolean compact = width > height && (config.smallestScreenWidthDp < 600
             || usableHeight < Math.round(420 * density));
-        int panelWidth = compact
-            ? Math.min(usableWidth, Math.min(Math.round(520 * density),
-                Math.max(Math.round(280 * density), Math.round(usableWidth * 0.76f))))
-            : usableWidth;
-        int panelHeight = compact
-            ? Math.min(usableHeight, Math.min(Math.round(160 * density),
-                Math.max(Math.round(112 * density), Math.round(usableHeight * 0.34f))))
-            : Math.min(usableHeight, Math.min(Math.round(240 * density),
-                Math.max(Math.round(124 * density), Math.round(height * 0.38f))));
-        int leftMargin = safeLeft + margin + (usableWidth - panelWidth) / 2;
-        int rightMargin = Math.max(0, width - leftMargin - panelWidth);
-        int bottomMargin = safeBottom + margin;
+        int defaultWidth = compact ? Math.min(Math.round(320 * density), Math.round(usableWidth * 0.62f))
+            : Math.min(Math.round(520 * density), Math.round(usableWidth * 0.88f));
+        int defaultHeight = compact ? Math.round(usableHeight * 0.40f)
+            : Math.min(Math.round(240 * density), Math.round(usableHeight * 0.36f));
+        int panelWidth = boundedSize(floatingConsoleWidthDp > 0
+            ? Math.round(floatingConsoleWidthDp * density) : defaultWidth,
+            Math.round(230 * density), usableWidth);
+        int panelHeight = boundedSize(floatingConsoleHeightDp > 0
+            ? Math.round(floatingConsoleHeightDp * density) : defaultHeight,
+            Math.round(120 * density), usableHeight);
+        int left = floatingConsoleBounds.left + Math.round((usableWidth - panelWidth) * floatingConsoleX);
+        int top = floatingConsoleBounds.top + Math.round((usableHeight - panelHeight) * floatingConsoleY);
+        applyFloatingConsoleBounds(left, top, panelWidth, panelHeight);
+    }
+
+    private static int boundedSize(int wanted, int minimum, int available) {
+        return Math.min(available, Math.max(minimum, wanted));
+    }
+
+    private static float clampFraction(float value) {
+        if (Float.isNaN(value)) return 0.5f;
+        return Math.max(0f, Math.min(1f, value));
+    }
+
+    private void applyFloatingConsoleBounds(int left, int top, int width, int height) {
         android.widget.RelativeLayout.LayoutParams lp =
             (android.widget.RelativeLayout.LayoutParams) standaloneConsole.getLayoutParams();
-        if (lp.width != panelWidth || lp.height != panelHeight
-                || lp.leftMargin != leftMargin || lp.rightMargin != rightMargin
-                || lp.bottomMargin != bottomMargin) {
-            lp.width = panelWidth;
-            lp.height = panelHeight;
-            lp.leftMargin = leftMargin;
-            lp.rightMargin = rightMargin;
-            lp.bottomMargin = bottomMargin;
-            lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_LEFT);
+        if (lp.width != width || lp.height != height || lp.leftMargin != left
+                || lp.topMargin != top || lp.rightMargin != 0 || lp.bottomMargin != 0) {
+            lp.width = width;
+            lp.height = height;
+            lp.leftMargin = left;
+            lp.topMargin = top;
+            lp.rightMargin = 0;
+            lp.bottomMargin = 0;
             standaloneConsole.setLayoutParams(lp);
         }
+    }
+
+    private void beginFloatingGesture() {
+        android.widget.RelativeLayout.LayoutParams lp =
+            (android.widget.RelativeLayout.LayoutParams) standaloneConsole.getLayoutParams();
+        floatingStartLeft = lp.leftMargin;
+        floatingStartTop = lp.topMargin;
+        floatingStartWidth = lp.width;
+        floatingStartHeight = lp.height;
+    }
+
+    private void moveFloatingConsole(float dx, float dy, boolean resize) {
+        if (floatingConsoleBounds.isEmpty() || floatingConsoleOrientation == null) return;
+        float density = getResources().getDisplayMetrics().density;
+        int width = resize ? boundedSize(floatingStartWidth + Math.round(dx),
+            Math.round(230 * density), floatingConsoleBounds.width()) : floatingStartWidth;
+        int height = resize ? boundedSize(floatingStartHeight + Math.round(dy),
+            Math.round(120 * density), floatingConsoleBounds.height()) : floatingStartHeight;
+        width = Math.min(width, floatingConsoleBounds.width());
+        height = Math.min(height, floatingConsoleBounds.height());
+        int left = Math.max(floatingConsoleBounds.left, Math.min(floatingConsoleBounds.right - width,
+            floatingStartLeft + (resize ? 0 : Math.round(dx))));
+        int top = Math.max(floatingConsoleBounds.top, Math.min(floatingConsoleBounds.bottom - height,
+            floatingStartTop + (resize ? 0 : Math.round(dy))));
+        int freeX = floatingConsoleBounds.width() - width;
+        int freeY = floatingConsoleBounds.height() - height;
+        if (freeX > 0) floatingConsoleX = clampFraction((float) (left - floatingConsoleBounds.left) / freeX);
+        if (freeY > 0) floatingConsoleY = clampFraction((float) (top - floatingConsoleBounds.top) / freeY);
+        if (resize) {
+            floatingConsoleWidthDp = Math.round(width / density);
+            floatingConsoleHeightDp = Math.round(height / density);
+        }
+        applyFloatingConsoleBounds(left, top, width, height);
+    }
+
+    private void saveFloatingConsole() {
+        if (floatingConsolePrefs == null || floatingConsoleOrientation == null) return;
+        String key = floatingConsoleOrientation;
+        floatingConsolePrefs.edit().putFloat(key + "_x", floatingConsoleX)
+            .putFloat(key + "_y", floatingConsoleY)
+            .putInt(key + "_width", floatingConsoleWidthDp)
+            .putInt(key + "_height", floatingConsoleHeightDp).apply();
+    }
+
+    private void cycleFloatingOpacity() {
+        floatingConsoleOpacity = floatingConsoleOpacity == 80 ? 60
+            : floatingConsoleOpacity == 60 ? 100 : 80;
+        standaloneConsole.setPanelOpacity(floatingConsoleOpacity);
+        floatingConsolePrefs.edit().putInt("opacity", floatingConsoleOpacity).apply();
     }
 
     private void setStandaloneConsoleOpen(boolean visible) {

@@ -279,4 +279,7 @@
     <string name="cl_update_install_failed">Could not open the installer. Check Android installation permissions.</string>
     <string name="cl_update_no_notes">No release notes provided.</string>
     <string name="cl_update_ready">The update was verified. Android will ask you to confirm installation.</string>
+    <string name="cl_console_move">Console — drag to move</string>
+    <string name="cl_console_resize">Drag to resize console</string>
+    <string name="cl_console_opacity">Console background opacity: %1$d%%. Tap to change.</string>
 </resources>

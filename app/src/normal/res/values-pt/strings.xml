@@ -279,4 +279,7 @@
     <string name="cl_update_install_failed">Não foi possível abrir o instalador. Confira as permissões de instalação do Android.</string>
     <string name="cl_update_no_notes">Nenhuma nota de atualização disponível.</string>
     <string name="cl_update_ready">A atualização foi validada. O Android solicitará a confirmação da instalação.</string>
+    <string name="cl_console_move">Console — arraste para mover</string>
+    <string name="cl_console_resize">Arraste para redimensionar o console</string>
+    <string name="cl_console_opacity">Opacidade do fundo do console: %1$d%%. Toque para alterar.</string>
 </resources>

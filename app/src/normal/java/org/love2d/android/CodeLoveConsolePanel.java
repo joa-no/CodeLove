@@ -20,6 +20,16 @@ final class CodeLoveConsolePanel extends LinearLayout {
     private final ScrollView logScroll;
     private TextView runtimeStats;
     private final LinearLayout.LayoutParams runtimeStatsParams;
+    private final LinearLayout header;
+    private final TextView title;
+    private final Workspace.IconView terminal;
+    private TextView opacityControl;
+
+    interface DragAction {
+        void start();
+        void move(float dx, float dy);
+        void end();
+    }
 
     CodeLoveConsolePanel(Context context, Runnable collapse,
                          Runnable clearLog, Runnable reloadProject) {
@@ -30,15 +40,15 @@ final class CodeLoveConsolePanel extends LinearLayout {
         setBackground(rounded(context, Workspace.COLOR_PANEL, 16, true));
         setClickable(true);
 
-        LinearLayout header = new LinearLayout(context);
+        header = new LinearLayout(context);
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
-        Workspace.IconView terminal = new Workspace.IconView(context,
+        terminal = new Workspace.IconView(context,
             Workspace.IconView.CONSOLE, Workspace.COLOR_FOLDER);
         header.addView(terminal, new LayoutParams(dp(context, 20), dp(context, 20)));
 
-        TextView title = new TextView(context);
+        title = new TextView(context);
         title.setText(CodeLoveLocale.wrap(context).getString(R.string.cl_console));
         title.setTextColor(Workspace.COLOR_TEXT);
         title.setTextSize(15);
@@ -104,6 +114,97 @@ final class CodeLoveConsolePanel extends LinearLayout {
             ViewGroup.LayoutParams.WRAP_CONTENT));
         addView(logScroll, new LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+    }
+
+    /** Floating controls are exclusive to the visual runtime console. */
+    void enableFloatingControls(DragAction move, DragAction resize,
+                                Runnable changeOpacity, int opacity) {
+        Context context = getContext();
+        Context localized = CodeLoveLocale.wrap(context);
+        setPadding(dp(context, 8), dp(context, 6), dp(context, 8), dp(context, 6));
+        title.setContentDescription(localized.getString(R.string.cl_console_move));
+        title.setOnTouchListener(dragListener(move));
+        terminal.setOnTouchListener(dragListener(move));
+        header.setOnTouchListener(dragListener(move));
+
+        opacityControl = new TextView(context);
+        opacityControl.setTextColor(Workspace.COLOR_TEXT);
+        opacityControl.setTextSize(11);
+        opacityControl.setGravity(Gravity.CENTER);
+        opacityControl.setBackground(rounded(context, Workspace.COLOR_FIELD, 8, false));
+        opacityControl.setOnClickListener(v -> changeOpacity.run());
+        LayoutParams opacityLp = new LayoutParams(dp(context, 44), dp(context, 32));
+        header.addView(opacityControl, header.getChildCount() - 1, opacityLp);
+
+        // A dedicated grip prevents resize gestures from stealing log scrolling
+        // or selection. Its narrow gutter leaves the rest of the logs usable.
+        removeView(logScroll);
+        android.widget.FrameLayout content = new android.widget.FrameLayout(context);
+        android.widget.FrameLayout.LayoutParams logLp =
+            new android.widget.FrameLayout.LayoutParams(-1, -1);
+        logLp.rightMargin = dp(context, 28);
+        content.addView(logScroll, logLp);
+        TextView grip = new TextView(context);
+        grip.setText("↘");
+        grip.setTextSize(18);
+        grip.setGravity(Gravity.CENTER);
+        grip.setTextColor(Workspace.COLOR_TEXT);
+        grip.setBackground(rounded(context, Workspace.COLOR_FIELD, 8, false));
+        grip.setContentDescription(localized.getString(R.string.cl_console_resize));
+        grip.setOnTouchListener(dragListener(resize));
+        android.widget.FrameLayout.LayoutParams gripLp =
+            new android.widget.FrameLayout.LayoutParams(dp(context, 28), dp(context, 28),
+                Gravity.BOTTOM | Gravity.RIGHT);
+        content.addView(grip, gripLp);
+        addView(content, new LayoutParams(-1, 0, 1f));
+        setPanelOpacity(opacity);
+    }
+
+    void setPanelOpacity(int percent) {
+        int alpha = Math.round(255 * percent / 100f);
+        setBackground(rounded(getContext(), (Workspace.COLOR_PANEL & 0x00FFFFFF)
+            | (alpha << 24), 16, true));
+        if (opacityControl != null) {
+            String value = percent + "%";
+            opacityControl.setText(value);
+            opacityControl.setContentDescription(CodeLoveLocale.wrap(getContext())
+                .getString(R.string.cl_console_opacity, percent));
+        }
+    }
+
+    private static View.OnTouchListener dragListener(DragAction action) {
+        return new View.OnTouchListener() {
+            private float startX, startY;
+            private int pointer = -1;
+            @Override public boolean onTouch(View v, android.view.MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case android.view.MotionEvent.ACTION_DOWN:
+                        pointer = event.getPointerId(0);
+                        startX = event.getRawX();
+                        startY = event.getRawY();
+                        action.start();
+                        return true;
+                    case android.view.MotionEvent.ACTION_MOVE:
+                        if (pointer != -1 && event.getPointerId(0) == pointer) {
+                            action.move(event.getRawX() - startX, event.getRawY() - startY);
+                        }
+                        return true;
+                    case android.view.MotionEvent.ACTION_POINTER_UP:
+                        if (event.getPointerId(event.getActionIndex()) != pointer) return true;
+                        // End when the original finger leaves, rather than jumping
+                        // to the coordinates of another finger.
+                    case android.view.MotionEvent.ACTION_UP:
+                    case android.view.MotionEvent.ACTION_CANCEL:
+                        if (pointer != -1) {
+                            pointer = -1;
+                            action.end();
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        };
     }
 
     void enableRuntimeStats() {
