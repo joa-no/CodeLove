@@ -326,7 +326,10 @@ public class GameActivity extends SDLActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (standaloneRuntime && hasFocus) hideStandaloneStatusBar();
+        if (standaloneRuntime && hasFocus) {
+            hideStandaloneStatusBar();
+            if (standaloneConsole != null) standaloneConsole.post(this::layoutStandaloneConsole);
+        }
     }
 
     /** Controles da visualizacao: console ao lado do X, sem sair do jogo. */
@@ -426,20 +429,91 @@ public class GameActivity extends SDLActivity {
         consoleLp.bottomMargin = margin;
         mLayout.addView(standaloneConsole, consoleLp);
 
-        // Em celular horizontal o painel deve ser mais baixo; em tablet, ate 240dp.
+        // Recompute after a resize or navigation-bar inset change without
+        // replacing SDL's own layout/inset handling.
         mLayout.addOnLayoutChangeListener((v, left, top, right, bottom,
-                                            oldLeft, oldTop, oldRight, oldBottom) -> {
-            int height = bottom - top;
-            if (height <= 0 || standaloneConsole == null) return;
-            int panelHeight = Math.min(Math.round(240 * density),
-                Math.max(Math.round(124 * density), Math.round(height * 0.38f)));
-            android.widget.RelativeLayout.LayoutParams lp =
-                (android.widget.RelativeLayout.LayoutParams) standaloneConsole.getLayoutParams();
-            if (lp.height != panelHeight) {
-                lp.height = panelHeight;
-                standaloneConsole.setLayoutParams(lp);
-            }
+                                            oldLeft, oldTop, oldRight, oldBottom) ->
+            layoutStandaloneConsole());
+        standaloneConsole.setOnApplyWindowInsetsListener((v, insets) -> {
+            v.post(this::layoutStandaloneConsole);
+            return insets;
         });
+        mLayout.post(this::layoutStandaloneConsole);
+    }
+
+    private void layoutStandaloneConsole() {
+        if (standaloneConsole == null || mLayout == null || isFinishing()
+                || isDestroyed()) return;
+        int width = mLayout.getWidth();
+        int height = mLayout.getHeight();
+        if (width <= 0 || height <= 0) return;
+        android.content.res.Configuration config = getResources().getConfiguration();
+        float density = getResources().getDisplayMetrics().density;
+        int margin = Math.round(12 * density);
+        int safeLeft = 0, safeRight = 0, safeBottom = 0;
+        View decor = getWindow().getDecorView();
+        android.view.WindowInsets insets = decor.getRootWindowInsets();
+        if (insets != null && decor.getWidth() > 0 && decor.getHeight() > 0) {
+            int left, right, bottom;
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                android.graphics.Insets bars = insets.getInsets(
+                    android.view.WindowInsets.Type.navigationBars()
+                    | android.view.WindowInsets.Type.displayCutout());
+                left = bars.left;
+                right = bars.right;
+                bottom = bars.bottom;
+            } else {
+                left = insets.getSystemWindowInsetLeft();
+                right = insets.getSystemWindowInsetRight();
+                bottom = insets.getSystemWindowInsetBottom();
+                if (android.os.Build.VERSION.SDK_INT >= 28 && insets.getDisplayCutout() != null) {
+                    android.view.DisplayCutout cutout = insets.getDisplayCutout();
+                    left = Math.max(left, cutout.getSafeInsetLeft());
+                    right = Math.max(right, cutout.getSafeInsetRight());
+                    bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+                }
+            }
+            // Only add the part of the system inset overlapping the SDL root.
+            // Its bounds may already exclude the navigation bar.
+            int[] rootPosition = new int[2];
+            int[] decorPosition = new int[2];
+            mLayout.getLocationOnScreen(rootPosition);
+            decor.getLocationOnScreen(decorPosition);
+            safeLeft = Math.max(0, decorPosition[0] + left - rootPosition[0]);
+            safeRight = Math.max(0, rootPosition[0] + width
+                - (decorPosition[0] + decor.getWidth() - right));
+            safeBottom = Math.max(0, rootPosition[1] + height
+                - (decorPosition[1] + decor.getHeight() - bottom));
+        }
+        int usableWidth = Math.max(1, width - safeLeft - safeRight - 2 * margin);
+        int usableHeight = Math.max(1, height - safeBottom - 2 * margin);
+        boolean compact = width > height && (config.smallestScreenWidthDp < 600
+            || usableHeight < Math.round(420 * density));
+        int panelWidth = compact
+            ? Math.min(usableWidth, Math.min(Math.round(520 * density),
+                Math.max(Math.round(280 * density), Math.round(usableWidth * 0.76f))))
+            : usableWidth;
+        int panelHeight = compact
+            ? Math.min(usableHeight, Math.min(Math.round(160 * density),
+                Math.max(Math.round(112 * density), Math.round(usableHeight * 0.34f))))
+            : Math.min(usableHeight, Math.min(Math.round(240 * density),
+                Math.max(Math.round(124 * density), Math.round(height * 0.38f))));
+        int leftMargin = safeLeft + margin + (usableWidth - panelWidth) / 2;
+        int rightMargin = Math.max(0, width - leftMargin - panelWidth);
+        int bottomMargin = safeBottom + margin;
+        android.widget.RelativeLayout.LayoutParams lp =
+            (android.widget.RelativeLayout.LayoutParams) standaloneConsole.getLayoutParams();
+        if (lp.width != panelWidth || lp.height != panelHeight
+                || lp.leftMargin != leftMargin || lp.rightMargin != rightMargin
+                || lp.bottomMargin != bottomMargin) {
+            lp.width = panelWidth;
+            lp.height = panelHeight;
+            lp.leftMargin = leftMargin;
+            lp.rightMargin = rightMargin;
+            lp.bottomMargin = bottomMargin;
+            lp.addRule(android.widget.RelativeLayout.ALIGN_PARENT_LEFT);
+            standaloneConsole.setLayoutParams(lp);
+        }
     }
 
     private void setStandaloneConsoleOpen(boolean visible) {
@@ -449,6 +523,9 @@ public class GameActivity extends SDLActivity {
         standaloneConsole.setVisibility(visible ? View.VISIBLE : View.GONE);
         standaloneConsole.removeCallbacks(standaloneConsolePoller);
         if (visible) {
+            layoutStandaloneConsole();
+            standaloneConsole.requestApplyInsets();
+            standaloneConsole.post(this::layoutStandaloneConsole);
             updateStandaloneConsole();
             standaloneConsole.postDelayed(standaloneConsolePoller, 700L);
         }
